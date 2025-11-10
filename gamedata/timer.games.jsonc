@@ -1,0 +1,27 @@
+{
+    "Addresses": {
+        "CCSBotManager::MaintainBotQuota": {
+            "library": "server",
+            "windows": "40 55 41 56 48 8D 6C 24 ? 48 81 EC ? ? ? ? 4C 8B F1 FF 15",
+            "linux": "55 31 F6 48 89 E5 41 57 41 56 49 89 FE"
+        },
+        "CCSBotManager::BotAddCommand": {
+            "library": "server",
+            "windows": "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 54 41 55 41 56 41 57 48 83 EC ? 48 8B 05 ? ? ? ? 4D 8B E1",
+            "linux": "TODO"
+        },
+        "PatchBotNavIgnore": {
+            "library": "server",
+            "windows": "0F 84 ? ? ? ? 80 B8 ? ? ? ? 00 0F 84 ? ? ? ? 80 3D ? ? ? ? 00 74 15",
+            "linux": "TODO"
+        }
+    },
+    "Patches": {
+        "BotNavIgnore": {
+            "address": "PatchBotNavIgnore",
+            "windows": {
+                "patch": "EB 2F 90 90 90 90"
+            }
+        }
+    }
+}

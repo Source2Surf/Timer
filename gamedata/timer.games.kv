@@ -1,0 +1,58 @@
+"Games"
+{
+    "Addresses"
+    {
+        "CCSBotManager::MaintainBotQuota"
+        {
+            "library"   "server"
+            "windows"   "40 53 48 81 EC ? ? ? ? 48 8B D9 FF 15"
+            "linux"     "55 31 F6 48 89 E5 41 57 41 56 49 89 FE"
+        }
+
+        "CCSBotManager::BotAddCommand"
+        {
+            "library"   "server"
+            "windows"   "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 54 41 55 41 56 41 57 48 83 EC ? 48 8B 05 ? ? ? ? 4D 8B F9"
+            "linux"     ""
+        }
+
+        "Script_CreateTrigger"
+        {
+            "library"   "server"
+            "windows"   "48 8B C4 48 89 50 ? 55 41 55"
+            "linux"     "55 48 8D 05 ? ? ? ? 48 89 E5 41 57 41 56 49 89 FE 41 55 49 89 F5"
+        }
+
+        "PatchBotNavIgnore"
+        {
+            "library"    "server"
+            "windows"    "0F 84 ? ? ? ? 80 B8 ? ? ? ? 00 0F 84 ? ? ? ? 80 3D ? ? ? ? 00 74 15"
+        }
+
+        "PatchMovement"
+        {
+            "library"   "server"
+            "windows"   "76 ? F2 0F 10 4F"
+        }
+    }
+    
+    "Patches"
+    {
+        "BotNavIgnore"
+        {
+            "address"    "PatchBotNavIgnore"
+            "windows"
+            {
+                "patch"       "E9 2C 00 00 00 90"
+            }
+        }
+        "Movement"
+        {
+            "address"    "PatchMovement"
+            "windows"
+            {
+                "patch"       "EB"
+            }
+        }
+    }
+}
