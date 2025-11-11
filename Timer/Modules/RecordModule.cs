@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -32,44 +32,12 @@ namespace SurfTimer.Modules;
 
 internal interface IRecordModule
 {
-    delegate void OnPlayerWorldRecordDelegate(IGamePlayer       player,
-                                              IPlayerController controller,
-                                              IPlayerPawn       pawn,
-                                              ITimerInfo        timerInfo,
-                                              RunRecord?        wrInfo,
-                                              RunRecord?        pbInfo);
-
     delegate void OnPlayerRecordSavedDelegate(SteamID        playerSteamId,
+                                              string         playerName,
                                               EAttemptResult recordType,
                                               RunRecord      savedRecord,
                                               RunRecord?     wrRecord,
                                               RunRecord?     pbRecord);
-
-    delegate void OnPlayerStageRecordSavedDelegate(SteamID        playerSteamId,
-                                                   EAttemptResult recordType,
-                                                   RunRecord      savedRecord,
-                                                   RunRecord?     wrRecord,
-                                                   RunRecord?     pbRecord);
-
-    delegate void OnPlayerFinishDelegate(IGamePlayer       player,
-                                         IPlayerController controller,
-                                         IPlayerPawn       pawn,
-                                         ITimerInfo        timerInfo,
-                                         RunRecord?        pbInfo,
-                                         bool              newRecord);
-
-    delegate void OnPlayerFinishStageDelegate(IGamePlayer       player,
-                                              IPlayerController controller,
-                                              IPlayerPawn       pawn,
-                                              IStageTimerInfo   stageTimerInfo,
-                                              RunRecord?        stageWRInfo,
-                                              RunRecord?        stagePBInfo,
-                                              bool              isWr,
-                                              bool              newRecord);
-
-    event OnPlayerWorldRecordDelegate OnPlayerWorldRecord;
-    event OnPlayerFinishDelegate      OnPlayerFinish;
-    event OnPlayerFinishStageDelegate OnPlayerFinishStage;
 
     event OnPlayerRecordSavedDelegate OnPlayerRecordSaved;
     event OnPlayerRecordSavedDelegate OnPlayerStageRecordSaved;
@@ -262,7 +230,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule
         }
     }
 
-    private RecordRequest CreateRecordRequest(ITimerInfo timerInfo)
+    private static RecordRequest CreateRecordRequest(ITimerInfo timerInfo)
     {
         var recordRequest = new RecordRequest
         {
@@ -310,7 +278,8 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule
             return;
         }
 
-        var steamId = player.SteamId;
+        var steamId    = player.SteamId;
+        var playerName = player.Name;
 
         var style      = timerInfo.Style;
         var track      = timerInfo.Track;
@@ -325,26 +294,40 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule
 
         Task.Run(async () =>
         {
-            var (recordType, savedRecord) = await _request.AddPlayerRecord(player.DatabaseId,
-                                                                           currentMapProfile.MapId,
-                                                                           recordRequest)
-                                                          .ConfigureAwait(false);
-
-            await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+            try
             {
-                OnPlayerRecordSaved?.Invoke(steamId,
-                                            recordType,
-                                            savedRecord,
-                                            wrRecord,
-                                            pbRecord);
+                var (recordType, savedRecord) = await _request.AddPlayerRecord(player.DatabaseId,
+                                                                               currentMapProfile.MapId,
+                                                                               recordRequest)
+                                                              .ConfigureAwait(false);
 
-                if (_playerManager.GetPlayer(steamId) is { } client)
+                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    _playerRecordsCache[client.Slot, style, track] = savedRecord;
-                }
-            }).ConfigureAwait(false);
+                    OnPlayerRecordSaved?.Invoke(steamId,
+                                                playerName,
+                                                recordType,
+                                                savedRecord,
+                                                wrRecord,
+                                                pbRecord);
 
-            await UpdateMapRecord(style, track).ConfigureAwait(false);
+                    if (recordType < EAttemptResult.NewPersonalRecord)
+                    {
+                        return;
+                    }
+
+                    if (_playerManager.GetPlayer(steamId) is { } client)
+                    {
+                        _logger.LogInformation("Found player {steamid}, setting record cache", steamId);
+                        _playerRecordsCache[client.Slot, style, track] = savedRecord;
+                    }
+                }).ConfigureAwait(false);
+
+                await UpdateMapRecord(style, track).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error when saving record");
+            }
         });
     }
 
@@ -364,7 +347,8 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule
             return;
         }
 
-        var steamId = player.SteamId;
+        var steamId    = player.SteamId;
+        var playerName = player.Name;
 
         var style = timerInfo.Style;
         var track = timerInfo.Track;
@@ -389,6 +373,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule
             await _bridge.ModSharp.InvokeFrameActionAsync(() =>
             {
                 OnPlayerStageRecordSaved?.Invoke(steamId,
+                                                 playerName,
                                                  recordType,
                                                  savedRecord,
                                                  wrRecord,
@@ -434,44 +419,44 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule
 
         Task.Run(async () =>
         {
-            // TODO: read cp time? is it needed?
-
-            var records = await _request.GetPlayerRecords(player.DatabaseId, currentMapInfo.MapId).ConfigureAwait(false);
-
-            var stageRecords = await _request.GetPlayerStageRecords(player.DatabaseId, currentMapInfo.MapId)
-                                             .ConfigureAwait(false);
-
-            await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+            try
             {
-                if (_bridge.ClientManager.GetGameClient(player.SteamId) is not { } client)
+                var records = await _request.GetPlayerRecords(player.DatabaseId, currentMapInfo.MapId).ConfigureAwait(false);
+
+                var stageRecords = await _request.GetPlayerStageRecords(player.DatabaseId, currentMapInfo.MapId)
+                                                 .ConfigureAwait(false);
+
+                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    return;
-                }
+                    if (_bridge.ClientManager.GetGameClient(player.SteamId) is not { } client)
+                    {
+                        return;
+                    }
 
-                foreach (var record in records)
-                {
-                    var style = record.Style;
-                    var track = record.Track;
+                    foreach (var record in records)
+                    {
+                        var style = record.Style;
+                        var track = record.Track;
 
-                    _playerRecordsCache[client.Slot, style, track] = record;
-                }
+                        _playerRecordsCache[client.Slot, style, track] = record;
+                    }
 
-                foreach (var record in stageRecords)
-                {
-                    var style = record.Style;
-                    var track = record.Track;
-                    var stage = record.Stage;
+                    foreach (var record in stageRecords)
+                    {
+                        var style = record.Style;
+                        var track = record.Track;
+                        var stage = record.Stage;
 
-                    _playerStageRecordsCache[client.Slot, style, track, stage] = record;
-                }
-            });
+                        _playerStageRecordsCache[client.Slot, style, track, stage] = record;
+                    }
+                });
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error when loading player time for {stemaid}", player.SteamId);
+            }
         });
     }
-
-    public event IRecordModule.OnPlayerWorldRecordDelegate? OnPlayerWorldRecord;
-
-    public event IRecordModule.OnPlayerFinishDelegate?      OnPlayerFinish;
-    public event IRecordModule.OnPlayerFinishStageDelegate? OnPlayerFinishStage;
 
     public event IRecordModule.OnPlayerRecordSavedDelegate? OnPlayerRecordSaved;
     public event IRecordModule.OnPlayerRecordSavedDelegate? OnPlayerStageRecordSaved;

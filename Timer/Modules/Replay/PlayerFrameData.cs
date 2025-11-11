@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 using System;
 using System.Collections.Generic;
 using Sharp.Shared.Units;
@@ -42,4 +42,10 @@ internal class PlayerFrameData
 
     public Guid? PostFrameTimer      { get; set; } = null;
     public Guid? StagePostFrameTimer { get; set; } = null;
+
+    public Guid?   PendingMainRunId    { get; set; }
+    public string? SavedMainReplayPath { get; set; }
+
+    public Dictionary<int, Guid> PendingStageRunIds { get; } = new ();
+    public Dictionary<int, string> SavedStageReplayPaths { get; } = new ();
 }

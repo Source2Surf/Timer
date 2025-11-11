@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -143,7 +143,7 @@ internal partial class ReplayModule : IReplayModule, IModule, IGameListener, IEn
         _playerFrameData = Enumerable.Repeat<PlayerFrameData?>(null, PlayerSlot.MaxPlayerSlot).ToArray();
 
         _replayDirectory  = Path.Combine(bridge.TimerDataPath, "replays");
-        _replayConfigPath = Path.Combine(bridge.TimerDataPath, "replay.json");
+        _replayConfigPath = Path.Combine(bridge.TimerDataPath, "replay.jsonc");
 
         LoadRepalyBotConfigs();
 
@@ -283,6 +283,9 @@ internal partial class ReplayModule : IReplayModule, IModule, IGameListener, IEn
 
         _timerModule.OnPlayerStageTimerStart  -= OnPlayerStageTimerStart;
         _timerModule.OnPlayerStageTimerFinish -= OnPlayerStageTimerFinish;
+
+        _recordModule.OnPlayerRecordSaved      -= OnPlayerRecordSaved;
+        _recordModule.OnPlayerStageRecordSaved -= OnPlayerRecordSaved;
 
         /*_recordModule.OnPlayerWorldRecord     -= OnPlayerWorldRecord;*/
     }

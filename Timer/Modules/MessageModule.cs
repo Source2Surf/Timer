@@ -14,12 +14,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 using System;
 using Cysharp.Text;
+using Microsoft.Extensions.Logging;
 using Sharp.Shared.Definition;
 using Sharp.Shared.GameEntities;
+using Sharp.Shared.Units;
 using SurfTimer.Extensions;
+using SurfTimer.Managers;
 using SurfTimer.Managers.Player;
 using SurfTimer.Managers.Request.Models;
 using SurfTimer.Modules.Timer;
@@ -33,30 +36,105 @@ internal interface IMessageModule
 internal class MessageModule : IModule, IMessageModule
 {
     private readonly InterfaceBridge _bridge;
+    private readonly IPlayerManager  _playerManager;
     private readonly IRecordModule   _recordModule;
 
-    public MessageModule(InterfaceBridge bridge, IRecordModule recordModule)
+    private readonly ILogger<MessageModule> _logger;
+
+    public MessageModule(InterfaceBridge        bridge,
+                         IPlayerManager         playerManager,
+                         IRecordModule          recordModule,
+                         ILogger<MessageModule> logger)
     {
-        _bridge       = bridge;
-        _recordModule = recordModule;
+        _bridge        = bridge;
+        _playerManager = playerManager;
+        _recordModule  = recordModule;
+
+        _logger = logger;
     }
 
     public bool Init()
     {
-        _recordModule.OnPlayerWorldRecord += OnPlayerWorldRecord;
-        _recordModule.OnPlayerFinish      += PlayerFinish;
-
-        _recordModule.OnPlayerFinishStage += PlayerFinishStage;
+        _recordModule.OnPlayerRecordSaved      += OnPlayerRecordSaved;
+        _recordModule.OnPlayerStageRecordSaved += OnPlayerStageRecordSaved;
 
         return true;
     }
 
     public void Shutdown()
     {
-        _recordModule.OnPlayerFinish      -= PlayerFinish;
-        _recordModule.OnPlayerWorldRecord -= OnPlayerWorldRecord;
+        _recordModule.OnPlayerRecordSaved      -= OnPlayerRecordSaved;
+        _recordModule.OnPlayerStageRecordSaved -= OnPlayerStageRecordSaved;
+    }
 
-        _recordModule.OnPlayerFinishStage -= PlayerFinishStage;
+    private void OnPlayerRecordSaved(SteamID        playerSteamId,
+                                     string         playerName,
+                                     EAttemptResult recordType,
+                                     RunRecord      savedRecord,
+                                     RunRecord?     wrRecord,
+                                     RunRecord?     pbRecord)
+    {
+        switch (recordType)
+        {
+            case EAttemptResult.NewPersonalRecord:
+            {
+                PrintNewPersonalBestMessage(playerName, savedRecord, pbRecord);
+
+                break;
+            }
+            case EAttemptResult.NewServerRecord:
+            {
+                PrintNewServerRecordMessage();
+
+                break;
+            }
+            case EAttemptResult.NoNewRecord:
+            {
+                PrintNoNewRecordMessage(playerSteamId, savedRecord, pbRecord);
+
+                break;
+            }
+            default:
+                throw new NotImplementedException($"Type {recordType} is not implemented");
+        }
+    }
+
+    private void PrintNewPersonalBestMessage(string playerName, RunRecord savedRecord, RunRecord? pbRecord)
+    {
+    }
+
+    private void PrintNewServerRecordMessage()
+    {
+    }
+
+    private void PrintNoNewRecordMessage(SteamID steamId, RunRecord savedRecord, RunRecord? pbRecord)
+    {
+        if (_playerManager.GetPlayer(steamId) is not { } player || player.Controller is not { IsValidEntity: true } controller)
+        {
+            return;
+        }
+    }
+
+    private void OnPlayerStageRecordSaved(SteamID        playerSteamId,
+                                          string         playerName,
+                                          EAttemptResult recordType,
+                                          RunRecord      savedRecord,
+                                          RunRecord?     wrRecord,
+                                          RunRecord?     pbRecord)
+    {
+        switch (recordType)
+        {
+            case EAttemptResult.NewPersonalRecord:
+            {
+                break;
+            }
+            case EAttemptResult.NewServerRecord:
+                break;
+            case EAttemptResult.NoNewRecord:
+                break;
+            default:
+                throw new NotImplementedException($"Type {recordType} is not implemented");
+        }
     }
 
     private void PlayerFinish(IGamePlayer       player,

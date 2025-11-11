@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 using System;
 using System.IO;
 using System.Text.Json;
@@ -226,7 +226,59 @@ internal partial class ReplayModule
                                                           GameTimerFlags.StopOnMapEnd);
     }
 
+    private void RenameReplayFile(string path, Guid runId)
+    {
+        if (!File.Exists(path))
+        {
+            _logger.LogWarning("Attempted to rename a temporary replay file that no longer exists: {path}", path);
+
+            return;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+
+            if (directory == null)
+            {
+                _logger.LogError("Could not determine directory for temporary path: {path}", path);
+
+                return;
+            }
+
+            var fileName = Path.GetFileName(path);
+
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                _logger.LogWarning("File name is null or empty from path {p}", path);
+
+                return;
+            }
+
+            const string strToLookUp = ".replay.";
+
+            // $"{_bridge.GlobalVars.MapName}_{track}.replay.{Guid.NewGuid()}" to "{_bridge.GlobalVars.MapName}_{track}_{runId}.replay"
+            var index = fileName.LastIndexOf(strToLookUp, StringComparison.Ordinal);
+
+            if (index == -1)
+            {
+                return;
+            }
+
+            var newFileName = $"{fileName.Substring(0, index)}_{runId}.replay";
+
+            var finalPath = Path.Combine(directory, newFileName);
+
+            File.Move(path, finalPath, true);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Failed to rename replay file from {tempPath} to run ID {runId}", path, runId);
+        }
+    }
+
     private void OnPlayerRecordSaved(SteamID        playerSteamId,
+                                     string         playerName,
                                      EAttemptResult recordType,
                                      RunRecord      savedRecord,
                                      RunRecord?     wrRecord,
@@ -241,11 +293,32 @@ internal partial class ReplayModule
 
         var runId = savedRecord.Id;
 
-        // TODO: handle two cases
-        // 1. if the record is saved but our replay for the run isnt saved yet
-        // the output file should contain runId
-        // 2. the record isn't saved but the replay is saved
-        // rename the output file to runId, but we need to know what file it is
+        if (isStageRecord)
+        {
+            var stage = savedRecord.Stage;
+
+            if (frameData.SavedStageReplayPaths.TryGetValue(stage, out var tempPath))
+            {
+                RenameReplayFile(tempPath, runId);
+                frameData.SavedStageReplayPaths.Remove(stage);
+            }
+            else
+            {
+                frameData.PendingStageRunIds[stage] = runId;
+            }
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(frameData.SavedMainReplayPath))
+            {
+                RenameReplayFile(frameData.SavedMainReplayPath, runId);
+                frameData.SavedMainReplayPath = null; // Clean up
+            }
+            else
+            {
+                frameData.PendingMainRunId = runId;
+            }
+        }
     }
 
     private async Task<bool> WriteReplayToFile(ReplayFileHeader header, string path, ReplayFrameData[] framesToWrite)
@@ -276,60 +349,10 @@ internal partial class ReplayModule
 
             _logger.LogError(e, "Error when trying to write temporary replay file to {p}", path);
 
-            throw;
+            return false;
         }
 
-        var shouldOverwrite = await ShouldOverwrite();
-
-        if (shouldOverwrite)
-        {
-            File.Move(path, path, true);
-
-            return true;
-        }
-
-        File.Delete(path);
-
-        return false;
-
-        async Task<bool> ShouldOverwrite()
-        {
-            string? headerString;
-
-            try
-            {
-                await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                using var       reader = new StreamReader(stream);
-                headerString = await reader.ReadLineAsync();
-            }
-            catch (Exception)
-            {
-                return true;
-            }
-
-            if (string.IsNullOrWhiteSpace(headerString))
-            {
-                return true;
-            }
-
-            try
-            {
-                var originalHeader = JsonSerializer.Deserialize<ReplayFileHeader>(headerString);
-
-                if (originalHeader == null)
-                {
-                    return true;
-                }
-
-                return header.Time <= originalHeader.Time;
-            }
-            catch (Exception e)
-            {
-                _logger.LogWarning(e, "Failed to deserialize header from existing replay {path}. Overwriting.", path);
-
-                return true;
-            }
-        }
+        return true;
     }
 
     private void SaveReplayToFile(PlayerSlot slot, PlayerFrameData frame)
@@ -346,9 +369,22 @@ internal partial class ReplayModule
         var style = frame.Style;
         var track = frame.Track;
 
-        var path = Path.Combine(_replayDirectory,
-                                $"style_{frame.Style}",
-                                $"{_bridge.GlobalVars.MapName}_{frame.Track}.replay.{Guid.NewGuid()}");
+        string path;
+
+        if (frame.PendingMainRunId is { } runId)
+        {
+            path = Path.Combine(_replayDirectory,
+                                $"style_{style}",
+                                $"{_bridge.GlobalVars.MapName}_{track}_{runId}.replay");
+
+            frame.PendingMainRunId = null;
+        }
+        else
+        {
+            path = Path.Combine(_replayDirectory,
+                                $"style_{style}",
+                                $"{_bridge.GlobalVars.MapName}_{track}.replay.{Guid.NewGuid()}");
+        }
 
         Task.Run(async () =>
         {
@@ -370,6 +406,11 @@ internal partial class ReplayModule
                 if (await WriteReplayToFile(header, path, framesToWrite))
                 {
                     await StartNewReplay(header, framesToWrite, style, track);
+
+                    if (frame.PendingMainRunId is null)
+                    {
+                        frame.SavedMainReplayPath = path;
+                    }
                 }
             }
             catch (Exception e)
@@ -378,7 +419,8 @@ internal partial class ReplayModule
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    if (_bridge.EntityManager.FindPlayerControllerBySlot(slot) is { } controller)
+                    if (_playerManager.GetPlayer(frame.SteamId) is { } player
+                        && player.Controller is { IsValidEntity: true } controller)
                     {
                         controller.PrintToChat($"Failed to save replay. Reason: {e.Message}");
                     }
@@ -394,6 +436,11 @@ internal partial class ReplayModule
 
     private async Task StartNewReplay(ReplayFileHeader header, ReplayFrameData[] framesToWrite, int style, int track)
     {
+        if (_replayCache.TryGetValue((style, track), out var cache) && cache.Header.Time <= header.Time)
+        {
+            return;
+        }
+
         var replayContent = new ReplayContent
         {
             Header = header,
@@ -425,6 +472,11 @@ internal partial class ReplayModule
     {
         frame.StagePostFrameTimer = null;
 
+        var path = Path.Combine(_replayDirectory,
+                                $"style_{frame.Style}",
+                                "stage",
+                                $"{_bridge.GlobalVars.MapName}_{frame.Track}_{stage}.replay.{Guid.NewGuid()}");
+
         Task.Run(async () =>
         {
             var finalFrame = Math.Min(frame.Frames.Count, stageFinsihFrame + postRunFrameCount);
@@ -443,15 +495,16 @@ internal partial class ReplayModule
 
             // timer_path/replays/style_id/stage/mapname_tracknum_stagenum.replay
 
-            var path = Path.Combine(_replayDirectory,
-                                    $"style_{frame.Style}",
-                                    "stage",
-                                    $"{_bridge.GlobalVars.MapName}_{frame.Track}_{stage}.replay");
-
             try
             {
                 if (await WriteReplayToFile(header, path, framesToWrite).ConfigureAwait(false))
                 {
+                    if (_stageReplayCache.TryGetValue((frame.Style, frame.Track, stage), out var cache)
+                        && cache.Header.Time <= header.Time)
+                    {
+                        return;
+                    }
+
                     _stageReplayCache[(frame.Style, frame.Track, stage)] = new ()
                     {
                         Frames = framesToWrite,

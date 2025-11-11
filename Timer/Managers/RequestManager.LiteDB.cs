@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -91,7 +91,6 @@ internal class RequestManagerLiteDB : IManager, IRequestManager
     {
         var col = _database.GetCollection<MapProfile>(MapTableName);
         col.EnsureIndex(i => i.MapId);
-        col.EnsureIndex(i => i.MapName);
 
         if (col.FindOne(i => i.MapName.Equals(map, StringComparison.OrdinalIgnoreCase)) is { } rec)
         {
@@ -305,13 +304,7 @@ internal class RequestManagerLiteDB : IManager, IRequestManager
     {
         var col = _database.GetCollection<RunRecord>(PlayerRecordTableName);
 
-        col.EnsureIndex(x => new
-        {
-            x.Id,
-            x.PlayerId,
-            x.MapId,
-            x.Stage,
-        });
+        col.EnsureIndex(x => x.Id);
 
         var allPlayerRuns = col.Query()
                                .Where(r => r.PlayerId == playerId && r.MapId == mapId && r.Stage == 0)
@@ -483,7 +476,7 @@ internal class RequestManagerLiteDB : IManager, IRequestManager
     {
         var col = _database.GetCollection<PlayerProfile>(UserTableName);
 
-        col.EnsureIndex(i => i.SteamId, true);
+        col.EnsureIndex(i => i.SteamId);
 
         var user = col.Query()
                       .Where(i => i.SteamId == steamId)

@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -132,7 +132,14 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
         Task.Run(async () =>
         {
-            _currentMapProfileInfo = await _requestManager.GetMapInfo(_currentMapName).ConfigureAwait(false);
+            try
+            {
+                _currentMapProfileInfo = await _requestManager.GetMapInfo(_currentMapName).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error when trying to get map profile");
+            }
         });
     }
 
