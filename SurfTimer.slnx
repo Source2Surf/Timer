@@ -5,7 +5,9 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="Timer.RequestManager/Timer.RequestManager.csproj" />
+  <Project Path="Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
   <Project Path="Timer.Shared/Timer.Shared.csproj" />
+  <Project Path="Timer.Tests/Timer.Tests.csproj" />
   <Project Path="Timer/Timer.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>

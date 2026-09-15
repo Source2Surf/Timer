@@ -38,7 +38,7 @@ internal sealed partial class StorageServiceImpl
         {
             Id             = (long) run.Id,
             RunDate        = run.Date,
-            SteamId        = run.SteamId.AsPrimitive(),
+            SteamId        = unchecked((ulong)run.SteamId),
             MapId          = run.MapId,
             Style          = (int) run.Style,
             Track          = run.Track,

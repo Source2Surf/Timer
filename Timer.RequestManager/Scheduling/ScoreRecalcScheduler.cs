@@ -10,7 +10,7 @@ namespace Timer.RequestManager.Scheduling;
 /// <summary>
 /// Score recalculation request.
 /// </summary>
-internal readonly record struct RecalcRequest(ulong MapId, int Style, ushort Track, int Tier, int BasePot, double StyleFactor);
+internal readonly record struct RecalcRequest(ulong MapId, int Style, ushort Track, double StyleFactor);
 
 /// <summary>
 /// Debounced score recalculation scheduler.

@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Common.Enums;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -63,12 +62,13 @@ internal sealed class DbReplayProvider : IReplayProvider
 
         if (steamId.HasValue)
         {
-            var sid = new SteamID(steamId.Value);
+            var sid = unchecked((long)steamId.Value);
             query = query.Where((r, run) => r.SteamId == sid);
         }
 
         var replayUrl = await query
             .OrderBy((r, run) => run.Time)
+            .OrderBy((r, run) => run.Id)
             .Select((r, run) => r.Replay)
             .FirstAsync();
 
@@ -114,14 +114,19 @@ internal sealed class DbReplayProvider : IReplayProvider
             var entity = new ReplayEntity
             {
                 MapId     = mapId,
-                SteamId   = new SteamID(steamId),
+                SteamId   = unchecked((long)steamId),
                 RunId     = runId,
                 Replay    = url,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
             };
 
-            await _storage.Db.Storageable(entity).ExecuteCommandAsync();
+            if (!await _storage.SaveReplayMetadataAsync(entity))
+            {
+                // The run was removed while the external upload was in progress.
+                await _replayStorage.DeleteAsync(url);
+                return;
+            }
 
 #if DEBUG
             _logger.LogInformation("DbReplayProvider.Upload DB OK key={Key} mapId={MapId} runId={RunId}", key, mapId, runId);

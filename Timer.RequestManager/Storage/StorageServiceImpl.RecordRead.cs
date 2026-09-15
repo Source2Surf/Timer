@@ -38,6 +38,7 @@ internal sealed partial class StorageServiceImpl
 
     public async Task<RunRecord?> GetPlayerRecord(SteamID steamId, string mapName, int style, int track)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         var mapId = await ResolveMapIdByNameAsync(mapName);
 
         if (mapId is null)
@@ -54,7 +55,7 @@ internal sealed partial class StorageServiceImpl
                                           .Where((best, run) => best.MapId == mapId.Value
                                                                 && best.RunType == RunType.Main
                                                                 && best.Stage == stage
-                                                                && best.SteamId == steamId
+                                                                && best.SteamId == steamIdValue
                                                                 && best.Style == style
                                                                 && best.Track == trackValue)
                                           .OrderBy((best, run) => best.BestTime)
@@ -90,37 +91,35 @@ internal sealed partial class StorageServiceImpl
 
     public async Task<PlayerProfile> GetPlayerProfile(SteamID steamId, string name)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         var now = DateTime.UtcNow;
 
         var player = await _db.Queryable<PlayerEntity>()
-                              .Where(x => x.SteamId == steamId)
+                              .Where(x => x.SteamId == steamIdValue)
                               .FirstAsync();
 
         if (player is null)
         {
             player = new ()
             {
-                SteamId   = steamId,
+                SteamId   = ToDbSteamId(steamId),
                 Name      = name,
                 Points    = 0,
                 Runs      = 0,
                 UpdatedAt = now,
             };
 
-            await _db.Insertable(player).ExecuteCommandAsync();
-
-            var newProfile = new PlayerProfile
+            try
             {
-                Id           = (long) player.Id,
-                SteamId      = steamId,
-                Points       = 0,
-                JoinDate     = now,
-                LastSeenDate = now,
-            };
-
-            newProfile.UpdateName(name);
-
-            return newProfile;
+                player.Id = checked((ulong)await _db.Insertable(player).ExecuteReturnBigIdentityAsync());
+            }
+            catch (Exception ex) when (IsUniqueKeyViolation(ex))
+            {
+                // Another server may create the profile after our first read.
+                // This insert is in autocommit, so PG can safely read the winner.
+                player = await _db.Queryable<PlayerEntity>().Where(x => x.SteamId == steamIdValue).FirstAsync();
+                if (player is null) throw;
+            }
         }
 
         // Only write back if name changed
@@ -150,10 +149,11 @@ internal sealed partial class StorageServiceImpl
 
     public async Task<(int rank, int total)> GetPlayerPointsRank(SteamID steamId)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         // Scalar projection (Points is a plain uint — no SteamID-converter concern);
         // no row and zero points both come back as 0.
         var playerPoints = await _db.Queryable<PlayerEntity>()
-                                    .Where(x => x.SteamId == steamId)
+                                    .Where(x => x.SteamId == steamIdValue)
                                     .Select(x => x.Points)
                                     .FirstAsync();
 
@@ -222,11 +222,12 @@ internal sealed partial class StorageServiceImpl
 
     private async Task<List<RunEntity>> QueryBestMainRunsForPlayerAsync(SteamID steamId, ulong mapId)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         var results = await QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
                             .Where((best, run) => best.MapId == mapId
                                                   && best.RunType == RunType.Main
                                                   && best.Stage == 0
-                                                  && best.SteamId == steamId)
+                                                  && best.SteamId == steamIdValue)
                             .OrderBy((best, run) => best.BestTime)
                             .OrderBy((best, run) => best.RunId)
                             .Select((best, run) => run)
@@ -237,10 +238,11 @@ internal sealed partial class StorageServiceImpl
 
     private async Task<List<RunEntity>> QueryBestStageRunsForPlayerAsync(SteamID steamId, ulong mapId)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         var results = await QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
                             .Where((best, run) => best.MapId == mapId
                                                   && best.RunType == RunType.Stage
-                                                  && best.SteamId == steamId
+                                                  && best.SteamId == steamIdValue
                                                   && best.Stage > 0)
                             .OrderBy((best, run) => best.Stage)
                             .OrderBy((best, run) => best.BestTime)

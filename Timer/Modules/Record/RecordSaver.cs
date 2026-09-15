@@ -104,6 +104,7 @@ internal sealed class RecordSaver
     {
         var style = timerInfo.Style;
         var track = timerInfo.Track;
+        var mapLoad = _mapCache.BeginLoad();
 
         var records  = _mapCache.GetRecords(style, track);
         var wrRecord = records.Count > 0 ? records[0] : null;
@@ -124,6 +125,7 @@ internal sealed class RecordSaver
 
                                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                                                                               {
+                                                                                  if (!_mapCache.IsCurrent(mapLoad)) return;
                                                                                   var recordEvent
                                                                                       = new PlayerRecordSavedEvent(steamId,
                                                                                           playerName,
@@ -161,7 +163,7 @@ internal sealed class RecordSaver
                                                                               ct)
                                              .ConfigureAwait(false);
 
-                                await RefreshMapRecord(mapName, style, track).ConfigureAwait(false);
+                                await RefreshMapRecord(mapName, style, track, mapLoad).ConfigureAwait(false);
                             }
                             catch (Exception e)
                             {
@@ -182,6 +184,7 @@ internal sealed class RecordSaver
         var style = timerInfo.Style;
         var track = timerInfo.Track;
         var stage = timerInfo.Stage;
+        var mapLoad = _mapCache.BeginLoad();
 
         if (!IsValidStageIndex(stage))
         {
@@ -213,6 +216,7 @@ internal sealed class RecordSaver
 
                                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                                              {
+                                                 if (!_mapCache.IsCurrent(mapLoad)) return;
                                                  var recordEvent = new PlayerRecordSavedEvent(steamId,
                                                      playerName,
                                                      recordType,
@@ -230,7 +234,7 @@ internal sealed class RecordSaver
                                              })
                                              .ConfigureAwait(false);
 
-                                await RefreshMapStageRecord(mapName, style, track, stage).ConfigureAwait(false);
+                                await RefreshMapStageRecord(mapName, style, track, stage, mapLoad).ConfigureAwait(false);
                             }
                             catch (Exception e)
                             {
@@ -240,8 +244,10 @@ internal sealed class RecordSaver
                         ct);
     }
 
-    private async Task RefreshMapRecord(string mapName, int style, int track)
+    private async Task RefreshMapRecord(string mapName, int style, int track, MapRecordCache.LoadToken origin)
     {
+        if (!_mapCache.IsCurrent(origin)) return;
+        var load = _mapCache.BeginLoad(origin);
         try
         {
             var records = await RetryHelper.RetryAsync(
@@ -261,15 +267,15 @@ internal sealed class RecordSaver
 
             await _bridge.ModSharp.InvokeFrameActionAsync(() =>
             {
-                _mapCache.RefreshTrack(style, track, records);
+                _mapCache.RefreshTrack(style, track, records, load);
 
                 if (wrCheckpoints is not null)
                 {
-                    _mapCache.SetWRCheckpoints(style, track, wrCheckpoints);
+                    _mapCache.SetWRCheckpoints(style, track, wrCheckpoints, load);
                 }
                 else
                 {
-                    _mapCache.SetWRCheckpoints(style, track, []);
+                    _mapCache.SetWRCheckpoints(style, track, [], load);
                 }
             });
         }
@@ -279,8 +285,10 @@ internal sealed class RecordSaver
         }
     }
 
-    private async Task RefreshMapStageRecord(string mapName, int style, int track, int stage)
+    private async Task RefreshMapStageRecord(string mapName, int style, int track, int stage, MapRecordCache.LoadToken origin)
     {
+        if (!_mapCache.IsCurrent(origin)) return;
+        var load = _mapCache.BeginLoad(origin);
         if (!IsValidStageIndex(stage))
         {
             _logger.LogWarning("Skip RefreshMapStageRecord with invalid stage index. style={style}, track={track}, stage={stage}",
@@ -298,7 +306,7 @@ internal sealed class RecordSaver
                 RetryHelper.IsTransient, _logger, "GetMapStageRecords"
             ).ConfigureAwait(false);
 
-            await _bridge.ModSharp.InvokeFrameActionAsync(() => { _mapCache.RefreshStage(style, track, stage, records); });
+            await _bridge.ModSharp.InvokeFrameActionAsync(() => { _mapCache.RefreshStage(style, track, stage, records, load); });
         }
         catch (Exception e)
         {

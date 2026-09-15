@@ -20,6 +20,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using LiteDB;
 using Microsoft.Extensions.Logging;
@@ -40,6 +41,7 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
 
     // Serializes find-or-create to avoid inserting duplicate MapProfile rows.
     private readonly object _mapCreateLock = new ();
+    private long _nextRunId;
 
     private LiteDatabase Database => _database ?? throw new ObjectDisposedException(nameof(RequestManagerLiteDB));
 
@@ -67,8 +69,13 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
     }
 
     public RequestManagerLiteDB(InterfaceBridge bridge, ILogger<RequestManagerLiteDB> logger)
+        : this(Path.Combine(bridge.SharpPath, "data", "surftimer", "timer.db"), logger)
     {
-        _dbPath = Path.Combine(bridge.SharpPath, "data", "surftimer", "timer.db");
+    }
+
+    internal RequestManagerLiteDB(string dbPath, ILogger<RequestManagerLiteDB> logger)
+    {
+        _dbPath = dbPath;
         _logger = logger;
     }
 
@@ -77,6 +84,14 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
         _database = new LiteDatabase(_dbPath);
         _mapIdCache.Clear();
         EnsureIndexes();
+        var mainId = Database.GetCollection<RunRecord>(PlayerRecordTableName)
+                             .Query().OrderByDescending(r => r.Id).FirstOrDefault()?.Id ?? 0;
+        var stageId = Database.GetCollection<RunRecord>(PlayerStageRecordTableName)
+                              .Query().OrderByDescending(r => r.Id).FirstOrDefault()?.Id ?? 0;
+        // Main/stage runs share the checkpoint collection and GetRecordCheckpoints(id).
+        // Their IDs must be unique across both collections. The time floor also avoids
+        // reusing old replay filenames after record deletion and a restart.
+        _nextRunId = Math.Max(DateTime.UtcNow.Ticks, Math.Max(mainId, stageId));
 
         return true;
     }
@@ -389,6 +404,7 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
 
         var newRecord = new RunRecord
         {
+            Id = Interlocked.Increment(ref _nextRunId),
             MapId    = mapId,
             SteamId  = steamId.AsPrimitive(),
 
@@ -447,7 +463,8 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
                                    .Where(r => r.MapId    == newRecord.MapId
                                                && r.Stage == newRecord.Stage
                                                && r.Style == newRecord.Style
-                                               && r.Track == newRecord.Track)
+                                               && r.Track == newRecord.Track
+                                               && r.Id != newRecord.Id)
                                    .ToEnumerable();
 
             var bestByPlayer = allRuns.GroupBy(r => r.SteamId)
@@ -529,6 +546,7 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
                                       run.Track,
                                   })
                                   .Select(group => group.OrderBy(run => run.Time)
+                                                        .ThenBy(run => run.Id)
                                                         .First())
                                   .ToList();
 
@@ -554,7 +572,9 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
                                               && r.Stage == 0
                                               && r.Style == style
                                               && r.Track == track)
+                                  .ToEnumerable()
                                   .OrderBy(r => r.Time)
+                                  .ThenBy(r => r.Id)
                                   .FirstOrDefault()
                                ?? null);
     }
@@ -571,6 +591,7 @@ internal class RequestManagerLiteDB : IManager, IRequestManager, IDisposable
 
         var newRecord = new RunRecord
         {
+            Id = Interlocked.Increment(ref _nextRunId),
             MapId    = mapId,
             SteamId  = steamIdValue,
 

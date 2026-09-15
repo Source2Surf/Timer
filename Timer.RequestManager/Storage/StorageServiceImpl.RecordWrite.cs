@@ -20,20 +20,18 @@ internal sealed partial class StorageServiceImpl
 
         var styleValue = recordRequest.Style;
         var trackValue = ToUInt16(recordRequest.Track);
-        var bestTimes = await QueryMainBestTimesAsync(steamId, mapId, styleValue, trackValue);
+        await EnsureBestRunsSeededAsync(mapId, RunType.Main, styleValue, trackValue, 0);
 
         var run = CreateRunEntity(steamId, mapId, recordRequest, DateTime.UtcNow);
         run.RunType = RunType.Main;
         run.Stage   = 0;
 
-        var result = ResolveAttemptResult(recordRequest.Time,
-                                          bestTimes?.ServerBestTime,
-                                          bestTimes?.PlayerBestTime);
-
-        await _db.Ado.BeginTranAsync();
-
-        try
+        var result = EAttemptResult.NoNewRecord;
+        await WithRecordTransactionAsync(async () =>
         {
+            await LockMapAsync(mapId);
+            var bestTimes = await QueryMainBestTimesAsync(steamId, mapId, styleValue, trackValue);
+            result = ResolveAttemptResult(recordRequest.Time, bestTimes?.ServerBestTime, bestTimes?.PlayerBestTime);
             var newRunId = await _db.Insertable(run).ExecuteReturnBigIdentityAsync();
             run.Id = unchecked((ulong) newRunId);
 
@@ -47,19 +45,11 @@ internal sealed partial class StorageServiceImpl
                 }
             }
 
-            await UpsertPlayerBestRunAsync(run);
-
-            await _db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await _db.Ado.RollbackTranAsync();
-
-            throw;
-        }
+            await UpsertPlayerBestRunAsync(run, bestTimes);
+        });
 
         // Post-commit, OUTSIDE the rollback-guarded try: the run + best row are now durably saved. The rank
-        // COUNT and score-config lookup are advisory — if a transient DB error throws here it must NOT roll
+        // COUNT is advisory — if a transient DB error throws here it must NOT roll
         // back the committed transaction nor surface the finish as a failed save, so it is logged and the
         // record is still returned (rank falls back to 0). The just-written best row (BestTime == run.Time)
         // is excluded by the strict `BestTime < run.Time` rank predicate, so the post-commit count is exact.
@@ -79,6 +69,10 @@ internal sealed partial class StorageServiceImpl
         double         styleFactor,
         Func<ulong, int, ushort, float, Task<int>> rankQuery)
     {
+        // Queue first: an advisory rank-query failure must not lose the score update.
+        if (result != EAttemptResult.NoNewRecord)
+            _scoreRecalcScheduler.Enqueue(new RecalcRequest(mapId, styleValue, trackValue, styleFactor));
+
         try
         {
             var rank = result switch
@@ -87,12 +81,6 @@ internal sealed partial class StorageServiceImpl
                 EAttemptResult.NewPersonalRecord => await rankQuery(mapId, styleValue, trackValue, runTime),
                 _                                => 0,
             };
-
-            if (result != EAttemptResult.NoNewRecord)
-            {
-                var (tier, basePot) = await GetTrackScoreConfigAsync(mapId, trackValue);
-                _scoreRecalcScheduler.Enqueue(new RecalcRequest(mapId, styleValue, trackValue, tier, basePot, styleFactor));
-            }
 
             return rank;
         }
@@ -113,21 +101,19 @@ internal sealed partial class StorageServiceImpl
         var styleValue = newRunRecord.Style;
         var trackValue = ToUInt16(newRunRecord.Track);
         var stageValue = ToUInt16(newRunRecord.Stage);
-        var bestTimes = await QueryStageBestTimesAsync(steamId, mapId, styleValue, trackValue, stageValue);
+        await EnsureBestRunsSeededAsync(mapId, RunType.Stage, styleValue, trackValue, stageValue);
 
         var now = DateTime.UtcNow;
         var run = CreateRunEntity(steamId, mapId, newRunRecord, now);
         run.RunType = RunType.Stage;
         run.Stage   = stageValue;
 
-        var result = ResolveAttemptResult(newRunRecord.Time,
-                                          bestTimes?.ServerBestTime,
-                                          bestTimes?.PlayerBestTime);
-
-        await _db.Ado.BeginTranAsync();
-
-        try
+        var result = EAttemptResult.NoNewRecord;
+        await WithRecordTransactionAsync(async () =>
         {
+            await LockMapAsync(mapId);
+            var bestTimes = await QueryStageBestTimesAsync(steamId, mapId, styleValue, trackValue, stageValue);
+            result = ResolveAttemptResult(newRunRecord.Time, bestTimes?.ServerBestTime, bestTimes?.PlayerBestTime);
             var runId = await _db.Insertable(run).ExecuteReturnBigIdentityAsync();
             run.Id = unchecked((ulong) runId);
 
@@ -143,16 +129,8 @@ internal sealed partial class StorageServiceImpl
                 }
             }
 
-            await UpsertPlayerBestRunAsync(run);
-
-            await _db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await _db.Ado.RollbackTranAsync();
-
-            throw;
-        }
+            await UpsertPlayerBestRunAsync(run, bestTimes);
+        });
 
         // Post-commit advisory rank, OUTSIDE the rollback-guarded try (see AddPlayerRecord): the stage run
         // is durably saved; a transient failure on the COUNT must not roll back or report a failed save.
@@ -187,26 +165,23 @@ internal sealed partial class StorageServiceImpl
             return;
         }
 
-        List<SteamID> affectedPlayers;
-
-        await _db.Ado.BeginTranAsync();
-
-        try
+        await WithRecordTransactionAsync(async () =>
         {
-            // Players whose totals will change once this map's track scores are removed. Captured BEFORE
-            // the delete. Dedup SteamId in the DB via GROUP BY and project through the converter POCO
-            // (a bare .Select(x => x.SteamId) scalar projection bypasses the SteamId converter -> Int64 cast).
+            await LockMapAsync(mapId.Value);
+            // Capture and deduplicate affected players before deleting their track scores.
             var affectedRows = await _db.Queryable<PlayerTrackScoreEntity>()
                                         .Where(x => x.MapId == mapId.Value)
                                         .GroupBy(x => x.SteamId)
                                         .Select(x => new PlayerIdRow { SteamId = x.SteamId })
                                         .ToListAsync();
 
-            affectedPlayers = new List<SteamID>(affectedRows.Count);
+            var affectedPlayers = new List<long>(affectedRows.Count);
             foreach (var row in affectedRows)
             {
                 affectedPlayers.Add(row.SteamId);
             }
+
+            await LockPlayersForPointsAsync(affectedPlayers);
 
             // Delete segments by materialized run-id list instead of a correlated-EXISTS
             // delete: MySQL does not semi-join-transform DELETE, so EXISTS would evaluate
@@ -250,58 +225,9 @@ internal sealed partial class StorageServiceImpl
                      .Where(x => x.MapId == mapId.Value)
                      .ExecuteCommandAsync();
 
-            await _db.Ado.CommitTranAsync();
-
-            RemoveBestRunSeedCacheForMap(mapId.Value);
-        }
-        catch
-        {
-            try
-            {
-                await _db.Ado.RollbackTranAsync();
-            }
-            catch (Exception rollbackEx)
-            {
-                // Don't let a rollback failure (e.g. a dropped connection) mask the original exception.
-                _logger.LogError(rollbackEx, "Rollback failed while removing records for map {MapName}", mapName);
-            }
-
-            throw;
-        }
-
-        // Recompute affected players' Points AFTER commit, in its own autocommit. The atomic
-        // UPDATE ... = (SELECT SUM ...) must read the LATEST COMMITTED track scores; run inside the delete
-        // transaction (MySQL REPEATABLE READ) its subquery would read the transaction snapshot and could
-        // miss a concurrent server's committed changes, re-opening the lost-update window. The deletes are
-        // already durably committed, so this is best-effort — but a player whose ONLY scores were on the
-        // wiped map is NOT re-summed by any later track recalc (they have no other tracks to finish), so
-        // retry before giving up rather than leaving their Points permanently inflated.
-        if (affectedPlayers.Count > 0)
-        {
-            const int maxAttempts = 3;
-
-            for (var attempt = 1; ; attempt++)
-            {
-                try
-                {
-                    await UpdatePlayerTotalPointsAsync(affectedPlayers);
-
-                    break;
-                }
-                catch (Exception e) when (attempt < maxAttempts)
-                {
-                    _logger.LogWarning(e, "Post-wipe Points recompute attempt {Attempt}/{Max} failed for map {MapName}; retrying.",
-                                       attempt, maxAttempts, mapName);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "Post-wipe Points recompute failed for map {MapName} after {Max} attempts; "
-                                      + "affected players' Points may stay stale until they next score.", mapName, maxAttempts);
-
-                    break;
-                }
-            }
-        }
+            await UpdatePlayerTotalPointsAsync(affectedPlayers);
+        });
+        RemoveBestRunSeedCacheForMap(mapId.Value);
     }
 
     private async Task<AttemptBestTimesRow?> QueryMainBestTimesAsync(SteamID steamId,
@@ -309,9 +235,8 @@ internal sealed partial class StorageServiceImpl
                                                                       int     style,
                                                                       ushort  track)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         const ushort stage = 0;
-
-        await EnsureBestRunsSeededAsync(mapId, RunType.Main, style, track, stage);
 
         return await QueryBestRuns().Where(x => x.MapId == mapId
                                                 && x.RunType == RunType.Main
@@ -320,8 +245,10 @@ internal sealed partial class StorageServiceImpl
                                                 && x.Stage == stage)
                                     .Select(x => new AttemptBestTimesRow
                                     {
+                                        PlayerBestRowId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.Id, null)),
+                                        PlayerBestRunId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.RunId, null)),
                                         ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
-                                        PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamId,
+                                        PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
                                                                                            (float?) x.BestTime,
                                                                                            null)),
                                     })
@@ -351,8 +278,7 @@ internal sealed partial class StorageServiceImpl
                                                                        ushort  track,
                                                                        ushort  stage)
     {
-        await EnsureBestRunsSeededAsync(mapId, RunType.Stage, style, track, stage);
-
+        var steamIdValue = ToDbSteamId(steamId);
         return await QueryBestRuns().Where(x => x.MapId == mapId
                                                 && x.RunType == RunType.Stage
                                                 && x.Style == style
@@ -360,8 +286,10 @@ internal sealed partial class StorageServiceImpl
                                                 && x.Stage == stage)
                                     .Select(x => new AttemptBestTimesRow
                                     {
+                                        PlayerBestRowId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.Id, null)),
+                                        PlayerBestRunId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.RunId, null)),
                                         ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
-                                        PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamId,
+                                        PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
                                                                                            (float?) x.BestTime,
                                                                                            null)),
                                     })
@@ -390,7 +318,7 @@ internal sealed partial class StorageServiceImpl
     private static RunEntity CreateRunEntity(SteamID steamId, ulong mapId, RecordRequest request, DateTime now)
         => new ()
         {
-            SteamId        = steamId,
+            SteamId        = ToDbSteamId(steamId),
             MapId          = mapId,
             RunType        = request.Stage > 0 ? RunType.Stage : RunType.Main,
             Stage          = ToUInt16(request.Stage),
@@ -470,7 +398,7 @@ internal sealed partial class StorageServiceImpl
 
     private sealed class PlayerIdRow
     {
-        [SugarColumn(ColumnDataType = "bigint", SqlParameterDbType = typeof(SteamIdDataConvert))]
-        public SteamID SteamId { get; set; }
+        [SugarColumn(ColumnDataType = "bigint")]
+        public long SteamId { get; set; }
     }
 }

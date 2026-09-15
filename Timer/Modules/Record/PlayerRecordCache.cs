@@ -37,12 +37,9 @@ internal sealed class PlayerRecordCache
 
     public void Populate(PlayerSlot slot, IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords)
     {
-        var mainRecords    = GetOrAddSlotRecords(slot);
-        var stageRecordsMap = GetOrAddSlotStageRecords(slot);
-
         foreach (var record in records)
         {
-            mainRecords[(record.Style, record.Track)] = record;
+            SetRecord(slot, record.Style, record.Track, record);
         }
 
         foreach (var record in stageRecords)
@@ -62,7 +59,7 @@ internal sealed class PlayerRecordCache
                 continue;
             }
 
-            stageRecordsMap[(style, track, stage)] = record;
+            SetStageRecord(slot, style, track, stage, record);
         }
     }
 
@@ -90,12 +87,22 @@ internal sealed class PlayerRecordCache
 
     public void SetRecord(PlayerSlot slot, int style, int track, RunRecord record)
     {
-        GetOrAddSlotRecords(slot)[(style, track)] = record;
+        var records = GetOrAddSlotRecords(slot);
+        var key = (style, track);
+        if (!records.TryGetValue(key, out var best) || record.CompareTo(best) < 0)
+        {
+            records[key] = record;
+        }
     }
 
     public void SetStageRecord(PlayerSlot slot, int style, int track, int stage, RunRecord record)
     {
-        GetOrAddSlotStageRecords(slot)[(style, track, stage)] = record;
+        var records = GetOrAddSlotStageRecords(slot);
+        var key = (style, track, stage);
+        if (!records.TryGetValue(key, out var best) || record.CompareTo(best) < 0)
+        {
+            records[key] = record;
+        }
     }
 
     public void Clear(PlayerSlot slot)

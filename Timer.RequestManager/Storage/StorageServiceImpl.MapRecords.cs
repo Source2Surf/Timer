@@ -158,13 +158,13 @@ internal sealed partial class StorageServiceImpl
         }
 
         var seen     = new HashSet<ulong>(records.Count);
-        var steamIds = new List<SteamID>(records.Count);
+        var steamIds = new List<long>(records.Count);
 
         foreach (var record in records)
         {
             if (seen.Add(record.SteamId))
             {
-                steamIds.Add(new SteamID(record.SteamId));
+                steamIds.Add(unchecked((long)record.SteamId));
             }
         }
 
@@ -177,7 +177,7 @@ internal sealed partial class StorageServiceImpl
 
         foreach (var row in rows)
         {
-            names[row.SteamId.AsPrimitive()] = row.Name;
+            names[unchecked((ulong)row.SteamId)] = row.Name;
         }
 
         foreach (var record in records)
@@ -191,8 +191,8 @@ internal sealed partial class StorageServiceImpl
 
     private sealed class PlayerNameRow
     {
-        [SugarColumn(ColumnDataType = "bigint", SqlParameterDbType = typeof(SteamIdDataConvert))]
-        public SteamID SteamId { get; set; }
+        [SugarColumn(ColumnDataType = "bigint")]
+        public long SteamId { get; set; }
 
         public string Name { get; set; } = string.Empty;
     }
@@ -207,7 +207,7 @@ internal sealed partial class StorageServiceImpl
         }
 
         var normalizedLimit = NormalizeLimit(limit);
-        var steamIdValue    = steamId.AsPrimitive();
+        var steamIdValue    = ToDbSteamId(steamId);
 
         var rows = await _db.Queryable<RunEntity>()
                             .Where(x => x.MapId == mapId.Value
@@ -238,7 +238,7 @@ internal sealed partial class StorageServiceImpl
             {
                 Id = (long)row.Id,
                 RunDate = row.Date,
-                SteamId = row.SteamId.AsPrimitive(),
+                SteamId = unchecked((ulong)row.SteamId),
                 MapId = row.MapId,
                 Style = row.Style,
                 Track = row.Track,
@@ -256,8 +256,8 @@ internal sealed partial class StorageServiceImpl
 
         public DateTime Date { get; set; }
 
-        [SugarColumn(ColumnDataType = "bigint", SqlParameterDbType = typeof(SteamIdDataConvert))]
-        public SteamID SteamId { get; set; }
+        [SugarColumn(ColumnDataType = "bigint")]
+        public long SteamId { get; set; }
 
         public ulong MapId { get; set; }
 

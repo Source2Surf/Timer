@@ -179,6 +179,9 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     public void OnServerActivate()
     {
         var currentMapName = _bridge.CurrentMapName;
+        _mapCache.Clear();
+        _playerCache.ClearAll();
+        var load = _mapCache.BeginLoad();
 
         Task.Run(async () =>
         {
@@ -216,12 +219,12 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    _mapCache.Clear();
-                    _mapCache.Populate(records, stageRecords);
+                    if (!_mapCache.IsCurrent(load)) return;
+                    _mapCache.Populate(records, stageRecords, load);
 
                     foreach (var ((style, track), checkpoints) in wrCheckpointMap)
                     {
-                        _mapCache.SetWRCheckpoints(style, track, checkpoints);
+                        _mapCache.SetWRCheckpoints(style, track, checkpoints, load);
                     }
 
                     _listenerHub.NotifyAll("OnMapRecordsLoaded", static l => l.OnMapRecordsLoaded());
@@ -255,6 +258,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         }
 
         _mapCache.Clear();
+        _playerCache.ClearAll();
     }
 
     public void OnPlayerFinishMap(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
@@ -352,6 +356,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         }
 
         var mapName = _bridge.CurrentMapName;
+        var load = _mapCache.BeginLoad();
 
         _taskTracker.Track(Task.Run(async () =>
                                     {
@@ -370,6 +375,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
                                             await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                                             {
+                                                if (!_mapCache.IsCurrent(load)) return;
                                                 if (_bridge.ClientManager.GetGameClient(steamId)
                                                     is not { } currentClient)
                                                 {

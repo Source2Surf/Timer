@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Sharp.Shared.Units;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Source2Surf.Timer.Common;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
@@ -13,6 +12,13 @@ namespace Timer.RequestManager.Storage;
 
 internal sealed partial class StorageServiceImpl
 {
+    private static long ToDbSteamId(SteamID steamId) => unchecked((long)steamId.AsPrimitive());
+
+    private static bool IsUniqueKeyViolation(Exception exception)
+        => exception is MySqlConnector.MySqlException { Number: 1062 }
+            or Npgsql.PostgresException { SqlState: "23505" }
+           || (exception.InnerException is { } inner && IsUniqueKeyViolation(inner));
+
     private async Task<MapEntity?> FindMapByNameAsync(string mapName)
     {
         return await _db.Queryable<MapEntity>()
@@ -137,26 +143,7 @@ internal sealed partial class StorageServiceImpl
             ConnectionString      = connectionString,
             IsAutoCloseConnection = true,
             InitKeyType           = InitKeyType.Attribute,
-            ConfigureExternalServices
-                = new ConfigureExternalServices { SerializeService = new SteamIdAwareSerializeService() },
         });
-
-    /// <summary>
-    ///     Custom SqlSugar serialize service that registers <see cref="SteamIdJsonConverter" />
-    ///     so that SteamID can be deserialized from Int64 in anonymous/POCO projections.
-    /// </summary>
-    private sealed class SteamIdAwareSerializeService : ISerializeService
-    {
-        private static readonly JsonSerializerSettings Settings = new () { Converters = { new SteamIdJsonConverter() } };
-        private static readonly SerializeService       Default  = new ();
-
-        public string SerializeObject(object value) => Default.SerializeObject(value);
-
-        public string SugarSerializeObject(object value) => Default.SugarSerializeObject(value);
-
-        public T DeserializeObject<T>(string value) =>
-            JsonConvert.DeserializeObject<T>(value, Settings)!;
-    }
 
     private static byte GetTier(byte[]? tiers, int track)
     {
@@ -221,31 +208,14 @@ internal sealed partial class StorageServiceImpl
     private static string ToMapKey(string mapName)
         => mapName.ToLowerInvariant();
 
-    private void InvalidateTrackScoreConfigCache(ulong mapId)
-    {
-        // Iterate the ConcurrentDictionary's allocation-free struct enumerator directly. Accessing .Keys
-        // would snapshot the entire keyset into a fresh List + ReadOnlyCollection on every call; the
-        // enumerator allocates nothing and is safe to remove from during enumeration.
-        foreach (var kvp in _trackScoreConfigCache)
-        {
-            if (kvp.Key.mapId == mapId)
-            {
-                _trackScoreConfigCache.TryRemove(kvp.Key, out _);
-            }
-        }
-    }
-
     public async Task<IReadOnlyList<string>> GetAllMapNamesAsync()
-    {
-        var maps = await _db.Queryable<MapEntity>()
-            .Select(x => x.File)
-            .ToListAsync();
-
-        return maps;
-    }
+        => await _db.Queryable<MapEntity>().Select(x => x.File).ToListAsync();
 
     private sealed class AttemptBestTimesRow
     {
+        public ulong? PlayerBestRowId { get; set; }
+        public ulong? PlayerBestRunId { get; set; }
+
         public float? ServerBestTime { get; set; }
 
         public float? PlayerBestTime { get; set; }

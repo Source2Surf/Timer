@@ -74,7 +74,11 @@ public class RunRecord : IComparable<RunRecord>
     }
 
     public int CompareTo(RunRecord? other)
-        => other is null ? 1 : Time.CompareTo(other.Time);
+    {
+        if (other is null) return 1;
+        var timeComparison = Time.CompareTo(other.Time);
+        return timeComparison != 0 ? timeComparison : Id.CompareTo(other.Id);
+    }
 }
 
 public class RunCheckpoint : IComparable<RunCheckpoint>

@@ -10,6 +10,7 @@ internal sealed partial class StorageServiceImpl
 {
     public async Task UpdatePlayerMapStatsAsync(SteamID steamId, string mapName, float deltaSeconds)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         if (deltaSeconds <= 0f)
         {
             return;
@@ -20,7 +21,7 @@ internal sealed partial class StorageServiceImpl
         var affected = await _db.Updateable<PlayerMapStatsEntity>()
                                 .SetColumns(x => x.PlayTime == x.PlayTime + deltaSeconds)
                                 .SetColumns(x => x.PlayCount == x.PlayCount + 1)
-                                .Where(x => x.SteamId == steamId && x.MapId == mapId)
+                                .Where(x => x.SteamId == steamIdValue && x.MapId == mapId)
                                 .ExecuteCommandAsync();
 
         if (affected > 0)
@@ -30,7 +31,7 @@ internal sealed partial class StorageServiceImpl
 
         var entity = new PlayerMapStatsEntity
         {
-            SteamId   = steamId,
+            SteamId   = ToDbSteamId(steamId),
             MapId     = mapId,
             PlayTime  = deltaSeconds,
             PlayCount = 1,
@@ -40,7 +41,7 @@ internal sealed partial class StorageServiceImpl
         {
             await _db.Insertable(entity).ExecuteCommandAsync();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsUniqueKeyViolation(ex))
         {
             _logger.LogDebug(ex,
                              "PlayerMapStats insert raced for {steamId} map {mapId}, retrying update.",
@@ -50,13 +51,14 @@ internal sealed partial class StorageServiceImpl
             await _db.Updateable<PlayerMapStatsEntity>()
                      .SetColumns(x => x.PlayTime == x.PlayTime + deltaSeconds)
                      .SetColumns(x => x.PlayCount == x.PlayCount + 1)
-                     .Where(x => x.SteamId == steamId && x.MapId == mapId)
+                     .Where(x => x.SteamId == steamIdValue && x.MapId == mapId)
                      .ExecuteCommandAsync();
         }
     }
 
     public async Task<(float playTime, int playCount)> GetPlayerMapStatsAsync(SteamID steamId, string mapName)
     {
+        var steamIdValue = ToDbSteamId(steamId);
         var mapId = await ResolveMapIdByNameAsync(mapName);
 
         if (mapId is null)
@@ -65,7 +67,7 @@ internal sealed partial class StorageServiceImpl
         }
 
         var stats = await _db.Queryable<PlayerMapStatsEntity>()
-                             .Where(x => x.SteamId == steamId && x.MapId == mapId.Value)
+                             .Where(x => x.SteamId == steamIdValue && x.MapId == mapId.Value)
                              .FirstAsync();
 
         if (stats is null)
