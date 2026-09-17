@@ -17,13 +17,18 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Configuration;
+using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
 using Source2Surf.Timer.Shared.Models;
@@ -48,6 +53,8 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
 
     private readonly InterfaceBridge        _bridge;
     private readonly IRequestManager        _requestManager;
+    private readonly ScoreWriteModeOptions  _scoreWriteMode;
+    private readonly RunSubmissionSender    _runSubmissionSender;
     private readonly ILogger<PlayerManager> _logger;
 
     // Core storage: PlayerProfile indexed by PlayerSlot
@@ -61,21 +68,30 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
 
     // Temporary storage: whether a slot has completed authentication
     private readonly bool[] _authenticated;
+    private readonly CancellationTokenSource?[] _profileLoadCancellations;
+    private readonly long[] _profileSessionEpoch;
+    private readonly object _profileLoadGate = new ();
 
     // Listener hub for notifying consumers
     private readonly ListenerHub<IPlayerManagerListener> _listenerHub;
 
     public PlayerManager(InterfaceBridge        bridge,
                          IRequestManager        requestManager,
+                         ScoreWriteModeOptions  scoreWriteMode,
+                         RunSubmissionSender    runSubmissionSender,
                          ILogger<PlayerManager> logger)
     {
         _bridge         = bridge;
         _requestManager = requestManager;
+        _scoreWriteMode = scoreWriteMode;
+        _runSubmissionSender = runSubmissionSender;
         _logger         = logger;
 
         _profiles        = new PlayerProfile?[PlayerSlot.MaxPlayerCount];
         _pendingSteamIds = new SteamID?[PlayerSlot.MaxPlayerCount];
         _authenticated   = new bool[PlayerSlot.MaxPlayerCount];
+        _profileLoadCancellations = new CancellationTokenSource?[PlayerSlot.MaxPlayerCount];
+        _profileSessionEpoch = new long[PlayerSlot.MaxPlayerCount];
         _listenerHub     = new ListenerHub<IPlayerManagerListener>(logger);
     }
 
@@ -83,16 +99,19 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
     {
         var slot = (int) client.Slot;
 
+        CancelProfileLoad(slot);
+        _profileSessionEpoch[slot]++;
+
         // Clean up old data if slot is occupied
         if (_profiles[slot] is { } oldProfile)
         {
-            _steamIdToSlot.Remove(oldProfile.SteamId);
+            RemoveSteamIdMappingIfSlotMatches(oldProfile.SteamId, client.Slot);
             _profiles[slot] = null;
         }
 
         if (_pendingSteamIds[slot] is { } oldPending)
         {
-            _steamIdToSlot.Remove(oldPending);
+            RemoveSteamIdMappingIfSlotMatches(oldPending, client.Slot);
         }
 
         _pendingSteamIds[slot] = client.SteamId;
@@ -146,18 +165,27 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
 
         var steamId = client.SteamId;
         var name    = client.Name;
+        var profileSessionEpoch = _profileSessionEpoch[slot];
+        var profileLoadCancellation = CancellationTokenSource.CreateLinkedTokenSource(_bridge.CancellationToken);
+        lock (_profileLoadGate)
+        {
+            _profileLoadCancellations[slot] = profileLoadCancellation;
+        }
 
         Task.Run(async () =>
         {
             try
             {
-                var profile = await RetryHelper.RetryAsync(() => _requestManager.GetPlayerProfile(steamId, name),
-                                                           RetryHelper.IsTransient,
-                                                           _logger,
-                                                           "GetPlayerProfile").ConfigureAwait(false);
+                var profile = await LoadPlayerProfileAsync(steamId, name, profileLoadCancellation.Token)
+                                    .ConfigureAwait(false);
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
+                    if (_profileSessionEpoch[slot] != profileSessionEpoch)
+                    {
+                        return;
+                    }
+
                     if (_pendingSteamIds[slot] is not { } pending)
                     {
                         return;
@@ -173,7 +201,10 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
                         return;
                     }
 
-                    slot = c.Slot;
+                    if (c.Slot != slot)
+                    {
+                        return;
+                    }
 
                     _profiles[slot]         = profile;
                     _steamIdToSlot[steamId] = slot;
@@ -184,16 +215,46 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
                                            steamId);
                 }).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (profileLoadCancellation.IsCancellationRequested)
+            {
+                // Disconnect and shutdown intentionally abandon this one player session.
+            }
             catch (Exception e)
             {
                 _logger.LogError(e, "Error when loading player profile for {steamId}", steamId);
+                try
+                {
+                    await HandlePermanentProfileLoadFailureAsync((int)slot, steamId, profileSessionEpoch)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception failure)
+                {
+                    _logger.LogError(failure,
+                        "Could not close failed backend player-profile session for {steamId} at slot {slot}",
+                        steamId, slot);
+                }
             }
-        }, _bridge.CancellationToken);
+            finally
+            {
+                lock (_profileLoadGate)
+                {
+                    if (ReferenceEquals(_profileLoadCancellations[slot], profileLoadCancellation))
+                    {
+                        _profileLoadCancellations[slot] = null;
+                    }
+                }
+
+                profileLoadCancellation.Dispose();
+            }
+        });
     }
 
     public void OnClientDisconnected(IGameClient client, NetworkDisconnectionReason reason)
     {
         var slot = (int) client.Slot;
+
+        CancelProfileLoad(slot);
+        _profileSessionEpoch[slot]++;
 
         _listenerHub.NotifyAll("OnClientDisconnected",
                                static (l, s) => l.OnClientDisconnected(s),
@@ -201,13 +262,13 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
 
         if (_profiles[slot] is { } profile)
         {
-            _steamIdToSlot.Remove(profile.SteamId);
+            RemoveSteamIdMappingIfSlotMatches(profile.SteamId, client.Slot);
             _profiles[slot] = null;
         }
 
         if (_pendingSteamIds[slot] is { } pending)
         {
-            _steamIdToSlot.Remove(pending);
+            RemoveSteamIdMappingIfSlotMatches(pending, client.Slot);
             _pendingSteamIds[slot] = null;
         }
 
@@ -260,8 +321,135 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
 
     public void Shutdown()
     {
+        for (var slot = 0; slot < _profileLoadCancellations.Length; slot++)
+        {
+            CancelProfileLoad(slot);
+            _profileSessionEpoch[slot]++;
+        }
+
         _bridge.ClientManager.RemoveClientListener(this);
         _listenerHub.Clear();
         _steamIdToSlot.Clear();
+    }
+
+    private async Task<PlayerProfile> LoadPlayerProfileAsync(SteamID steamId,
+                                                              string name,
+                                                              CancellationToken cancellationToken)
+    {
+        if (_scoreWriteMode.Mode != ScoreWriteMode.RemoteWrite)
+        {
+            return await RetryHelper.RetryAsync(() => _requestManager.GetPlayerProfile(steamId, name),
+                                                RetryHelper.IsTransient,
+                                                _logger,
+                                                "GetPlayerProfile",
+                                                cancellationToken: cancellationToken)
+                                    .ConfigureAwait(false);
+        }
+
+        var steamIdValue = checked((long)steamId.AsPrimitive());
+        var safeName = NormalizeRemotePlayerName(name, steamIdValue);
+        var retryDelay = TimeSpan.FromMilliseconds(500);
+
+        for (;;)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var response = await _runSubmissionSender.EnsurePlayerProfileAsync(
+                    steamIdValue, safeName, cancellationToken).ConfigureAwait(false);
+                return BackendPlayerProfileMapper.ToProfile(response, steamId);
+            }
+            catch (RpcException exception) when (IsRetryableProfileRpcFailure(exception))
+            {
+                _logger.LogWarning(exception,
+                    "Backend player profile unavailable for {SteamId}; retrying in {Delay}.",
+                    steamId, retryDelay);
+                await Task.Delay(retryDelay, cancellationToken).ConfigureAwait(false);
+                retryDelay = TimeSpan.FromMilliseconds(Math.Min(retryDelay.TotalMilliseconds * 2, 30_000));
+            }
+        }
+    }
+
+    private static bool IsRetryableProfileRpcFailure(RpcException exception)
+        => exception.StatusCode is StatusCode.Unavailable
+            or StatusCode.DeadlineExceeded
+            or StatusCode.Cancelled
+            or StatusCode.Internal
+            or StatusCode.Unknown
+            or StatusCode.ResourceExhausted;
+
+    private static string NormalizeRemotePlayerName(string? name, long steamId)
+    {
+        var normalized = (name ?? string.Empty).Trim();
+        if (normalized.Length > 192)
+        {
+            normalized = normalized[..192];
+        }
+
+        normalized = string.Concat(normalized.Where(character => !char.IsControl(character)));
+        return normalized.Length == 0 ? $"Player {steamId}" : normalized;
+    }
+
+    private void CancelProfileLoad(int slot)
+    {
+        CancellationTokenSource? cancellation;
+        lock (_profileLoadGate)
+        {
+            cancellation = _profileLoadCancellations[slot];
+            _profileLoadCancellations[slot] = null;
+        }
+
+        if (cancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The completed profile task owns disposal. It cannot still apply a result.
+        }
+    }
+
+    private void RemoveSteamIdMappingIfSlotMatches(SteamID steamId, PlayerSlot slot)
+    {
+        if (_steamIdToSlot.TryGetValue(steamId, out var mappedSlot) && mappedSlot == slot)
+        {
+            _steamIdToSlot.Remove(steamId);
+        }
+    }
+
+    private async Task HandlePermanentProfileLoadFailureAsync(int slot,
+                                                               SteamID steamId,
+                                                               long sessionEpoch)
+    {
+        try
+        {
+            await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+            {
+                if (_profileSessionEpoch[slot] != sessionEpoch
+                    || _pendingSteamIds[slot] != steamId)
+                {
+                    return;
+                }
+
+                _pendingSteamIds[slot] = null;
+                _authenticated[slot] = false;
+                if (_bridge.ClientManager.GetGameClient(steamId) is { } client
+                    && (int)client.Slot == slot)
+                {
+                    _bridge.ClientManager.KickClient(client,
+                        "Backend player profile unavailable",
+                        NetworkDisconnectionReason.Kicked);
+                }
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_bridge.CancellationToken.IsCancellationRequested)
+        {
+            // Shutdown is already disconnecting clients and abandoning pending profiles.
+        }
     }
 }

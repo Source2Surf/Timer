@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
@@ -26,8 +27,10 @@ using Sharp.Shared.GameEntities;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Player;
+using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Modules.Practice;
 using Source2Surf.Timer.Modules.Record;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -76,6 +79,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     private readonly IRequestManager       _request;
     private readonly IMapInfoModule        _mapInfo;
     private readonly IPracticeModule       _practiceModule;
+    private readonly ScoreWriteMode         _scoreWriteMode;
     private readonly ILogger<RecordModule> _logger;
 
     // Sub-components
@@ -99,6 +103,9 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                         ICommandManager       commandManager,
                         IMapInfoModule        mapInfoModule,
                         IPracticeModule       practiceModule,
+                        ScoreWriteModeOptions scoreWriteMode,
+                        IConfiguration        configuration,
+                        RunSubmissionSender   remoteSubmissionSender,
                         ILogger<RecordModule> logger)
     {
         _bridge         = bridge;
@@ -109,12 +116,22 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         _commandManager = commandManager;
         _mapInfo        = mapInfoModule;
         _practiceModule = practiceModule;
+        _scoreWriteMode = scoreWriteMode.Mode;
         _logger         = logger;
 
         _listenerHub = new ListenerHub<IRecordModuleListener>(logger);
         _mapCache    = new MapRecordCache(logger);
         _playerCache = new PlayerRecordCache(logger);
-        _saver       = new RecordSaver(bridge, request, styleModule, _mapCache, _playerCache, _listenerHub, logger);
+        _saver       = new RecordSaver(bridge,
+                                       request,
+                                       styleModule,
+                                       _mapCache,
+                                       _playerCache,
+                                       _listenerHub,
+                                       scoreWriteMode,
+                                       RemoteRunSubmissionOptions.FromConfiguration(configuration, scoreWriteMode),
+                                       remoteSubmissionSender,
+                                       logger);
         _taskTracker = new TaskTracker(logger);
     }
 
@@ -155,6 +172,14 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     public void OnPostInit(ServiceProvider provider)
     {
         _replayRecorder = provider.GetRequiredService<IReplayRecorderModule>();
+        if (_replayRecorder is IRecordModuleListener replayListener)
+        {
+            _saver.SetLateReplayListener(replayListener);
+        }
+        else
+        {
+            _logger.LogError("Replay recorder does not implement IRecordModuleListener; old-map remote acknowledgements cannot attach replays.");
+        }
     }
 
     public void Shutdown()
@@ -282,10 +307,13 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
             return;
         }
 
+        var mapName = _bridge.CurrentMapName;
+        var mapId = CaptureFinishMapId(mapName);
         _taskTracker.Track(_saver.SaveMapRecordAsync(slot,
                                                      client.SteamId,
                                                      client.Name,
-                                                     _bridge.CurrentMapName,
+                                                     mapName,
+                                                     mapId,
                                                      timerInfo,
                                                      attemptId: _replayRecorder.GetAttemptId(slot),
                                                      _bridge.CancellationToken));
@@ -313,10 +341,13 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
             return;
         }
 
+        var mapName = _bridge.CurrentMapName;
+        var mapId = CaptureFinishMapId(mapName);
         _taskTracker.Track(_saver.SaveStageRecordAsync(slot,
                                                        client.SteamId,
                                                        client.Name,
-                                                       _bridge.CurrentMapName,
+                                                       mapName,
+                                                       mapId,
                                                        timerInfo,
                                                        attemptId: _replayRecorder.GetAttemptId(slot),
                                                        _bridge.CancellationToken));
@@ -464,6 +495,12 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     /// </summary>
     private ECommandAction OnCommandRecalcScores(StringCommand arg)
     {
+        if (_scoreWriteMode == ScoreWriteMode.RemoteWrite)
+        {
+            _logger.LogWarning("timer_recalc_scores is unavailable in remote-write mode because score policy and recalculation are backend-owned.");
+            return ECommandAction.Handled;
+        }
+
         // Build the style factor dictionary
         var styleCount   = _styleModule.GetStyleCount();
         var styleFactors = new Dictionary<int, double>(styleCount);
@@ -522,5 +559,19 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                  _bridge.CancellationToken);
 
         return ECommandAction.Handled;
+    }
+
+    private ulong CaptureFinishMapId(string mapName)
+    {
+        var profile = _mapInfo.GetCurrentMapProfile();
+        if (profile.MapId != 0
+            && string.Equals(profile.MapName, mapName, StringComparison.OrdinalIgnoreCase))
+        {
+            return profile.MapId;
+        }
+
+        _logger.LogWarning("No stable map identity was available at finish for {mapName}; a remote acknowledgement will not publish a local record event.",
+                           mapName);
+        return 0;
     }
 }

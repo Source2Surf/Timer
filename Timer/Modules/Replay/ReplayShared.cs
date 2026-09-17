@@ -21,9 +21,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
-using MemoryPack;
 using Microsoft.Extensions.Logging;
-using Sharp.Shared.Types;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models.Replay;
 using ZstdSharp;
@@ -70,23 +68,41 @@ internal static class ReplayShared
 
     /// <summary>
     /// Serialize replay data in-memory (JSON header + \n separator + Zstd-compressed MemoryPack frame data)
-    /// for remote upload. Spatial fields are quantized for storage (see <see cref="QuantizeForStorage"/>).
+    /// for remote upload. Spatial fields are quantized for storage (see <see cref="ReplayFrameStorage"/>).
     /// </summary>
     public static byte[] SerializeReplay(ReplayFileHeader header, IReadOnlyList<ReplayFrameData> frames)
     {
-        var serializedFrames = MemoryPackSerializer.Serialize(QuantizeForStorage(frames));
+        var storage = new ReplayFrameStorage(frames);
+        var storageHeader = header with { Version = storage.Version };
+        var headerBytes = JsonSerializer.SerializeToUtf8Bytes(storageHeader);
+        var payloadSize = storage.SerializedSize;
+        var payload = ArrayPool<byte>.Shared.Rent(payloadSize);
+        try
+        {
+            storage.Serialize(payload.AsSpan(0, payloadSize));
+            var prefixSize = checked(headerBytes.Length + 1);
+            var compressedCapacity = Compressor.GetCompressBound(payloadSize);
+            var output = ArrayPool<byte>.Shared.Rent(checked(prefixSize + compressedCapacity));
+            try
+            {
+                headerBytes.CopyTo(output, 0);
+                output[headerBytes.Length] = (byte)HeaderFrameSeparator;
+                using var compressor = new Compressor();
+                var written = compressor.Wrap(payload.AsSpan(0, payloadSize),
+                                              output.AsSpan(prefixSize, compressedCapacity));
 
-        // Zstd compress
-        using var compressor = new Compressor();
-        var       compressed = compressor.Wrap(serializedFrames);
-
-        // Assemble: JSON header + \n separator + compressed frames
-        using var ms = new MemoryStream(compressed.Length + 4096);
-        JsonSerializer.Serialize(ms, header);
-        ms.WriteByte((byte) HeaderFrameSeparator);
-        ms.Write(compressed);
-
-        return ms.ToArray();
+                // The returned upload byte[] owns its memory. All working buffers are pooled.
+                return output.AsSpan(0, prefixSize + written).ToArray();
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(output);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(payload);
+        }
     }
 
     /// <summary>
@@ -113,7 +129,7 @@ internal static class ReplayShared
             }
 
             using var decompressor = new Decompressor();
-            var frames = DeserializeReplayFrames(bytes[(split + 1)..], decompressor);
+            var frames = DeserializeReplayFrames(bytes[(split + 1)..], header.Version, decompressor);
             if (frames == null)
             {
                 logger.LogError("Failed to deserialize replay frames for style={style} track={track} stage={stage}", style, track, stage);
@@ -135,9 +151,21 @@ internal static class ReplayShared
     /// </summary>
     public static ReplayLoadResult? LoadReplayFromPath(string path, int style, int track, int stage, Decompressor decompressor, ILogger logger)
     {
+        byte[]? fileBuffer = null;
         try
         {
-            var bytes = File.ReadAllBytes(path).AsSpan();
+            int length;
+            // Close the handle before parsing so corrupt files can still be renamed on Windows.
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                                               bufferSize: 1, FileOptions.SequentialScan))
+            {
+                if (stream.Length > Array.MaxLength)
+                    throw new InvalidDataException("Replay file exceeds the supported buffer size.");
+                length = checked((int)stream.Length);
+                fileBuffer = ArrayPool<byte>.Shared.Rent(length);
+                stream.ReadExactly(fileBuffer.AsSpan(0, length));
+            }
+            var bytes = fileBuffer.AsSpan(0, length);
             var split = bytes.IndexOf((byte)HeaderFrameSeparator);
 
             if (split == -1)
@@ -163,7 +191,7 @@ internal static class ReplayShared
                 return null;
             }
 
-            var frames = DeserializeReplayFrames(bytes[(split + 1)..], decompressor);
+            var frames = DeserializeReplayFrames(bytes[(split + 1)..], header.Version, decompressor);
             if (frames == null)
             {
                 logger.LogError("Failed to deserialize frames: {p}", path);
@@ -176,6 +204,11 @@ internal static class ReplayShared
         {
             logger.LogError(e, "Error loading replay: {p}", path);
             return null;
+        }
+        finally
+        {
+            if (fileBuffer is not null)
+                ArrayPool<byte>.Shared.Return(fileBuffer);
         }
     }
 
@@ -362,7 +395,7 @@ internal static class ReplayShared
 
     /// <summary>
     /// Asynchronously write a replay file (JSON header + \n separator + MemoryPack frame data).
-    /// Spatial fields are quantized for storage (see <see cref="QuantizeForStorage"/>).
+    /// Spatial fields are quantized for storage (see <see cref="ReplayFrameStorage"/>).
     /// If compressionLevel &lt;= 0, writes uncompressed frame data.
     /// If compressionWorkers &lt;= 0, uses single-threaded compression.
     /// </summary>
@@ -376,35 +409,18 @@ internal static class ReplayShared
     {
         try
         {
+            var storage = new ReplayFrameStorage(framesToWrite);
+            var storageHeader = header with { Version = storage.Version };
+
             await using var fileStream
                 = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
 
-            var headerBuffer = ArrayPool<byte>.Shared.Rent(4096);
-
-            try
-            {
-                using var       memoryStream = new MemoryStream(headerBuffer);
-                await using var jsonWriter   = new Utf8JsonWriter(memoryStream);
-
-                JsonSerializer.Serialize(jsonWriter, header);
-
-                await jsonWriter.FlushAsync();
-
-                await fileStream.WriteAsync(new ReadOnlyMemory<byte>(headerBuffer, 0, (int) memoryStream.Position));
-                await fileStream.WriteAsync(HeaderFrameSeparatorBytes);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(headerBuffer);
-            }
-
-            // Round position/velocity/angles to the storage grid before serializing: zeroing the low
-            // mantissa bits makes the MemoryPack blob markedly more compressible without a custom layout.
-            var quantizedFrames = QuantizeForStorage(framesToWrite);
+            await JsonSerializer.SerializeAsync(fileStream, storageHeader).ConfigureAwait(false);
+            await fileStream.WriteAsync(HeaderFrameSeparatorBytes).ConfigureAwait(false);
 
             if (compressionLevel <= 0)
             {
-                await SerializeFramesToStreamAsync(fileStream, quantizedFrames);
+                await storage.SerializeAsync(fileStream);
             }
             else
             {
@@ -413,7 +429,7 @@ internal static class ReplayShared
                 compressionStream.SetParameter(ZSTD_cParameter.ZSTD_c_nbWorkers,
                                                Math.Max(compressionWorkers, 0));
 
-                await SerializeFramesToStreamAsync(compressionStream, quantizedFrames);
+                await storage.SerializeAsync(compressionStream);
             }
         }
         catch (Exception e)
@@ -431,95 +447,32 @@ internal static class ReplayShared
         return true;
     }
 
-    // Storage quantization grid: 1/32 unit, matching Valve's network coordinate precision
-    // (COORD_FRACTIONAL_BITS = 5). Lossy but sub-perceptual, and bounded per-frame — playback sets an
-    // absolute transform each tick, so the error never accumulates.
-    private const float StorageQuantScale    = 32f;
-    private const float InvStorageQuantScale = 1f / StorageQuantScale;
-
-    /// <summary>
-    /// Return a copy of <paramref name="frames"/> with Origin / Velocity / Angles snapped to the storage
-    /// grid. Uses <c>record struct</c> <c>with</c> so every other field — including any added later — is
-    /// carried through verbatim, keeping the encoding field-agnostic (no per-field codec to maintain).
-    /// </summary>
-    private static ReplayFrameData[] QuantizeForStorage(IReadOnlyList<ReplayFrameData> frames)
+    private static ReplayFrameData[]? DeserializeReplayFrames(ReadOnlySpan<byte> payload, int version, Decompressor decompressor)
     {
-        var result = new ReplayFrameData[frames.Count];
-
-        for (var i = 0; i < frames.Count; i++)
-        {
-            var f = frames[i];
-
-            result[i] = f with
-            {
-                Origin   = Snap(f.Origin),
-                Velocity = Snap(f.Velocity),
-                Angles   = SnapAngles(f.Angles),
-            };
-        }
-
-        return result;
-    }
-
-    private static float Snap(float value)
-        => MathF.Round(value * StorageQuantScale) * InvStorageQuantScale;
-
-    private static Vector Snap(Vector v)
-        => new (Snap(v.X), Snap(v.Y), Snap(v.Z));
-
-    private static Vector2D SnapAngles(Vector2D a)
-        => new (Snap(a.X), Snap(a.Y));
-
-    private static async Task SerializeFramesToStreamAsync(Stream stream, IReadOnlyList<ReplayFrameData> framesToWrite)
-    {
-        switch (framesToWrite)
-        {
-            case ReplayFrameData[] arr:
-                await MemoryPackSerializer.SerializeAsync(stream, arr);
-
-                break;
-            case List<ReplayFrameData> list:
-                await MemoryPackSerializer.SerializeAsync(stream, list);
-
-                break;
-            default:
-                var rented = ArrayPool<ReplayFrameData>.Shared.Rent(framesToWrite.Count);
-
-                try
-                {
-                    for (var i = 0; i < framesToWrite.Count; i++)
-                    {
-                        rented[i] = framesToWrite[i];
-                    }
-
-                    await MemoryPackSerializer.SerializeAsync(stream, rented.AsMemory(0, framesToWrite.Count));
-                }
-                finally
-                {
-                    ArrayPool<ReplayFrameData>.Shared.Return(rented);
-                }
-
-                break;
-        }
-    }
-
-    private static ReplayFrameData[]? DeserializeReplayFrames(ReadOnlySpan<byte> payload, Decompressor decompressor)
-    {
+        ulong capacity;
         try
         {
-            var decompressed = decompressor.Unwrap(payload);
-            var frames = MemoryPackSerializer.Deserialize<ReplayFrameData[]>(decompressed);
-
-            if (frames is not null)
-            {
-                return frames;
-            }
+            // For streaming Zstd frames this is a bound, not necessarily the exact length.
+            capacity = Decompressor.GetDecompressedSize(payload);
         }
-        catch
+        catch (ZstdException)
         {
+            // Legacy and current files may be stored without Zstd compression.
+            return ReplayFrameStorage.Deserialize(payload, version);
         }
 
-        return MemoryPackSerializer.Deserialize<ReplayFrameData[]>(payload);
-    }
+        if (capacity > (ulong)Array.MaxLength)
+            throw new InvalidDataException("Decompressed replay exceeds the supported buffer size.");
 
+        var buffer = ArrayPool<byte>.Shared.Rent((int)capacity);
+        try
+        {
+            var written = decompressor.Unwrap(payload, buffer.AsSpan(0, (int)capacity));
+            return ReplayFrameStorage.Deserialize(buffer.AsSpan(0, written), version);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
 }

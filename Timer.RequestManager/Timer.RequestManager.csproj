@@ -8,7 +8,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="ModSharp.Sharp.Shared" Version="*" PrivateAssets="all" />
+		<PackageReference Include="ModSharp.Sharp.Shared" Version="2.1.136" PrivateAssets="all" />
 		<PackageReference Include="MySqlConnector" Version="2.5.0" />
 		<PackageReference Include="Npgsql" Version="10.0.1" />
 		<PackageReference Include="SqlSugarCoreNoDrive" Version="5.1.4.211" />
@@ -20,6 +20,6 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="Timer.RequestManager.Tests" />
+		<InternalsVisibleTo Include="Timer.Backend.Tests" />
 	</ItemGroup>
 </Project>
-

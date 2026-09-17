@@ -31,6 +31,9 @@ internal sealed class PlayerTrackScoreEntity
     public ulong MapId { get; set; }
     public int Style { get; set; }
     public ushort Track { get; set; }
+    // See PlayerEntity.Points: a single board can exceed signed INT while still
+    // remaining within the public uint score contract.
+    [SugarColumn(ColumnDataType = "bigint", SqlParameterDbType = typeof(UInt32BigIntConverter))]
     public uint Points { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

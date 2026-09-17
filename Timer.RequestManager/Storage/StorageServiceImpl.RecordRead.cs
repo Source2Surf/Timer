@@ -61,7 +61,7 @@ internal sealed partial class StorageServiceImpl
                                           .OrderBy((best, run) => best.BestTime)
                                           .OrderBy((best, run) => best.RunId)
                                           .Select((best, run) => run)
-                                          .FirstAsync();
+                                          .FirstAsync(OperationCancellation);
 
         return record is null ? null : ToRunRecord(record);
     }
@@ -89,6 +89,64 @@ internal sealed partial class StorageServiceImpl
         return result;
     }
 
+    /// <summary>
+    /// Bounded read-model query for the standalone HTTP backend. Unlike the historical
+    /// IRequestManager methods, read repair is explicit so replicas can use credentials
+    /// that have SELECT permission only.
+    /// </summary>
+    internal async Task<IReadOnlyList<RunRecord>> GetPlayerRecordsForReadApiAsync(ulong  steamId,
+                                                                                  string mapName,
+                                                                                  bool   stageRecords,
+                                                                                  int    limit,
+                                                                                  bool   allowReadRepair)
+    {
+        var mapId = await ResolveMapIdByNameAsync(mapName);
+
+        if (mapId is null)
+        {
+            return [];
+        }
+
+        var runType = stageRecords ? RunType.Stage : RunType.Main;
+
+        if (allowReadRepair)
+        {
+            await EnsureBestRunsSeededForMapAsync(mapId.Value, runType);
+        }
+
+        var steamIdValue = unchecked((long)steamId);
+        var query = QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
+                                   .Where((best, run) => best.MapId == mapId.Value
+                                                         && best.RunType == runType
+                                                         && best.SteamId == steamIdValue);
+
+        if (stageRecords)
+        {
+            query = query.Where((best, run) => best.Stage > 0)
+                         .OrderBy((best, run) => best.Stage)
+                         .OrderBy((best, run) => best.BestTime)
+                         .OrderBy((best, run) => best.RunId);
+        }
+        else
+        {
+            query = query.Where((best, run) => best.Stage == 0)
+                         .OrderBy((best, run) => best.BestTime)
+                         .OrderBy((best, run) => best.RunId);
+        }
+
+        var runs = await query.Select((best, run) => run)
+                              .Take(NormalizeLimit(limit))
+                              .ToListAsync(OperationCancellation);
+        var result = new List<RunRecord>(runs.Count);
+
+        foreach (var run in runs)
+        {
+            result.Add(ToRunRecord(run));
+        }
+
+        return result;
+    }
+
     public async Task<PlayerProfile> GetPlayerProfile(SteamID steamId, string name)
     {
         var steamIdValue = ToDbSteamId(steamId);
@@ -96,7 +154,7 @@ internal sealed partial class StorageServiceImpl
 
         var player = await _db.Queryable<PlayerEntity>()
                               .Where(x => x.SteamId == steamIdValue)
-                              .FirstAsync();
+                              .FirstAsync(OperationCancellation);
 
         if (player is null)
         {
@@ -106,20 +164,36 @@ internal sealed partial class StorageServiceImpl
                 Name      = name,
                 Points    = 0,
                 Runs      = 0,
+                JoinedAtUtc = now,
                 UpdatedAt = now,
             };
 
             try
             {
-                player.Id = checked((ulong)await _db.Insertable(player).ExecuteReturnBigIdentityAsync());
+                player.Id = checked((ulong)await _db.Insertable(player).ExecuteReturnBigIdentityAsync(OperationCancellation));
+                // Return the database's timestamp precision on the first response too.
+                player = await _db.Queryable<PlayerEntity>()
+                                  .Where(x => x.Id == player.Id).FirstAsync(OperationCancellation);
             }
             catch (Exception ex) when (IsUniqueKeyViolation(ex))
             {
                 // Another server may create the profile after our first read.
                 // This insert is in autocommit, so PG can safely read the winner.
-                player = await _db.Queryable<PlayerEntity>().Where(x => x.SteamId == steamIdValue).FirstAsync();
+                player = await _db.Queryable<PlayerEntity>().Where(x => x.SteamId == steamIdValue).FirstAsync(OperationCancellation);
                 if (player is null) throw;
             }
+        }
+
+        if (player.JoinedAtUtc is null)
+        {
+            // Freeze the stored pre-update timestamp atomically. A competing login or
+            // points writer may have initialized it since our first read.
+            await _db.Updateable<PlayerEntity>()
+                     .SetColumns(x => x.JoinedAtUtc == x.UpdatedAt)
+                     .Where(x => x.Id == player.Id && x.JoinedAtUtc == null)
+                     .ExecuteCommandAsync(OperationCancellation);
+            player = await _db.Queryable<PlayerEntity>()
+                              .Where(x => x.Id == player.Id).FirstAsync(OperationCancellation);
         }
 
         // Only write back if name changed
@@ -130,7 +204,7 @@ internal sealed partial class StorageServiceImpl
 
             await _db.Updateable(player)
                      .UpdateColumns(x => new { x.Name, x.UpdatedAt })
-                     .ExecuteCommandAsync();
+                     .ExecuteCommandAsync(OperationCancellation);
         }
 
         var profile = new PlayerProfile
@@ -138,7 +212,7 @@ internal sealed partial class StorageServiceImpl
             Id           = (long) player.Id,
             SteamId      = steamId,
             Points       = player.Points,
-            JoinDate     = player.UpdatedAt, // first record's UpdatedAt serves as join date
+            JoinDate     = player.JoinedAtUtc ?? throw new InvalidOperationException("Player join date was not initialized."),
             LastSeenDate = now,
         };
 
@@ -147,15 +221,20 @@ internal sealed partial class StorageServiceImpl
         return profile;
     }
 
-    public async Task<(int rank, int total)> GetPlayerPointsRank(SteamID steamId)
+    public Task<(int rank, int total)> GetPlayerPointsRank(SteamID steamId)
+        => GetPlayerPointsRankByDbIdAsync(ToDbSteamId(steamId));
+
+    internal Task<(int rank, int total)> GetPlayerPointsRankForReadApiAsync(ulong steamId)
+        => GetPlayerPointsRankByDbIdAsync(unchecked((long)steamId));
+
+    private async Task<(int rank, int total)> GetPlayerPointsRankByDbIdAsync(long steamIdValue)
     {
-        var steamIdValue = ToDbSteamId(steamId);
         // Scalar projection (Points is a plain uint — no SteamID-converter concern);
         // no row and zero points both come back as 0.
         var playerPoints = await _db.Queryable<PlayerEntity>()
                                     .Where(x => x.SteamId == steamIdValue)
                                     .Select(x => x.Points)
-                                    .FirstAsync();
+                                    .FirstAsync(OperationCancellation);
 
         if (playerPoints == 0)
         {
@@ -170,7 +249,7 @@ internal sealed partial class StorageServiceImpl
                                  Total = SqlFunc.AggregateCount(_.Id),
                                  Ahead = SqlFunc.AggregateSum(SqlFunc.IIF(_.Points > playerPoints, 1, 0)),
                              })
-                             .FirstAsync();
+                             .FirstAsync(OperationCancellation);
 
         if (stats is null)
         {
@@ -187,7 +266,7 @@ internal sealed partial class StorageServiceImpl
         var segments = await _db.Queryable<RunSegmentEntity>()
                                 .Where(s => s.RunId == runId)
                                 .OrderBy(s => s.Stage)
-                                .ToListAsync();
+                                .ToListAsync(OperationCancellation);
 
         var result = new List<RunCheckpoint>(segments.Count);
 
@@ -231,7 +310,7 @@ internal sealed partial class StorageServiceImpl
                             .OrderBy((best, run) => best.BestTime)
                             .OrderBy((best, run) => best.RunId)
                             .Select((best, run) => run)
-                            .ToListAsync();
+                            .ToListAsync(OperationCancellation);
 
         return results;
     }
@@ -248,7 +327,7 @@ internal sealed partial class StorageServiceImpl
                             .OrderBy((best, run) => best.BestTime)
                             .OrderBy((best, run) => best.RunId)
                             .Select((best, run) => run)
-                            .ToListAsync();
+                            .ToListAsync(OperationCancellation);
 
         return results;
     }

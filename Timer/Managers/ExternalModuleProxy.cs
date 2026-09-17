@@ -24,8 +24,9 @@ namespace Source2Surf.Timer.Managers;
 
 /// <summary>
 ///     Base for proxies that forward a Timer.Shared contract to an externally registered
-///     ModSharp module when one is present, and to a built-in fallback otherwise. Owns the
-///     refresh/swap plumbing and the lazy, thread-safe fallback initialization; derived
+///     ModSharp module when one is present. A built-in fallback is optional; without one,
+///     calls fail closed until the external module registers. Owns the refresh/swap plumbing
+///     and the lazy, thread-safe fallback initialization; derived
 ///     classes contribute only the Identity/fallback hooks and the forwarding members
 ///     (which should dispatch through <see cref="Current" />).
 /// </summary>
@@ -33,14 +34,14 @@ internal abstract class ExternalModuleProxy<TInterface> : IManager
     where TInterface : class
 {
     private readonly ISharedSystem _shared;
-    private readonly TInterface    _fallback;
+    private readonly TInterface?   _fallback;
     private readonly ILogger       _logger;
     private readonly object        _fallbackLock = new ();
 
-    private TInterface _current;
+    private TInterface? _current;
     private bool       _fallbackInitialized;
 
-    protected ExternalModuleProxy(ISharedSystem shared, TInterface fallback, ILogger logger)
+    protected ExternalModuleProxy(ISharedSystem shared, TInterface? fallback, ILogger logger)
     {
         _shared   = shared;
         _fallback = fallback;
@@ -48,7 +49,11 @@ internal abstract class ExternalModuleProxy<TInterface> : IManager
         _logger   = logger;
     }
 
-    protected TInterface Current => Volatile.Read(ref _current);
+    protected TInterface Current => Volatile.Read(ref _current)
+                                    ?? throw new InvalidOperationException(
+                                        $"{ContractName} is unavailable; register its external provider before use.");
+
+    protected bool HasCurrentProvider => Volatile.Read(ref _current) is not null;
 
     /// <summary>ModSharp Identity string the external module registers under.</summary>
     protected abstract string Identity { get; }
@@ -104,12 +109,12 @@ internal abstract class ExternalModuleProxy<TInterface> : IManager
 
     public void Use(TInterface manager, string? providerName = null)
     {
-        if (ReferenceEquals(manager, _fallback))
+        if (_fallback is not null && ReferenceEquals(manager, _fallback))
         {
             EnsureFallbackInitialized();
         }
 
-        if (ReferenceEquals(Current, manager))
+        if (ReferenceEquals(Volatile.Read(ref _current), manager))
         {
             return;
         }
@@ -131,12 +136,26 @@ internal abstract class ExternalModuleProxy<TInterface> : IManager
         {
             _logger.LogInformation("Using built-in {contract}: {type}",
                                    ContractName,
-                                   _fallback.GetType().FullName);
+                                   _fallback!.GetType().FullName);
         }
     }
 
     public void UseFallback()
-        => Use(_fallback);
+    {
+        if (_fallback is not null)
+        {
+            Use(_fallback);
+            return;
+        }
+
+        if (Volatile.Read(ref _current) is null)
+        {
+            return;
+        }
+
+        Volatile.Write(ref _current, null);
+        _logger.LogWarning("External {contract} disconnected; no built-in fallback is configured.", ContractName);
+    }
 
     private void EnsureFallbackInitialized()
     {

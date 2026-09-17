@@ -55,12 +55,13 @@ public static class ScoreCalculator
     /// <param name="tier">Track difficulty tier, clamped to 1 if less</param>
     /// <param name="isBonus">Whether this is a bonus track</param>
     /// <param name="basePot">Base score pool; uses default when null or &lt;= 0</param>
-    /// <param name="styleFactor">Style score multiplier; uses 1.0 when null or &lt;= 0</param>
+    /// <param name="styleFactor">Style score multiplier; uses 1.0 when null or negative.
+    /// Zero deliberately disables points for this style.</param>
     /// <returns>Track score pool</returns>
     public static double CalculateTrackPool(int tier, bool isBonus, double? basePot = null, double? styleFactor = null)
     {
         var effectiveBasePot = basePot is > 0 ? basePot.Value : DefaultBasePot;
-        var effectiveStyleFactor = styleFactor is > 0 ? styleFactor.Value : 1.0;
+        var effectiveStyleFactor = styleFactor is >= 0 ? styleFactor.Value : 1.0;
         var effectiveTier = Math.Max(1, tier);
         var scale = isBonus ? BonusTrackScale : MainTrackScale;
         return effectiveBasePot * Math.Pow(TierExponentBase, effectiveTier - 1) * scale * effectiveStyleFactor;

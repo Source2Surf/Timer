@@ -8,7 +8,6 @@ using Source2Surf.Timer.Common.Enums;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
 using SqlSugar;
-using Timer.RequestManager.Scheduling;
 
 namespace Timer.RequestManager.Storage;
 
@@ -22,63 +21,60 @@ internal sealed partial class StorageServiceImpl
         var trackValue = ToUInt16(recordRequest.Track);
         await EnsureBestRunsSeededAsync(mapId, RunType.Main, styleValue, trackValue, 0);
 
-        var run = CreateRunEntity(steamId, mapId, recordRequest, DateTime.UtcNow);
+        var now = DateTime.UtcNow;
+        var run = CreateRunEntity(steamId, mapId, recordRequest, now);
         run.RunType = RunType.Main;
         run.Stage   = 0;
 
         var result = EAttemptResult.NoNewRecord;
+        var wakeScoreRecalcWorker = false;
         await WithRecordTransactionAsync(async () =>
         {
+            // WithRecordTransactionAsync can retry a rolled-back lock conflict. Keep the post-
+            // commit wake tied to the final successful attempt, not an earlier rolled-back one.
+            wakeScoreRecalcWorker = false;
             await LockMapAsync(mapId);
-            var bestTimes = await QueryMainBestTimesAsync(steamId, mapId, styleValue, trackValue);
-            result = ResolveAttemptResult(recordRequest.Time, bestTimes?.ServerBestTime, bestTimes?.PlayerBestTime);
-            var newRunId = await _db.Insertable(run).ExecuteReturnBigIdentityAsync();
-            run.Id = unchecked((ulong) newRunId);
-
-            if (recordRequest.Checkpoints.Count > 0)
-            {
-                var stageSegments = CreateRunSegmentsFromCheckpoints(run.Id, recordRequest, run.Date);
-
-                if (stageSegments.Count > 0)
-                {
-                    await _db.Insertable(stageSegments).ExecuteCommandAsync();
-                }
-            }
-
-            await UpsertPlayerBestRunAsync(run, bestTimes);
+            var write = await WriteRunInCurrentRecordTransactionAsync(
+                run,
+                runId => CreateRunSegmentsFromCheckpoints(runId, recordRequest, now),
+                recordRequest.StyleFactor,
+                enqueueScoreRecalc: true);
+            result = write.AttemptResult;
+            wakeScoreRecalcWorker = write.WakeScoreRecalcWorker;
         });
+
+        if (wakeScoreRecalcWorker)
+        {
+            // Only wake after commit. The durable outbox row above is the source of truth.
+            WakeScoreRecalcWorker();
+        }
 
         // Post-commit, OUTSIDE the rollback-guarded try: the run + best row are now durably saved. The rank
         // COUNT is advisory — if a transient DB error throws here it must NOT roll
         // back the committed transaction nor surface the finish as a failed save, so it is logged and the
-        // record is still returned (rank falls back to 0). The just-written best row (BestTime == run.Time)
-        // is excluded by the strict `BestTime < run.Time` rank predicate, so the post-commit count is exact.
-        var rank = await ComputePostCommitRankAndEnqueueRecalcAsync(
-            result, mapId, styleValue, trackValue, run.Time, recordRequest.StyleFactor,
-            (m, s, t, time) => QueryMainRunRankAsync(m, s, t, time));
+        // record is still returned (rank falls back to 0). Match the leaderboard and points
+        // ordering: time first, then the earlier RunId for equal times.
+        var rank = await ComputePostCommitRankAsync(
+            result, mapId, styleValue, trackValue, run.Id,
+            (m, s, t, id) => QueryMainRunRankAsync(m, s, t, id));
 
         return (result, ToRunRecord(run), rank);
     }
 
-    private async Task<int> ComputePostCommitRankAndEnqueueRecalcAsync(
+    private async Task<int> ComputePostCommitRankAsync(
         EAttemptResult result,
         ulong          mapId,
         int            styleValue,
         ushort         trackValue,
-        float          runTime,
-        double         styleFactor,
-        Func<ulong, int, ushort, float, Task<int>> rankQuery)
+        ulong          runId,
+        Func<ulong, int, ushort, ulong, Task<int>> rankQuery)
     {
-        // Queue first: an advisory rank-query failure must not lose the score update.
-        if (result != EAttemptResult.NoNewRecord)
-            _scoreRecalcScheduler.Enqueue(new RecalcRequest(mapId, styleValue, trackValue, styleFactor));
-
         try
         {
             var rank = result switch
             {
                 EAttemptResult.NewServerRecord   => 1,
-                EAttemptResult.NewPersonalRecord => await rankQuery(mapId, styleValue, trackValue, runTime),
+                EAttemptResult.NewPersonalRecord => await rankQuery(mapId, styleValue, trackValue, runId),
                 _                                => 0,
             };
 
@@ -87,7 +83,7 @@ internal sealed partial class StorageServiceImpl
         catch (Exception e)
         {
             // The record is already committed; never fail the save over advisory post-commit work.
-            _logger.LogWarning(e, "Post-commit rank/recalc failed for map {MapId} style {Style} track {Track}; record was saved.",
+            _logger.LogWarning(e, "Post-commit rank query failed for map {MapId} style {Style} track {Track}; record was saved.",
                                mapId, styleValue, trackValue);
 
             return 0;
@@ -112,24 +108,12 @@ internal sealed partial class StorageServiceImpl
         await WithRecordTransactionAsync(async () =>
         {
             await LockMapAsync(mapId);
-            var bestTimes = await QueryStageBestTimesAsync(steamId, mapId, styleValue, trackValue, stageValue);
-            result = ResolveAttemptResult(newRunRecord.Time, bestTimes?.ServerBestTime, bestTimes?.PlayerBestTime);
-            var runId = await _db.Insertable(run).ExecuteReturnBigIdentityAsync();
-            run.Id = unchecked((ulong) runId);
-
-            // Persist stage checkpoints like the main path does — without this the LiteDB
-            // backend returns checkpoint data for stage records while SQL returns [].
-            if (newRunRecord.Checkpoints.Count > 0)
-            {
-                var stageSegments = CreateRunSegmentsFromCheckpoints(run.Id, newRunRecord, now);
-
-                if (stageSegments.Count > 0)
-                {
-                    await _db.Insertable(stageSegments).ExecuteCommandAsync();
-                }
-            }
-
-            await UpsertPlayerBestRunAsync(run, bestTimes);
+            var write = await WriteRunInCurrentRecordTransactionAsync(
+                run,
+                runId => CreateRunSegmentsFromCheckpoints(runId, newRunRecord, now),
+                styleFactor: 1,
+                enqueueScoreRecalc: false);
+            result = write.AttemptResult;
         });
 
         // Post-commit advisory rank, OUTSIDE the rollback-guarded try (see AddPlayerRecord): the stage run
@@ -144,7 +128,7 @@ internal sealed partial class StorageServiceImpl
         {
             try
             {
-                rank = await QueryStageRunRankAsync(mapId, styleValue, trackValue, stageValue, run.Time);
+                rank = await QueryStageRunRankAsync(mapId, styleValue, trackValue, stageValue, run.Id);
             }
             catch (Exception e)
             {
@@ -168,12 +152,14 @@ internal sealed partial class StorageServiceImpl
         await WithRecordTransactionAsync(async () =>
         {
             await LockMapAsync(mapId.Value);
+            // Keep submission receipts: an exact retry acknowledges the historical commit,
+            // rather than recreating a run intentionally removed by this administrative wipe.
             // Capture and deduplicate affected players before deleting their track scores.
             var affectedRows = await _db.Queryable<PlayerTrackScoreEntity>()
                                         .Where(x => x.MapId == mapId.Value)
                                         .GroupBy(x => x.SteamId)
                                         .Select(x => new PlayerIdRow { SteamId = x.SteamId })
-                                        .ToListAsync();
+                                        .ToListAsync(OperationCancellation);
 
             var affectedPlayers = new List<long>(affectedRows.Count);
             foreach (var row in affectedRows)
@@ -192,7 +178,7 @@ internal sealed partial class StorageServiceImpl
             var runIds = await _db.Queryable<RunEntity>()
                                   .Where(run => run.MapId == mapId.Value)
                                   .Select(run => run.Id)
-                                  .ToListAsync();
+                                  .ToListAsync(OperationCancellation);
 
             const int runIdChunkSize = 5000;
 
@@ -202,20 +188,20 @@ internal sealed partial class StorageServiceImpl
 
                 await _db.Deleteable<RunSegmentEntity>()
                          .Where(segment => chunk.Contains(segment.RunId))
-                         .ExecuteCommandAsync();
+                         .ExecuteCommandAsync(OperationCancellation);
             }
 
             await _db.Deleteable<RunEntity>()
                      .Where(x => x.MapId == mapId.Value)
-                     .ExecuteCommandAsync();
+                     .ExecuteCommandAsync(OperationCancellation);
 
             await _db.Deleteable<ReplayEntity>()
                      .Where(x => x.MapId == mapId.Value)
-                     .ExecuteCommandAsync();
+                     .ExecuteCommandAsync(OperationCancellation);
 
             await _db.Deleteable<PlayerBestRunEntity>()
                      .Where(x => x.MapId == mapId.Value)
-                     .ExecuteCommandAsync();
+                     .ExecuteCommandAsync(OperationCancellation);
 
             // Track scores are NOT cascade-deleted with runs/best-runs; without this they linger and keep
             // inflating PlayerEntity.Points forever, since RecalculateTrackScoresAsync early-returns on an
@@ -223,19 +209,67 @@ internal sealed partial class StorageServiceImpl
             // intact — it is play-session telemetry, not a run record, and survived record-clears at HEAD.)
             await _db.Deleteable<PlayerTrackScoreEntity>()
                      .Where(x => x.MapId == mapId.Value)
-                     .ExecuteCommandAsync();
+                     .ExecuteCommandAsync(OperationCancellation);
 
             await UpdatePlayerTotalPointsAsync(affectedPlayers);
         });
         RemoveBestRunSeedCacheForMap(mapId.Value);
     }
 
-    private async Task<AttemptBestTimesRow?> QueryMainBestTimesAsync(SteamID steamId,
-                                                                      ulong   mapId,
-                                                                      int     style,
-                                                                      ushort  track)
+    /// <summary>
+    /// Shared transaction-local write core for plugin-originated records and authoritative
+    /// backend submissions. The caller owns the map lock; this method never seeds historical
+    /// best-runs or performs a rank COUNT, preserving the backend write path's bounded lock.
+    /// </summary>
+    private async Task<RunWriteOutcome> WriteRunInCurrentRecordTransactionAsync(
+        RunEntity run,
+        Func<ulong, List<RunSegmentEntity>> createSegments,
+        double styleFactor,
+        bool enqueueScoreRecalc)
     {
-        var steamIdValue = ToDbSteamId(steamId);
+        if (_db.Ado.Transaction is null)
+        {
+            throw new InvalidOperationException("Run writes require an active record transaction.");
+        }
+
+        var bestTimes = run.RunType == RunType.Main
+            ? await QueryMainBestTimesAsync(run.SteamId, run.MapId, run.Style, run.Track)
+            : await QueryStageBestTimesAsync(run.SteamId, run.MapId, run.Style, run.Track, run.Stage);
+        var result = ResolveAttemptResult(run.Time, bestTimes?.ServerBestTime, bestTimes?.PlayerBestTime);
+        run.Id = unchecked((ulong)await _db.Insertable(run).ExecuteReturnBigIdentityAsync(OperationCancellation));
+
+        var segments = createSegments(run.Id);
+        if (segments.Count > 0)
+        {
+            await _db.Insertable(segments).ExecuteCommandAsync(OperationCancellation);
+        }
+
+        await UpsertPlayerBestRunAsync(run, bestTimes);
+
+        if (enqueueScoreRecalc && result != EAttemptResult.NoNewRecord)
+        {
+            // This merge is part of the same ReadCommitted map-locked transaction as the
+            // run and best-run projection. A committed PB/WR can therefore never lose its
+            // durable score recalculation request.
+            await EnqueueScoreRecalcInCurrentRecordTransactionAsync(
+                run.MapId, run.Style, run.Track, styleFactor, DateTime.UtcNow);
+            return new RunWriteOutcome(result, WakeScoreRecalcWorker: true);
+        }
+
+        return new RunWriteOutcome(result, WakeScoreRecalcWorker: false);
+    }
+
+    private Task<AttemptBestTimesRow?> QueryMainBestTimesAsync(SteamID steamId,
+                                                                ulong   mapId,
+                                                                int     style,
+                                                                ushort  track)
+        => QueryMainBestTimesAsync(ToDbSteamId(steamId), mapId, style, track);
+
+    private async Task<AttemptBestTimesRow?> QueryMainBestTimesAsync(long steamIdValue,
+                                                                      ulong mapId,
+                                                                      int style,
+                                                                      ushort track)
+    {
         const ushort stage = 0;
 
         return await QueryBestRuns().Where(x => x.MapId == mapId
@@ -252,33 +286,42 @@ internal sealed partial class StorageServiceImpl
                                                                                            (float?) x.BestTime,
                                                                                            null)),
                                     })
-                                    .FirstAsync();
+                                    .FirstAsync(OperationCancellation);
     }
 
-    private async Task<int> QueryMainRunRankAsync(ulong mapId, int style, ushort track, float runTime)
+    private async Task<int> QueryMainRunRankAsync(ulong mapId, int style, ushort track, ulong runId)
     {
         const ushort stage = 0;
 
         await EnsureBestRunsSeededAsync(mapId, RunType.Main, style, track, stage);
 
-        var quickerCount = await QueryBestRuns().Where(run => run.MapId == mapId
-                                                              && run.RunType == RunType.Main
-                                                              && run.Style == style
-                                                              && run.Track == track
-                                                              && run.Stage == stage
-                                                              && run.BestTime < runTime)
-                                        .CountAsync();
+        // Compare persisted floats to each other. A bound float parameter can be
+        // promoted to double by MySQL, making even a run compare as faster than itself.
+        var precedingCount = await QueryBestRuns()
+            .InnerJoin<RunEntity>((best, saved) => saved.Id == runId)
+            .Where((best, saved) => best.MapId == mapId
+                                   && best.RunType == RunType.Main
+                                   && best.Style == style && best.Track == track && best.Stage == stage
+                                   && (best.BestTime < saved.Time
+                                       || (best.BestTime == saved.Time && best.RunId < saved.Id)))
+            .CountAsync(OperationCancellation);
 
-        return quickerCount + 1;
+        return precedingCount + 1;
     }
 
-    private async Task<AttemptBestTimesRow?> QueryStageBestTimesAsync(SteamID steamId,
-                                                                       ulong   mapId,
-                                                                       int     style,
-                                                                       ushort  track,
-                                                                       ushort  stage)
+    private Task<AttemptBestTimesRow?> QueryStageBestTimesAsync(SteamID steamId,
+                                                                 ulong   mapId,
+                                                                 int     style,
+                                                                 ushort  track,
+                                                                 ushort  stage)
+        => QueryStageBestTimesAsync(ToDbSteamId(steamId), mapId, style, track, stage);
+
+    private async Task<AttemptBestTimesRow?> QueryStageBestTimesAsync(long steamIdValue,
+                                                                       ulong mapId,
+                                                                       int style,
+                                                                       ushort track,
+                                                                       ushort stage)
     {
-        var steamIdValue = ToDbSteamId(steamId);
         return await QueryBestRuns().Where(x => x.MapId == mapId
                                                 && x.RunType == RunType.Stage
                                                 && x.Style == style
@@ -293,26 +336,29 @@ internal sealed partial class StorageServiceImpl
                                                                                            (float?) x.BestTime,
                                                                                            null)),
                                     })
-                                    .FirstAsync();
+                                    .FirstAsync(OperationCancellation);
     }
 
     private async Task<int> QueryStageRunRankAsync(ulong    mapId,
                                                     int      style,
                                                     ushort   track,
                                                     ushort   stage,
-                                                    float    runTime)
+                                                    ulong    runId)
     {
         await EnsureBestRunsSeededAsync(mapId, RunType.Stage, style, track, stage);
 
-        var quickerCount = await QueryBestRuns().Where(run => run.MapId == mapId
-                                                              && run.RunType == RunType.Stage
-                                                              && run.Style == style
-                                                              && run.Track == track
-                                                              && run.Stage == stage
-                                                              && run.BestTime < runTime)
-                                        .CountAsync();
+        // Compare persisted floats to each other. A bound float parameter can be
+        // promoted to double by MySQL, making even a run compare as faster than itself.
+        var precedingCount = await QueryBestRuns()
+            .InnerJoin<RunEntity>((best, saved) => saved.Id == runId)
+            .Where((best, saved) => best.MapId == mapId
+                                   && best.RunType == RunType.Stage
+                                   && best.Style == style && best.Track == track && best.Stage == stage
+                                   && (best.BestTime < saved.Time
+                                       || (best.BestTime == saved.Time && best.RunId < saved.Id)))
+            .CountAsync(OperationCancellation);
 
-        return quickerCount + 1;
+        return precedingCount + 1;
     }
 
     private static RunEntity CreateRunEntity(SteamID steamId, ulong mapId, RecordRequest request, DateTime now)
@@ -340,7 +386,7 @@ internal sealed partial class StorageServiceImpl
             VelocityAvgX   = request.VelocityAvgX,
             VelocityAvgY   = request.VelocityAvgY,
             VelocityAvgZ   = request.VelocityAvgZ,
-            Date           = now,
+            DateUnixTimeMilliseconds = ToUnixTimeMilliseconds(now),
         };
 
     private static List<RunSegmentEntity> CreateRunSegmentsFromCheckpoints(ulong runId, RecordRequest request, DateTime now)
@@ -401,4 +447,6 @@ internal sealed partial class StorageServiceImpl
         [SugarColumn(ColumnDataType = "bigint")]
         public long SteamId { get; set; }
     }
+
+    private readonly record struct RunWriteOutcome(EAttemptResult AttemptResult, bool WakeScoreRecalcWorker);
 }

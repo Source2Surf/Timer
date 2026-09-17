@@ -39,15 +39,17 @@
 
     <ItemGroup>
         <PackageReference Include="Iced" Version="1.21.0" />
-        <PackageReference Include="LiteDB" Version="5.0.21" />
+        <PackageReference Include="MagicOnion.Client" Version="7.10.2" />
+        <PackageReference Include="MessagePack" Version="3.1.8" />
         <PackageReference Include="MemoryPack" Version="1.21.4" />
-        <PackageReference Include="ModSharp.Sharp.Shared" Version="*" />
+        <PackageReference Include="ModSharp.Sharp.Shared" Version="2.1.136" />
         <PackageReference Include="ZLinq" Version="1.5.4" />
         <PackageReference Include="ZstdSharp.Port" Version="0.8.6" />
         <PackageReference Include="ZString" Version="2.6.0" />
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Timer.Backend.Rpc.Contracts\Timer.Backend.Rpc.Contracts.csproj" />
       <ProjectReference Include="..\Timer.Shared\Timer.Shared.csproj" Private="false" ExcludeAssets="runtime" />
     </ItemGroup>
 

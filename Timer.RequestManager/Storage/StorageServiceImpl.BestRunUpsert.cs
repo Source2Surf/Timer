@@ -21,8 +21,8 @@ internal sealed partial class StorageServiceImpl
             RunId = run.Id, BestTime = run.Time, UpdatedAt = DateTime.UtcNow,
         };
         if (best.Id == 0)
-            await _db.Insertable(best).ExecuteCommandAsync();
+            await _db.Insertable(best).ExecuteCommandAsync(OperationCancellation);
         else
-            await _db.Updateable(best).UpdateColumns(x => new { x.RunId, x.BestTime, x.UpdatedAt }).ExecuteCommandAsync();
+            await _db.Updateable(best).UpdateColumns(x => new { x.RunId, x.BestTime, x.UpdatedAt }).ExecuteCommandAsync(OperationCancellation);
     }
 }

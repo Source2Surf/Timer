@@ -22,8 +22,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared;
+using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Command;
+using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
 using Source2Surf.Timer.Managers.Request;
 using Source2Surf.Timer.Modules;
@@ -81,7 +83,10 @@ public class Timer : IModSharpModule
         services.AddSingleton(factory);
         services.AddSingleton(shared);
         services.AddSingleton(gameData);
-        /*services.AddSingleton<IConfiguration>(configuration);*/
+        // The host owns this configuration. Remote score-write mode is explicitly selected
+        // from it; registering the existing instance adds no file watcher or network I/O.
+        services.AddSingleton<IConfiguration>(coreConfiguration);
+        services.AddSingleton(ScoreWriteModeOptions.FromConfiguration(coreConfiguration));
         /*ConfigureDebugServices(services, bridge);*/
         ConfigureServices(services);
 
@@ -189,7 +194,7 @@ public class Timer : IModSharpModule
     {
         if (moduleIdentity.Equals(IRequestManager.Identity, StringComparison.Ordinal))
         {
-            SwitchRequestManagerToLiteDb();
+            SwitchRequestManagerToUnavailable();
         }
         else if (moduleIdentity.Equals(IReplayProvider.Identity, StringComparison.Ordinal))
         {
@@ -206,6 +211,12 @@ public class Timer : IModSharpModule
     public void OnAllModulesLoaded()
     {
         RefreshRequestManager();
+        if (_serviceProvider.GetService<IRequestManager>() is RequestManagerProxy { IsAvailable: false })
+        {
+            _logger.LogError(
+                "No external IRequestManager was registered after modules loaded. Timer reads and non-score writes will fail closed; install/configure Timer.RequestManager or a complete remote read provider.");
+        }
+
         RefreshCommandManager();
         RefreshReplayProvider();
     }
@@ -222,8 +233,28 @@ public class Timer : IModSharpModule
             _serviceProvider.GetRequiredService<IGameData>()
                             .Unregister("timer.games");
 
+            // Login profile RPCs share the sender's channel. Cancel those per-session calls
+            // before the sender drains scores and disposes that transport.
+            var playerManager = _serviceProvider.GetService<IPlayerManager>() as IManager;
+            if (playerManager is not null)
+            {
+                try
+                {
+                    playerManager.Shutdown();
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "An error occurred while shutting down the player manager.");
+                }
+            }
+
             foreach (var service in _serviceProvider.GetServices<IManager>())
             {
+                if (ReferenceEquals(service, playerManager))
+                {
+                    continue;
+                }
+
                 try
                 {
                     service.Shutdown();
@@ -291,7 +322,7 @@ public class Timer : IModSharpModule
         _logger.LogWarning("IRequestManager is not RequestManagerProxy, skip refresh.");
     }
 
-    private void SwitchRequestManagerToLiteDb()
+    private void SwitchRequestManagerToUnavailable()
     {
         if (_serviceProvider.GetService<IRequestManager>() is RequestManagerProxy proxy)
         {
@@ -300,7 +331,7 @@ public class Timer : IModSharpModule
             return;
         }
 
-        _logger.LogWarning("IRequestManager is not RequestManagerProxy, cannot force LiteDB fallback.");
+        _logger.LogWarning("IRequestManager is not RequestManagerProxy, cannot mark the external provider unavailable.");
     }
 
     private void RefreshCommandManager()

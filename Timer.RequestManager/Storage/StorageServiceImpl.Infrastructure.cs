@@ -23,7 +23,7 @@ internal sealed partial class StorageServiceImpl
     {
         return await _db.Queryable<MapEntity>()
                         .Where(x => x.File == mapName)
-                        .FirstAsync();
+                        .FirstAsync(OperationCancellation);
     }
 
     internal async Task<ulong?> ResolveMapIdByNameAsync(string mapName)
@@ -74,7 +74,7 @@ internal sealed partial class StorageServiceImpl
 
             try
             {
-                var newId = await _db.Insertable(mapEntity).ExecuteReturnBigIdentityAsync();
+                var newId = await _db.Insertable(mapEntity).ExecuteReturnBigIdentityAsync(OperationCancellation);
                 mapEntity.MapId = unchecked((ulong) newId);
             }
             catch (Exception ex)
@@ -104,7 +104,7 @@ internal sealed partial class StorageServiceImpl
     {
         await _db.Deleteable<MapTrackEntity>()
                  .Where(x => x.MapId == mapId)
-                 .ExecuteCommandAsync();
+                 .ExecuteCommandAsync(OperationCancellation);
 
         if (tiers is null || tiers.Length <= 1)
         {
@@ -132,7 +132,7 @@ internal sealed partial class StorageServiceImpl
 
         if (entities.Count > 0)
         {
-            await _db.Insertable(entities).ExecuteCommandAsync();
+            await _db.Insertable(entities).ExecuteCommandAsync(OperationCancellation);
         }
     }
 
@@ -143,6 +143,12 @@ internal sealed partial class StorageServiceImpl
             ConnectionString      = connectionString,
             IsAutoCloseConnection = true,
             InitKeyType           = InitKeyType.Attribute,
+            // A mixed-version or incomplete entity must never delete a production
+            // column merely because CodeFirst does not know about it.
+            ConfigureExternalServices = new ConfigureExternalServices
+            {
+                EntityNameService = (_, entity) => entity.IsDisabledDelete = true,
+            },
         });
 
     private static byte GetTier(byte[]? tiers, int track)
@@ -209,7 +215,10 @@ internal sealed partial class StorageServiceImpl
         => mapName.ToLowerInvariant();
 
     public async Task<IReadOnlyList<string>> GetAllMapNamesAsync()
-        => await _db.Queryable<MapEntity>().Select(x => x.File).ToListAsync();
+        => await _db.Queryable<MapEntity>()
+                    .OrderBy(x => x.File)
+                    .Select(x => x.File)
+                    .ToListAsync(OperationCancellation);
 
     private sealed class AttemptBestTimesRow
     {

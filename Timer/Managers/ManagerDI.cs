@@ -15,12 +15,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers.Command;
 using Source2Surf.Timer.Managers.Patch;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
 using Source2Surf.Timer.Managers.Request;
+using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Shared.Interfaces;
 
 namespace Source2Surf.Timer.Managers;
@@ -29,8 +33,39 @@ internal static class ManagerDi
 {
     public static void AddManagerService(this IServiceCollection services)
     {
-        services.AddSingleton<RequestManagerLiteDB>();
         services.ImplSingleton<IRequestManager, IManager, RequestManagerProxy>();
+
+        // The spool remains owned by the sender, rather than separately registered as IManager.
+        // Thus the disabled/default sender performs no file I/O during Timer.Init.
+        services.AddSingleton<RunSubmissionSpool>();
+        services.AddSingleton(serviceProvider =>
+        {
+            var mode = serviceProvider.GetRequiredService<ScoreWriteModeOptions>();
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            var options = RunSubmissionSenderOptions.FromConfiguration(configuration);
+
+            if (mode.Mode == ScoreWriteMode.LocalSql)
+            {
+                if (options.Enabled)
+                {
+                    throw new InvalidOperationException(
+                        "Timer:RunSubmissionSender:Enabled requires Timer:ScoreWrite:Mode=remote-write.");
+                }
+
+                return RunSubmissionSenderOptions.Disabled;
+            }
+
+            if (!options.Enabled)
+            {
+                throw new InvalidOperationException(
+                    "Timer:ScoreWrite:Mode=remote-write requires Timer:RunSubmissionSender:Enabled=true.");
+            }
+
+            return options;
+        });
+        services.AddSingleton<IRunSubmissionTransportFactory, MagicOnionRunSubmissionTransportFactory>();
+        services.AddSingleton<RunSubmissionSender>();
+        services.AddSingleton<IManager>(serviceProvider => serviceProvider.GetRequiredService<RunSubmissionSender>());
 
         services.ImplSingleton<IInlineHookManager, IManager, InlineHookManager>();
         services.ImplSingleton<IPatchManager, IManager, PatchManager>();

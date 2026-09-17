@@ -29,30 +29,29 @@ namespace Source2Surf.Timer.Managers.Request;
 
 internal sealed class RequestManagerProxy : ExternalModuleProxy<IRequestManager>, IRequestManager
 {
-    private readonly RequestManagerLiteDB _fallbackManager;
+    internal bool IsAvailable => HasCurrentProvider;
 
     public RequestManagerProxy(ISharedSystem                shared,
-                               RequestManagerLiteDB         fallback,
                                ILogger<RequestManagerProxy> logger)
-        : base(shared, fallback, logger)
-    {
-        _fallbackManager = fallback;
-    }
+        : base(shared, null, logger) { }
 
     protected override string Identity     => IRequestManager.Identity;
     protected override string ContractName => "IRequestManager";
 
     protected override bool InitFallback()
-        => _fallbackManager.Init();
+        => throw new InvalidOperationException("IRequestManager has no built-in fallback.");
 
     protected override void ShutdownFallback()
-        => _fallbackManager.Shutdown();
+    { }
 
     public Task<MapProfile> GetMapInfo(string map)
         => Current.GetMapInfo(map);
 
     public Task UpdateMapInfo(MapProfile info)
         => Current.UpdateMapInfo(info);
+
+    public Task IncrementMapStatsAsync(string mapName, float deltaSeconds)
+        => Current.IncrementMapStatsAsync(mapName, deltaSeconds);
 
     public Task<IReadOnlyList<RunRecord>> GetMapRecords(string mapName, int limit = IRequestManager.DefaultRecordLimit)
         => Current.GetMapRecords(mapName, limit);

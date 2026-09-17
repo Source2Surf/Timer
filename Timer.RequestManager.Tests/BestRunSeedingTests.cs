@@ -24,7 +24,12 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
         {
             if (column.IsIdentity) column.DataType = "INTEGER";
         };
-        storage.Db.CodeFirst.InitTables<MapEntity, RunEntity, PlayerBestRunEntity, PlayerEntity, MapTrackEntity>();
+        storage.Db.CodeFirst.InitTables(typeof(MapEntity),
+                                        typeof(RunEntity),
+                                        typeof(PlayerBestRunEntity),
+                                        typeof(PlayerEntity),
+                                        typeof(MapTrackEntity),
+                                        typeof(ScoreRecalcOutboxEntity));
         storage.Db.Aop.OnLogExecuting = (sql, _) => output.WriteLine(sql);
         return _storage = storage;
     }
@@ -35,7 +40,8 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
         var run = new RunEntity
         {
             MapId = mapId, SteamId = unchecked((long)(player ?? Player).AsPrimitive()), Time = time, Style = style, Track = track, Stage = stage,
-            RunType = stage == 0 ? RunType.Main : RunType.Stage, Date = DateTime.UtcNow,
+            RunType = stage == 0 ? RunType.Main : RunType.Stage,
+            DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
         };
         run.Id = (ulong)await storage.Db.Insertable(run).ExecuteReturnBigIdentityAsync();
         return run;
@@ -127,6 +133,54 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(60, record.Time);
     }
 
+    [Fact]
+    public async Task ReadApiDoesNotRepairBestRunProjectionUnlessExplicitlyEnabled()
+    {
+        var storage = CreateStorage();
+        var map = await storage.GetMapInfo("surf_read_only");
+        var best = await AddRun(storage, map.MapId, 80);
+
+        var readOnlyResult = await storage.GetMapRecordsForReadApiAsync("surf_read_only",
+                                                                        stageRecords: false,
+                                                                        style: null,
+                                                                        track: null,
+                                                                        stage: null,
+                                                                        limit: 10,
+                                                                        allowReadRepair: false);
+
+        Assert.Empty(readOnlyResult);
+        Assert.Equal(0, await storage.Db.Queryable<PlayerBestRunEntity>().CountAsync());
+
+        var repairedResult = await storage.GetMapRecordsForReadApiAsync("surf_read_only",
+                                                                        stageRecords: false,
+                                                                        style: null,
+                                                                        track: null,
+                                                                        stage: null,
+                                                                        limit: 10,
+                                                                        allowReadRepair: true);
+
+        Assert.Equal((long)best.Id, Assert.Single(repairedResult).Id);
+        Assert.Equal(1, await storage.Db.Queryable<PlayerBestRunEntity>().CountAsync());
+    }
+
+    [Fact]
+    public async Task PlayerReadApiAppliesLimitInSql()
+    {
+        var storage = CreateStorage();
+        var map = await storage.GetMapInfo("surf_player_limit");
+        await AddRun(storage, map.MapId, 80, style: 0);
+        await AddRun(storage, map.MapId, 70, style: 1);
+        await AddRun(storage, map.MapId, 60, style: 2);
+
+        var records = await storage.GetPlayerRecordsForReadApiAsync(Player.AsPrimitive(),
+                                                                     "surf_player_limit",
+                                                                     stageRecords: false,
+                                                                     limit: 2,
+                                                                     allowReadRepair: true);
+
+        Assert.Equal(new[] { 60f, 70f }, records.Select(record => record.Time));
+    }
+
     [Theory]
     [InlineData(true, true)]
     [InlineData(true, false)]
@@ -198,6 +252,15 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
     public void Dispose()
     {
         _storage?.Shutdown();
-        File.Delete(_path);
+        try
+        {
+            File.Delete(_path);
+        }
+        catch (IOException)
+        {
+            // SQLite can retain an outstanding file handle briefly when this concurrent
+            // seed test runs beside the rest of the suite. The assertions and storage
+            // shutdown already completed; temporary-file cleanup is best effort.
+        }
     }
 }

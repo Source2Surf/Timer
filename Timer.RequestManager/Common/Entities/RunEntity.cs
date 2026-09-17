@@ -42,7 +42,7 @@ namespace Source2Surf.Timer.Common.Entities;
             OrderByType.Asc,
             nameof(Stage),
             OrderByType.Asc,
-            nameof(Date),
+            nameof(DateUnixTimeMilliseconds),
             OrderByType.Desc,
             nameof(Id),
             OrderByType.Desc)]
@@ -86,5 +86,11 @@ internal sealed class RunEntity : BaseSteamIdSerialEntity
     public float VelocityAvgY   { get; set; }
     public float VelocityAvgZ   { get; set; }
 
-    public DateTime Date { get; set; }
+    /// <summary>
+    /// UTC Unix time in milliseconds.  The persisted master SQL column deliberately
+    /// retains its historical <c>Date</c> name so existing indexes and operations keep
+    /// addressing the same logical field.
+    /// </summary>
+    [SugarColumn(ColumnName = "Date", ColumnDataType = "bigint")]
+    public long DateUnixTimeMilliseconds { get; set; }
 }

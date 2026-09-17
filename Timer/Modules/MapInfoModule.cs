@@ -29,6 +29,7 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Modules.MapInfo;
 using Source2Surf.Timer.Utilities;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -62,6 +63,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     private readonly InterfaceBridge _bridge;
     private readonly IRequestManager _requestManager;
     private readonly ICommandManager _commandManager;
+    private readonly ScoreWriteMode _scoreWriteMode;
 
     private readonly ILogger<MapInfoModule>          _logger;
     private readonly TaskTracker                     _taskTracker;
@@ -130,11 +132,13 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     public MapInfoModule(InterfaceBridge        bridge,
                          IRequestManager        requestManager,
                          ICommandManager        commandManager,
+                         ScoreWriteModeOptions  scoreWriteMode,
                          ILogger<MapInfoModule> logger)
     {
         _bridge         = bridge;
         _requestManager = requestManager;
         _commandManager = commandManager;
+        _scoreWriteMode = scoreWriteMode.Mode;
         _logger         = logger;
         _taskTracker    = new TaskTracker(logger);
 
@@ -229,6 +233,12 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     private ECommandAction OnCommandSetTier(PlayerSlot slot, StringCommand command)
     {
+        if (_scoreWriteMode == ScoreWriteMode.RemoteWrite)
+        {
+            _logger.LogWarning("set_tier is unavailable in remote-write mode. Use the backend set-tier command so backend score policy is used and affected boards are recalculated.");
+            return ECommandAction.Handled;
+        }
+
         if (command.ArgCount < 1)
         {
             return ECommandAction.Handled;
@@ -717,43 +727,18 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             delta = 0f;
         }
 
-        if (!_mapProfileLoaded)
-        {
-            var mapName = _bridge.CurrentMapName;
-
-            _taskTracker.Track(Task.Run(async () =>
-            {
-                try
-                {
-                    var profile = await _requestManager.GetMapInfo(mapName).ConfigureAwait(false);
-                    profile.PlayCount++;
-                    profile.TotalPlayTime += delta;
-
-                    await _requestManager.UpdateMapInfo(profile).ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "Error when updating map info on shutdown");
-                }
-            }, _bridge.CancellationToken));
-
-            return;
-        }
-
-        var profile = _currentMapProfileInfo;
-        profile.PlayCount++;
-        profile.TotalPlayTime += delta;
+        var map = _bridge.CurrentMapName;
 
         _taskTracker.Track(Task.Run(async () =>
         {
             try
             {
-                await _requestManager.UpdateMapInfo(profile).ConfigureAwait(false);
+                await _requestManager.IncrementMapStatsAsync(map, delta).ConfigureAwait(false);
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Error when updating map info on shutdown");
             }
-        }, _bridge.CancellationToken));
+        }));
     }
 }

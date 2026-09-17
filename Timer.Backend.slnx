@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Timer.Backend/Timer.Backend.csproj" />
+  <Project Path="Timer.Backend.Contracts/Timer.Backend.Contracts.csproj" />
+  <Project Path="Timer.Backend.Rpc.Contracts/Timer.Backend.Rpc.Contracts.csproj" />
+  <Project Path="Timer.RequestManager/Timer.RequestManager.csproj" />
+  <Project Path="Timer.Shared/Timer.Shared.csproj" />
+  <Project Path="Timer.Backend.Tests/Timer.Backend.Tests.csproj" />
+  <Project Path="Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
+</Solution>

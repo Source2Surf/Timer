@@ -575,6 +575,19 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             return;
         }
 
+        // A replay that already exceeded fallback TTL may still receive a canonical score ACK.
+        // Do not feed that old-map event into the current map's PlayerFrameData fallback slot:
+        // if the player has not started a new attempt yet, the old AttemptId could otherwise be
+        // consumed by a later snapshot on the new map.
+        if (!IsCurrentReplayMap(recordEvent.MapId))
+        {
+            _logger.LogInformation(
+                "Ignoring record-saved event for stale map {MapId} after replay correlation expired.",
+                recordEvent.MapId);
+
+            return;
+        }
+
         // 3. Record arrived before post-frame ended — store into PlayerFrameData.
         var client = _bridge.ClientManager.GetGameClient(recordEvent.SteamId);
 
@@ -761,7 +774,15 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         // Pass the captured map name (same one used to build filePath) so the upload targets the map
         // the run belongs to, not the live map — a record-saved event can land after a map change.
-        WriteReplayToDiskAndNotify(pending.Snapshot, filePath, pending.MapName, context, key.Style, key.Track, key.Stage, runId);
+        WriteReplayToDiskAndNotify(pending.Snapshot,
+                                    filePath,
+                                    pending.MapName,
+                                    context,
+                                    key.Style,
+                                    key.Track,
+                                    key.Stage,
+                                    runId,
+                                    key.MapId);
     }
 
     /// <summary>
@@ -775,7 +796,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                             int                style,
                                             int                track,
                                             int                stage,
-                                            long?              runId)
+                                            long?              runId,
+                                            ulong              mapId)
     {
         var header = snapshot.Header;
         var frames = snapshot.Frames;
@@ -809,7 +831,29 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                 // Evaluate the playback notify on the game main thread (it touches bot state).
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    isNewBest    = NotifyPlaybackSaved(_playbackModule, style, track, stage, replayContent, context);
+                    if (IsCurrentReplayMap(mapId))
+                    {
+                        isNewBest = NotifyPlaybackSaved(_playbackModule,
+                                                        style,
+                                                        track,
+                                                        stage,
+                                                        replayContent,
+                                                        context);
+                    }
+                    else
+                    {
+                        // The file and remote upload still belong to the captured map, but the
+                        // playback cache is map-local and has already been reset for a new map.
+                        // Use the authoritative record result for the upload gate when the cache
+                        // notification is intentionally fenced off.
+                        isNewBest = context.AttemptResult is EAttemptResult.NewPersonalRecord
+                            or EAttemptResult.NewServerRecord;
+
+                        _logger.LogInformation(
+                            "Suppressing replay playback cache update for stale map {MapId}; current map has changed.",
+                            mapId);
+                    }
+
                     shouldUpload = providerReady && (uploadNonPB || isNewBest);
                 }).ConfigureAwait(false);
 
@@ -870,7 +914,15 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    NotifyPlaybackSaved(_playbackModule, style, track, stage, fallbackContent, fallbackContext);
+                    if (IsCurrentReplayMap(mapId))
+                    {
+                        NotifyPlaybackSaved(_playbackModule,
+                                            style,
+                                            track,
+                                            stage,
+                                            fallbackContent,
+                                            fallbackContext);
+                    }
                 }).ConfigureAwait(false);
             }
         });
@@ -952,7 +1004,15 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         _ = _bridge.ModSharp.InvokeFrameActionAsync(() =>
         {
-            NotifyPlaybackSaved(_playbackModule, style, track, stage, fallbackContent, fallbackContext);
+            if (IsCurrentReplayMap(key.MapId))
+            {
+                NotifyPlaybackSaved(_playbackModule,
+                                    style,
+                                    track,
+                                    stage,
+                                    fallbackContent,
+                                    fallbackContext);
+            }
         });
 
         // If a fallback record already exists for this exact key, its temp file has a different
@@ -1149,7 +1209,16 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             {
                 await bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    NotifyPlaybackSaved(playbackModule, style, track, stage, content, context);
+                    if (IsCurrentReplayMap(mapId))
+                    {
+                        NotifyPlaybackSaved(playbackModule, style, track, stage, content, context);
+                    }
+                    else
+                    {
+                        logger.LogInformation(
+                            "Suppressing fallback replay playback cache update for stale map {MapId}; current map has changed.",
+                            mapId);
+                    }
                 }).ConfigureAwait(false);
             }
 
@@ -1215,6 +1284,21 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                   finalPath);
 #endif
         });
+    }
+
+    /// <summary>
+    ///     Playback state is scoped to the currently active map. A late remote ACK may still
+    ///     promote/upload a replay under its captured map, but must not put that old replay into
+    ///     the cache used by bots and HUDs on the new map.
+    /// </summary>
+    private bool IsCurrentReplayMap(ulong mapId)
+    {
+        if (mapId == 0)
+        {
+            return false;
+        }
+
+        return _mapInfoModule.GetCurrentMapProfile().MapId == mapId;
     }
 
     private static Task RetryOnIOException(Func<Task> action, ILogger logger, string operationName, string path)

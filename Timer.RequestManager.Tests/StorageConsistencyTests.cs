@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Reflection;
 using System.Text;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
@@ -8,7 +7,6 @@ using Source2Surf.Timer.Shared.Models;
 using SqlSugar;
 using Timer.RequestManager.Storage;
 using Timer.RequestManager.Replay;
-using Timer.RequestManager.Scheduling;
 using Xunit;
 
 namespace Timer.RequestManager.Tests;
@@ -21,13 +19,55 @@ public sealed class StorageConsistencyTests : IDisposable
 
     public StorageConsistencyTests()
     {
-        _storage = new StorageServiceImpl(DbType.Sqlite, $"Data Source={_path};Pooling=False", NullLogger<StorageServiceImpl>.Instance);
+        _storage = new StorageServiceImpl(DbType.Sqlite, $"Data Source={_path};Pooling=False",
+                                          NullLogger<StorageServiceImpl>.Instance,
+                                          enableScoreRecalcWorker: false);
         _storage.Db.CurrentConnectionConfig.ConfigureExternalServices.EntityService = (_, column) =>
         {
             if (column.IsIdentity) column.DataType = "INTEGER";
         };
         _storage.Db.CodeFirst.InitTables(typeof(MapEntity), typeof(MapTrackEntity), typeof(PlayerEntity), typeof(RunEntity),
-                                        typeof(PlayerBestRunEntity), typeof(PlayerTrackScoreEntity), typeof(PlayerMapStatsEntity), typeof(ReplayEntity));
+                                        typeof(PlayerBestRunEntity), typeof(PlayerTrackScoreEntity), typeof(PlayerMapStatsEntity), typeof(ReplayEntity),
+                                        typeof(ScoreRecalcOutboxEntity));
+    }
+
+    [Fact]
+    public async Task CompletionFailureRollsBackScoresAndPlayerTotalsTogether()
+    {
+        var map = await _storage.GetMapInfo("surf_completion_rollback");
+        await _storage.GetPlayerProfile(Player, "Player");
+        await _storage.Db.Insertable(new RunEntity
+        {
+            MapId = map.MapId, SteamId = unchecked((long)Player.AsPrimitive()), RunType = RunType.Main, Time = 80,
+            DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
+        }).ExecuteCommandAsync();
+        await _storage.RecalculateTrackScoresAsync(map.MapId, 0, 0, 1);
+        var originalPoints = (await _storage.Db.Queryable<PlayerEntity>().SingleAsync()).Points;
+        var now = DateTime.UtcNow;
+        await _storage.EnqueueScoreRecalcAsync(map.MapId, 0, 0, 2, now);
+        _storage.Db.Aop.OnLogExecuting = (sql, _) =>
+        {
+            if (!sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)
+                || !sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase)) return;
+            var where = sql.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase);
+            var processed = sql.IndexOf("ProcessedGeneration", StringComparison.OrdinalIgnoreCase);
+            if (processed >= 0 && processed < where) throw new InvalidOperationException("Injected completion failure");
+        };
+        try { await _storage.ProcessScoreRecalcOutboxBatchAsync(now.AddSeconds(5), "completion-failure"); }
+        finally { _storage.Db.Aop.OnLogExecuting = null; }
+
+        var pending = await _storage.Db.Queryable<ScoreRecalcOutboxEntity>().SingleAsync();
+        Assert.Equal(0, pending.ProcessedGeneration);
+        Assert.Equal(1, pending.AttemptCount);
+        Assert.Contains("Injected completion failure", pending.LastError);
+        Assert.Equal(originalPoints, (await _storage.Db.Queryable<PlayerEntity>().SingleAsync()).Points);
+        Assert.Equal(originalPoints, (await _storage.Db.Queryable<PlayerTrackScoreEntity>().SingleAsync()).Points);
+
+        await _storage.ProcessScoreRecalcOutboxBatchAsync(pending.AvailableAtUtc, "completion-retry");
+        var done = await _storage.Db.Queryable<ScoreRecalcOutboxEntity>().SingleAsync();
+        Assert.Equal(done.RequestedGeneration, done.ProcessedGeneration);
+        Assert.Null(done.PendingSinceUtc);
+        Assert.Equal(originalPoints * 2, (await _storage.Db.Queryable<PlayerEntity>().SingleAsync()).Points);
     }
 
     [Fact]
@@ -37,7 +77,8 @@ public sealed class StorageConsistencyTests : IDisposable
         await _storage.GetPlayerProfile(Player, "Player");
         await _storage.Db.Insertable(new RunEntity
         {
-            MapId = map.MapId, SteamId = unchecked((long)Player.AsPrimitive()), RunType = RunType.Main, Time = 80, Date = DateTime.UtcNow,
+            MapId = map.MapId, SteamId = unchecked((long)Player.AsPrimitive()), RunType = RunType.Main, Time = 80,
+            DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
         }).ExecuteCommandAsync();
         _storage.Db.Aop.OnLogExecuting = (sql, _) =>
         {
@@ -91,23 +132,47 @@ public sealed class StorageConsistencyTests : IDisposable
     }
 
     [Fact]
-    public async Task ScheduledRecalculationRetriesAFailedTotalWrite()
+    public async Task DurableRecalculationBacksOffThenRetriesAFailedTotalWrite()
     {
         var map = await _storage.GetMapInfo("surf_retry_scores");
         await _storage.GetPlayerProfile(Player, "Player");
         await _storage.Db.Insertable(new RunEntity
         {
-            MapId = map.MapId, SteamId = unchecked((long)Player.AsPrimitive()), RunType = RunType.Main, Time = 80, Date = DateTime.UtcNow,
+            MapId = map.MapId, SteamId = unchecked((long)Player.AsPrimitive()), RunType = RunType.Main, Time = 80,
+            DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
         }).ExecuteCommandAsync();
+
+        var requestedAt = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        await _storage.EnqueueScoreRecalcAsync(map.MapId, 0, 0, 1, requestedAt);
+
         var totalAttempts = 0;
         _storage.Db.Aop.OnLogExecuting = (sql, _) =>
         {
             if (sql.StartsWith("UPDATE `surf_players`") && ++totalAttempts == 1)
                 throw new InvalidOperationException("Fail first total update");
         };
-        var handler = typeof(StorageServiceImpl).GetMethod("HandleScoreRecalcAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        await (Task)handler.Invoke(_storage, [new RecalcRequest(map.MapId, 0, 0, 1)])!;
+
+        var firstEligibleAt = requestedAt.AddSeconds(5);
+        Assert.Equal(1, await _storage.ProcessScoreRecalcOutboxBatchAsync(firstEligibleAt, "first-worker"));
+
+        var failed = await _storage.Db.Queryable<ScoreRecalcOutboxEntity>().SingleAsync();
+        Assert.Equal(1, totalAttempts);
+        Assert.Equal(1, failed.AttemptCount);
+        Assert.Null(failed.LeaseOwner);
+        Assert.Null(failed.LeaseUntilUtc);
+        Assert.Null(failed.DeadLetteredAtUtc);
+        Assert.Equal(firstEligibleAt.AddSeconds(1), failed.AvailableAtUtc);
+        Assert.Equal(0, await _storage.Db.Queryable<PlayerTrackScoreEntity>().CountAsync());
+
+        Assert.Equal(0, await _storage.ProcessScoreRecalcOutboxBatchAsync(firstEligibleAt, "early-worker"));
+        Assert.Equal(1, await _storage.ProcessScoreRecalcOutboxBatchAsync(failed.AvailableAtUtc, "retry-worker"));
+        _storage.Db.Aop.OnLogExecuting = null;
+
+        var completed = await _storage.Db.Queryable<ScoreRecalcOutboxEntity>().SingleAsync();
         Assert.Equal(2, totalAttempts);
+        Assert.Equal(completed.RequestedGeneration, completed.ProcessedGeneration);
+        Assert.Equal(0, completed.AttemptCount);
+        Assert.Null(completed.LeaseOwner);
         Assert.Equal(1000u, (await _storage.Db.Queryable<PlayerEntity>().FirstAsync()).Points);
     }
 
@@ -124,7 +189,8 @@ public sealed class StorageConsistencyTests : IDisposable
             await _storage.Db.Insertable(new RunEntity
             {
                 Id = id, MapId = map.MapId, SteamId = unchecked((long)player.AsPrimitive()), Time = 80, Stage = (ushort)stage,
-                RunType = stage == 0 ? RunType.Main : RunType.Stage, Date = DateTime.UtcNow,
+                RunType = stage == 0 ? RunType.Main : RunType.Stage,
+                DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
             }).OffIdentity().ExecuteCommandAsync();
             await _storage.Db.Insertable(new ReplayEntity
             {

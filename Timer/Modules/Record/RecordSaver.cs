@@ -21,7 +21,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Backend.Rpc.Contracts;
+using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Events;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -40,27 +43,55 @@ internal sealed class RecordSaver
     private readonly PlayerRecordCache                  _playerCache;
     private readonly ListenerHub<IRecordModuleListener> _listenerHub;
     private readonly ILogger                            _logger;
+    private readonly ScoreWriteMode                     _scoreWriteMode;
+    private readonly RemoteRunSubmissionOptions         _remoteSubmissionOptions;
+    private readonly RemoteRunSubmissionWriter          _remoteSubmissionWriter;
+    private IRecordModuleListener?                        _lateReplayListener;
+
+    private bool UsesRemoteWrite => _scoreWriteMode == ScoreWriteMode.RemoteWrite;
 
     public RecordSaver(InterfaceBridge                    bridge,
                        IRequestManager                    request,
                        IStyleModule                       styleModule,
-                       MapRecordCache                     mapCache,
-                       PlayerRecordCache                  playerCache,
-                       ListenerHub<IRecordModuleListener> listenerHub,
-                       ILogger                            logger)
+                        MapRecordCache                     mapCache,
+                        PlayerRecordCache                  playerCache,
+                        ListenerHub<IRecordModuleListener> listenerHub,
+                        ScoreWriteModeOptions              scoreWriteMode,
+                        RemoteRunSubmissionOptions         remoteSubmissionOptions,
+                        RunSubmissionSender                remoteSubmissionSender,
+                        ILogger                            logger)
     {
-        _bridge      = bridge;
-        _request     = request;
-        _styleModule = styleModule;
-        _mapCache    = mapCache;
-        _playerCache = playerCache;
-        _listenerHub = listenerHub;
-        _logger      = logger;
+        ArgumentNullException.ThrowIfNull(scoreWriteMode);
+        ArgumentNullException.ThrowIfNull(remoteSubmissionOptions);
+        ArgumentNullException.ThrowIfNull(remoteSubmissionSender);
+
+        _bridge                   = bridge;
+        _request                  = request;
+        _styleModule              = styleModule;
+        _mapCache                 = mapCache;
+        _playerCache              = playerCache;
+        _listenerHub              = listenerHub;
+        _scoreWriteMode           = scoreWriteMode.Mode;
+        _remoteSubmissionOptions  = remoteSubmissionOptions;
+        _remoteSubmissionWriter   = new RemoteRunSubmissionWriter(remoteSubmissionSender);
+        _logger                   = logger;
     }
 
-    public static RecordRequest CreateRecordRequest(ITimerInfo timerInfo, IStyleModule styleModule)
+    /// <summary>
+    /// ReplayRecorder is resolved after RecordModule construction because it depends on
+    /// IRecordModule. Old-map acknowledgements go only to this listener, never to map-local
+    /// chat/cache consumers.
+    /// </summary>
+    internal void SetLateReplayListener(IRecordModuleListener replayListener)
+        => _lateReplayListener = replayListener ?? throw new ArgumentNullException(nameof(replayListener));
+
+    /// <summary>
+    /// Creates only run facts. Remote-write callers use this overload so they never read or carry
+    /// the plugin-side style score multiplier.
+    /// </summary>
+    public static RecordRequest CreateRecordRequest(ITimerInfo timerInfo)
     {
-        var styleSetting = styleModule.GetStyleSetting(timerInfo.Style);
+        ArgumentNullException.ThrowIfNull(timerInfo);
 
         var recordRequest = new RecordRequest
         {
@@ -71,8 +102,12 @@ internal sealed class RecordSaver
             Jumps       = timerInfo.Jumps,
             Strafes     = timerInfo.Strafes,
             Sync        = timerInfo.Sync,
-            StyleFactor = styleSetting.ScoreFactor,
         };
+
+        recordRequest.SetStartVelocity(timerInfo.StartVelocity);
+        recordRequest.SetAverageVelocity(timerInfo.AvgVelocity);
+        recordRequest.SetMaxVelocity(timerInfo.MaxVelocity);
+        recordRequest.SetEndVelocity(timerInfo.EndVelocity);
 
         for (var i = 0; i < timerInfo.Checkpoints.Count; i++)
         {
@@ -94,10 +129,24 @@ internal sealed class RecordSaver
         return recordRequest;
     }
 
+    /// <summary>
+    /// Legacy local-SQL projection, which intentionally preserves the pre-existing style factor
+    /// behavior. It must never be used by remote-write submission code.
+    /// </summary>
+    public static RecordRequest CreateRecordRequest(ITimerInfo timerInfo, IStyleModule styleModule)
+    {
+        ArgumentNullException.ThrowIfNull(styleModule);
+
+        var recordRequest = CreateRecordRequest(timerInfo);
+        recordRequest.StyleFactor = styleModule.GetStyleSetting(timerInfo.Style).ScoreFactor;
+        return recordRequest;
+    }
+
     public Task SaveMapRecordAsync(PlayerSlot        slot,
                                    SteamID           steamId,
                                    string            playerName,
                                    string            mapName,
+                                   ulong             mapId,
                                    ITimerInfo        timerInfo,
                                    int               attemptId,
                                    CancellationToken ct)
@@ -110,13 +159,26 @@ internal sealed class RecordSaver
         var wrRecord = records.Count > 0 ? records[0] : null;
         var pbRecord = _playerCache.GetRecord(slot, style, track);
 
-        var recordRequest = CreateRecordRequest(timerInfo, _styleModule);
+        var finishedAtUtc = DateTime.UtcNow;
+        var recordRequest = UsesRemoteWrite
+            ? CreateRecordRequest(timerInfo)
+            : CreateRecordRequest(timerInfo, _styleModule);
+
+        if (UsesRemoteWrite)
+        {
+            // An async method runs through its first await on this finish callback. Build and
+            // enqueue the immutable facts before returning to the game loop or scheduling UI.
+            return CompleteRemoteSaveAsync(
+                SaveRemoteMapRecordAsync(steamId, playerName, mapName, mapId, recordRequest,
+                                         finishedAtUtc, mapLoad, attemptId, ct),
+                steamId, "main", ct);
+        }
 
         return Task.Run(async () =>
                         {
-                            try
-                            {
-                                var (recordType, savedRecord, rank) = await _request.AddPlayerRecord(steamId,
+                             try
+                             {
+                                 var (recordType, savedRecord, rank) = await _request.AddPlayerRecord(steamId,
                                                                                         mapName,
                                                                                         recordRequest)
                                                                                     .ConfigureAwait(false);
@@ -165,6 +227,10 @@ internal sealed class RecordSaver
 
                                 await RefreshMapRecord(mapName, style, track, mapLoad).ConfigureAwait(false);
                             }
+                            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                            {
+                                _logger.LogDebug("Stopped local main-record save for {steamId} during shutdown.", steamId);
+                            }
                             catch (Exception e)
                             {
                                 _logger.LogError(e, "Error when saving record");
@@ -177,6 +243,7 @@ internal sealed class RecordSaver
                                      SteamID           steamId,
                                      string            playerName,
                                      string            mapName,
+                                     ulong             mapId,
                                      IStageTimerInfo   timerInfo,
                                      int               attemptId,
                                      CancellationToken ct)
@@ -200,14 +267,25 @@ internal sealed class RecordSaver
         var wrRecord     = stageRecords is { Count: > 0 } ? stageRecords[0] : null;
         var pbRecord     = _playerCache.GetRecord(slot, style, track, stage);
 
-        var recordRequest = CreateRecordRequest(timerInfo, _styleModule);
+        var finishedAtUtc = DateTime.UtcNow;
+        var recordRequest = UsesRemoteWrite
+            ? CreateRecordRequest(timerInfo)
+            : CreateRecordRequest(timerInfo, _styleModule);
         recordRequest.Stage = timerInfo.Stage;
+
+        if (UsesRemoteWrite)
+        {
+            return CompleteRemoteSaveAsync(
+                SaveRemoteStageRecordAsync(steamId, playerName, mapName, mapId, recordRequest,
+                                           finishedAtUtc, mapLoad, attemptId, ct),
+                steamId, "stage", ct);
+        }
 
         return Task.Run(async () =>
                         {
-                            try
-                            {
-                                var (recordType, savedRecord, rank) = await _request.AddPlayerStageRecord(steamId,
+                             try
+                             {
+                                 var (recordType, savedRecord, rank) = await _request.AddPlayerStageRecord(steamId,
                                                                                         mapName,
                                                                                         recordRequest)
                                                                                     .ConfigureAwait(false);
@@ -236,12 +314,275 @@ internal sealed class RecordSaver
 
                                 await RefreshMapStageRecord(mapName, style, track, stage, mapLoad).ConfigureAwait(false);
                             }
+                            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                            {
+                                _logger.LogDebug("Stopped local stage-record save for {steamId} during shutdown.", steamId);
+                            }
                             catch (Exception e)
                             {
                                 _logger.LogError(e, "Error when saving stage record");
                             }
                         },
                         ct);
+    }
+
+    private async Task CompleteRemoteSaveAsync(Task              saveTask,
+                                               SteamID           steamId,
+                                               string            runKind,
+                                               CancellationToken ct)
+    {
+        try
+        {
+            await saveTask.ConfigureAwait(false);
+        }
+        catch (RunSubmissionEnqueueException exception)
+        {
+            _logger.LogError(exception,
+                "Remote {RunKind} submission {SubmissionId} was not queued ({Disposition}).",
+                runKind, exception.SubmissionId, exception.Disposition);
+            await NotifyRemoteSubmissionFailureAsync(steamId,
+                exception.Disposition == SubmissionSpoolEnqueueDisposition.CapacityExceeded
+                    ? "Remote submission queue is full; this run was not queued."
+                    : "Remote submission could not be queued; this run was not queued.",
+                ct).ConfigureAwait(false);
+        }
+        catch (RunSubmissionRejectedException exception)
+        {
+            _logger.LogWarning(exception,
+                "Remote {RunKind} submission {SubmissionId} was permanently rejected by the backend.",
+                runKind, exception.SubmissionId);
+            await NotifyRemoteSubmissionFailureAsync(steamId,
+                "Remote backend rejected this run; no record result was published.", ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogDebug(
+                "Stopped waiting for remote {RunKind} submission for {SteamId}; an ambiguous in-memory entry is not acknowledged by this cancellation.",
+                runKind, steamId);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Error when saving remote {RunKind} record for {SteamId}", runKind, steamId);
+            await NotifyRemoteSubmissionFailureAsync(steamId,
+                "Remote score result was not confirmed; no record result was published.", ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task SaveRemoteMapRecordAsync(SteamID                    steamId,
+                                                string                     playerName,
+                                                string                     mapName,
+                                                ulong                      mapId,
+                                                RecordRequest              recordRequest,
+                                                DateTime                   finishedAtUtc,
+                                                MapRecordCache.LoadToken   mapLoad,
+                                                int                        attemptId,
+                                                CancellationToken          ct)
+    {
+        var request = RemoteRunSubmissionMapper.CreateMain(steamId.AsPrimitive(),
+                                                            mapName,
+                                                            recordRequest,
+                                                            finishedAtUtc,
+                                                            _remoteSubmissionOptions);
+
+        // EnqueueAndWaitAsync inserts into the sender's in-memory queue before its first wait.
+        // This task is intentionally started before any UI work so a pending notification never
+        // races ahead of a submission that has not yet reached the queue.
+        var acknowledgementTask = _remoteSubmissionWriter.EnqueueAndWaitAsync(request, ct);
+        if (!acknowledgementTask.IsCompleted)
+        {
+            await NotifyRemoteSubmissionPendingAsync(steamId, request.SubmissionId, "main", ct).ConfigureAwait(false);
+        }
+
+        var response = await acknowledgementTask.ConfigureAwait(false);
+        _logger.LogInformation("Remote main submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
+                               request.SubmissionId,
+                               response.Disposition,
+                               response.RunId);
+        if (mapId == 0)
+        {
+            _logger.LogWarning("Remote main submission {submissionId} was acknowledged, but no stable map id was captured; suppressing PlayerRecordSavedEvent and cache projection.",
+                               request.SubmissionId);
+            await RefreshMapRecord(mapName, recordRequest.Style, recordRequest.Track, mapLoad).ConfigureAwait(false);
+            return;
+        }
+
+        var acknowledged = RemoteRunSubmissionMapper.ToAcknowledgedRun(request, response, playerName, mapId);
+        await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+        {
+            if (!_mapCache.IsCurrent(mapLoad))
+            {
+                _logger.LogInformation("Remote main submission {submissionId} was acknowledged after the map changed; sending a replay-only event without updating current-map records.",
+                                       request.SubmissionId);
+                _lateReplayListener?.OnRecordSaved(new PlayerRecordSavedEvent(steamId,
+                    playerName,
+                    acknowledged.RecordType,
+                    acknowledged.SavedRecord,
+                    null,
+                    null,
+                    attemptId));
+                return;
+            }
+
+            var currentRecords = _mapCache.GetRecords(recordRequest.Style, recordRequest.Track);
+            var currentWrRecord = currentRecords.Count > 0 ? currentRecords[0] : null;
+            var currentClient = _bridge.ClientManager.GetGameClient(steamId);
+            var currentPbRecord = currentClient is null
+                ? null
+                : _playerCache.GetRecord(currentClient.Slot, recordRequest.Style, recordRequest.Track);
+
+            var recordEvent = new PlayerRecordSavedEvent(steamId,
+                                                          playerName,
+                                                          acknowledged.RecordType,
+                                                          acknowledged.SavedRecord,
+                                                          currentWrRecord,
+                                                          currentPbRecord,
+                                                          attemptId);
+
+            // ReplayRecorderModule correlates a late acknowledgement by this map id and attempt
+            // id. A remote outage longer than its fallback TTL can still lose the replay artifact;
+            // that limitation must not prevent the accepted score write from being published here.
+            NotifyRecordSavedListeners(recordEvent);
+
+            if (acknowledged.RecordType < EAttemptResult.NewPersonalRecord)
+            {
+                return;
+            }
+
+            if (currentClient is not null)
+            {
+                _playerCache.SetRecord(currentClient.Slot,
+                                       recordRequest.Style,
+                                       recordRequest.Track,
+                                       acknowledged.SavedRecord);
+            }
+        }, ct).ConfigureAwait(false);
+
+        await RefreshMapRecord(mapName, recordRequest.Style, recordRequest.Track, mapLoad).ConfigureAwait(false);
+    }
+
+    private async Task SaveRemoteStageRecordAsync(SteamID                    steamId,
+                                                  string                     playerName,
+                                                  string                     mapName,
+                                                  ulong                      mapId,
+                                                  RecordRequest              recordRequest,
+                                                  DateTime                   finishedAtUtc,
+                                                  MapRecordCache.LoadToken   mapLoad,
+                                                  int                        attemptId,
+                                                  CancellationToken          ct)
+    {
+        var request = RemoteRunSubmissionMapper.CreateStage(steamId.AsPrimitive(),
+                                                             mapName,
+                                                             recordRequest,
+                                                             finishedAtUtc,
+                                                             _remoteSubmissionOptions);
+
+        var acknowledgementTask = _remoteSubmissionWriter.EnqueueAndWaitAsync(request, ct);
+        if (!acknowledgementTask.IsCompleted)
+        {
+            await NotifyRemoteSubmissionPendingAsync(steamId, request.SubmissionId, "stage", ct).ConfigureAwait(false);
+        }
+
+        var response = await acknowledgementTask.ConfigureAwait(false);
+        _logger.LogInformation("Remote stage submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
+                               request.SubmissionId,
+                               response.Disposition,
+                               response.RunId);
+        if (mapId == 0)
+        {
+            _logger.LogWarning("Remote stage submission {submissionId} was acknowledged, but no stable map id was captured; suppressing PlayerRecordSavedEvent and cache projection.",
+                               request.SubmissionId);
+            await RefreshMapStageRecord(mapName,
+                                        recordRequest.Style,
+                                        recordRequest.Track,
+                                        recordRequest.Stage,
+                                        mapLoad).ConfigureAwait(false);
+            return;
+        }
+
+        var acknowledged = RemoteRunSubmissionMapper.ToAcknowledgedRun(request, response, playerName, mapId);
+        await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+        {
+            if (!_mapCache.IsCurrent(mapLoad))
+            {
+                _logger.LogInformation("Remote stage submission {submissionId} was acknowledged after the map changed; sending a replay-only event without updating current-map records.",
+                                       request.SubmissionId);
+                _lateReplayListener?.OnRecordSaved(new PlayerRecordSavedEvent(steamId,
+                    playerName,
+                    acknowledged.RecordType,
+                    acknowledged.SavedRecord,
+                    null,
+                    null,
+                    attemptId));
+                return;
+            }
+
+            var currentStageRecords = _mapCache.GetStageRecords(recordRequest.Style,
+                                                                 recordRequest.Track,
+                                                                 recordRequest.Stage);
+            var currentWrRecord = currentStageRecords is { Count: > 0 } ? currentStageRecords[0] : null;
+            var currentClient = _bridge.ClientManager.GetGameClient(steamId);
+            var currentPbRecord = currentClient is null
+                ? null
+                : _playerCache.GetRecord(currentClient.Slot,
+                                         recordRequest.Style,
+                                         recordRequest.Track,
+                                         recordRequest.Stage);
+
+            var recordEvent = new PlayerRecordSavedEvent(steamId,
+                                                          playerName,
+                                                          acknowledged.RecordType,
+                                                          acknowledged.SavedRecord,
+                                                          currentWrRecord,
+                                                          currentPbRecord,
+                                                          attemptId);
+            NotifyRecordSavedListeners(recordEvent);
+
+            if (currentClient is not null)
+            {
+                _playerCache.SetStageRecord(currentClient.Slot,
+                                            recordRequest.Style,
+                                            recordRequest.Track,
+                                            recordRequest.Stage,
+                                            acknowledged.SavedRecord);
+            }
+        }, ct).ConfigureAwait(false);
+
+        await RefreshMapStageRecord(mapName,
+                                    recordRequest.Style,
+                                    recordRequest.Track,
+                                    recordRequest.Stage,
+                                    mapLoad).ConfigureAwait(false);
+    }
+
+    private async Task NotifyRemoteSubmissionPendingAsync(SteamID           steamId,
+                                                           Guid              submissionId,
+                                                           string            runKind,
+                                                           CancellationToken ct)
+    {
+        _logger.LogInformation("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
+                               runKind,
+                               submissionId);
+
+        await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+        {
+            if (_bridge.ClientManager.GetGameClient(steamId) is { } client)
+            {
+                client.GetPlayerController()?.PrintToChat("Run is pending remote backend confirmation.");
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
+    private async Task NotifyRemoteSubmissionFailureAsync(SteamID           steamId,
+                                                           string            message,
+                                                           CancellationToken ct)
+    {
+        await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+        {
+            if (_bridge.ClientManager.GetGameClient(steamId) is { } client)
+            {
+                client.GetPlayerController()?.PrintToChat(message);
+            }
+        }, ct).ConfigureAwait(false);
     }
 
     private async Task RefreshMapRecord(string mapName, int style, int track, MapRecordCache.LoadToken origin)

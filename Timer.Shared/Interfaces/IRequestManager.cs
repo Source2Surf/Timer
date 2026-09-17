@@ -48,6 +48,12 @@ public interface IRequestManager
     Task UpdateMapInfo(MapProfile info);
 
     /// <summary>
+    /// Atomically records one completed map session without writing an old map-profile snapshot
+    /// over sessions completed by other game servers.
+    /// </summary>
+    Task IncrementMapStatsAsync(string mapName, float deltaSeconds);
+
+    /// <summary>
     /// Get all map names.
     /// </summary>
     Task<IReadOnlyList<string>> GetAllMapNamesAsync();

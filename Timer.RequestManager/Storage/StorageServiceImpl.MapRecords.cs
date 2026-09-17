@@ -65,13 +65,37 @@ internal sealed partial class StorageServiceImpl
                                           orderByStageThenTime: false);
     }
 
+    /// <summary>
+    /// Read-only API query shape. The plugin-facing IRequestManager predates optional
+    /// style/track/stage filters, whereas the HTTP API needs to represent those filters
+    /// independently without materializing an unbounded list in the web process.
+    /// </summary>
+    internal Task<IReadOnlyList<RunRecord>> GetMapRecordsForReadApiAsync(string mapName,
+                                                                        bool   stageRecords,
+                                                                        int?   style,
+                                                                        int?   track,
+                                                                        int?   stage,
+                                                                        int    limit,
+                                                                        bool   allowReadRepair)
+    {
+        return QueryBestRecordsByMapAsync(mapName,
+                                          limit,
+                                          stageRecords ? RunType.Stage : RunType.Main,
+                                          style,
+                                          track.HasValue ? ToUInt16(track.Value) : null,
+                                          stage.HasValue ? ToUInt16(stage.Value) : null,
+                                          orderByStageThenTime: stageRecords && !stage.HasValue,
+                                          ensureBestRunsSeeded: allowReadRepair);
+    }
+
     private async Task<IReadOnlyList<RunRecord>> QueryBestRecordsByMapAsync(string    mapName,
                                                                              int       limit,
                                                                              RunType   runType,
                                                                              int?      style,
                                                                              ushort?   track,
                                                                              ushort?   stage,
-                                                                             bool      orderByStageThenTime)
+                                                                             bool      orderByStageThenTime,
+                                                                             bool      ensureBestRunsSeeded = true)
     {
         var mapId = await ResolveMapIdByNameAsync(mapName);
 
@@ -80,11 +104,11 @@ internal sealed partial class StorageServiceImpl
             return [];
         }
 
-        if (style.HasValue && track.HasValue && stage.HasValue)
+        if (ensureBestRunsSeeded && style.HasValue && track.HasValue && stage.HasValue)
         {
             await EnsureBestRunsSeededAsync(mapId.Value, runType, style.Value, track.Value, stage.Value);
         }
-        else
+        else if (ensureBestRunsSeeded)
         {
             await EnsureBestRunsSeededForMapAsync(mapId.Value, runType);
         }
@@ -132,7 +156,7 @@ internal sealed partial class StorageServiceImpl
 
         var runs = await query.Select((best, run) => run)
                               .Take(normalizedLimit)
-                              .ToListAsync();
+                              .ToListAsync(OperationCancellation);
 
         var result = new List<RunRecord>(runs.Count);
 
@@ -171,7 +195,7 @@ internal sealed partial class StorageServiceImpl
         var rows = await _db.Queryable<PlayerEntity>()
                             .Where(x => steamIds.Contains(x.SteamId))
                             .Select(x => new PlayerNameRow { SteamId = x.SteamId, Name = x.Name })
-                            .ToListAsync();
+                            .ToListAsync(OperationCancellation);
 
         var names = new Dictionary<ulong, string>(rows.Count);
 
@@ -214,12 +238,12 @@ internal sealed partial class StorageServiceImpl
                                         && x.SteamId == steamIdValue
                                         && x.RunType == RunType.Main
                                         && x.Stage == 0)
-                            .OrderByDescending(x => x.Date)
+                            .OrderByDescending(x => x.DateUnixTimeMilliseconds)
                             .OrderByDescending(x => x.Id)
                             .Select(x => new RecentRunRow
                             {
                                 Id = x.Id,
-                                Date = x.Date,
+                                DateUnixTimeMilliseconds = x.DateUnixTimeMilliseconds,
                                 SteamId = x.SteamId,
                                 MapId = x.MapId,
                                 Style = x.Style,
@@ -228,7 +252,7 @@ internal sealed partial class StorageServiceImpl
                                 Time = x.Time,
                             })
                             .Take(normalizedLimit)
-                            .ToListAsync();
+                            .ToListAsync(OperationCancellation);
 
         var result = new List<RunRecord>(rows.Count);
 
@@ -237,7 +261,7 @@ internal sealed partial class StorageServiceImpl
             result.Add(new RunRecord
             {
                 Id = (long)row.Id,
-                RunDate = row.Date,
+                RunDate = FromUnixTimeMilliseconds(row.DateUnixTimeMilliseconds),
                 SteamId = unchecked((ulong)row.SteamId),
                 MapId = row.MapId,
                 Style = row.Style,
@@ -254,7 +278,8 @@ internal sealed partial class StorageServiceImpl
     {
         public ulong Id { get; set; }
 
-        public DateTime Date { get; set; }
+        [SugarColumn(ColumnName = "Date", ColumnDataType = "bigint")]
+        public long DateUnixTimeMilliseconds { get; set; }
 
         [SugarColumn(ColumnDataType = "bigint")]
         public long SteamId { get; set; }

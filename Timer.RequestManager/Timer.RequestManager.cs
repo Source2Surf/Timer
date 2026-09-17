@@ -23,12 +23,14 @@ public class SqlRequestManager : IModSharpModule
     private const string ModuleConnectionStringKey      = "Timer.RequestManager";
     private const string ReplayStorageBaseUrlKey        = "Timer:ReplayStorageBaseUrl";
     private const string ReplayUploadNonPersonalBestKey = "Timer:ReplayUploadNonPersonalBest";
+    private const string InitializeSchemaKey            = "Timer:InitializeSchema";
 
     private readonly ISharedSystem              _shared;
     private readonly ILogger<SqlRequestManager> _logger;
 
     private readonly IRequestManager   _impl;
     private readonly DbReplayProvider? _replayProvider;
+    private readonly bool              _initializeSchema;
 
     public SqlRequestManager(
         ISharedSystem  sharedSystem,
@@ -46,6 +48,7 @@ public class SqlRequestManager : IModSharpModule
         using var timerConfig = LoadTimerJsonc(configPath);
 
         var (dbType, connectionString, source) = ResolveDatabaseConnection(timerConfig, configPath, configuration);
+        _initializeSchema = ResolveInitializeSchema(timerConfig, configuration);
 
         _logger.LogInformation("Resolved SQL config from {source}.", source);
 
@@ -80,7 +83,7 @@ public class SqlRequestManager : IModSharpModule
     {
         try
         {
-            ((StorageServiceImpl) _impl).Init();
+            ((StorageServiceImpl) _impl).Init(_initializeSchema);
 
             _logger.LogInformation("{module} initialized with SQL storage.",
                                    ((IModSharpModule) this).DisplayName);
@@ -142,6 +145,26 @@ public class SqlRequestManager : IModSharpModule
         var parsed = ParseConnectionString(rawConnectionString);
 
         return (parsed.DbType, parsed.ConnectionString, "IConfiguration:ConnectionStrings");
+    }
+
+    internal static bool ResolveInitializeSchema(JsonDocument? timerConfig,
+                                                 IConfiguration configuration)
+    {
+        if (timerConfig is not null
+            && TryGetPropertyIgnoreCase(timerConfig.RootElement, "database", out var database)
+            && database.ValueKind == JsonValueKind.Object)
+        {
+            var configured = ReadOptionalBool(database, "initialize_schema");
+            if (configured.HasValue)
+            {
+                return configured.Value;
+            }
+        }
+
+        var raw = configuration[InitializeSchemaKey];
+        if (string.IsNullOrWhiteSpace(raw)) return true; // preserve fresh-install bootstrap
+        if (bool.TryParse(raw, out var value)) return value;
+        throw new InvalidDataException($"{InitializeSchemaKey} must be true or false.");
     }
 
     private readonly record struct ReplayConfig(string BaseUrl, bool UploadNonPersonalBest, string Source);

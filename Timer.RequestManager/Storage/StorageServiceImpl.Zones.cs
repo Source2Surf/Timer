@@ -19,7 +19,7 @@ internal sealed partial class StorageServiceImpl
 
         var entities = await _db.Queryable<ZoneEntity>()
                                 .Where(z => z.MapId == mapId.Value)
-                                .ToListAsync();
+                                .ToListAsync(OperationCancellation);
 
         var result = new List<ZoneData>(entities.Count);
 
@@ -34,34 +34,22 @@ internal sealed partial class StorageServiceImpl
     public async Task SaveZonesAsync(string mapName, IReadOnlyList<ZoneData> zones)
     {
         var mapId = await EnsureMapIdByNameAsync(mapName);
-
-        await _db.Ado.BeginTranAsync();
-
-        try
+        await WithRecordTransactionAsync(async () =>
         {
+            // Serialize whole snapshots, including an initially empty zone range.
+            await LockMapAsync(mapId);
             await _db.Deleteable<ZoneEntity>()
                      .Where(z => z.MapId == mapId)
-                     .ExecuteCommandAsync();
+                     .ExecuteCommandAsync(OperationCancellation);
 
             if (zones.Count > 0)
             {
+                // Recreate entities on each retry so rolled-back identity values are not reused.
                 var entities = new List<ZoneEntity>(zones.Count);
-
                 foreach (var zone in zones)
-                {
                     entities.Add(ZoneEntityMapper.ToEntity(zone, mapId));
-                }
-
-                await _db.Insertable(entities).ExecuteCommandAsync();
+                await _db.Insertable(entities).ExecuteCommandAsync(OperationCancellation);
             }
-
-            await _db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await _db.Ado.RollbackTranAsync();
-
-            throw;
-        }
+        });
     }
 }

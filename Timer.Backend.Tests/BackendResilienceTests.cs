@@ -1,0 +1,344 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using Grpc.Core;
+using Grpc.Net.Client;
+using MagicOnion.Client;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Source2Surf.Timer.Backend.Rpc.Contracts;
+using Source2Surf.Timer.Common.Entities;
+using SqlSugar;
+using Timer.Backend.Configuration;
+using Timer.Backend.Endpoints;
+using Timer.Backend.Infrastructure;
+using Timer.Backend.WriteApi;
+using Timer.RequestManager.Backend;
+using Timer.RequestManager.Storage;
+using Xunit;
+
+namespace Timer.Backend.Tests;
+
+public sealed class BackendResilienceTests
+{
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task AdministrativeOperationsRespectCancellationAndRecover(int operationIndex)
+    {
+        using var fixture = new Fixture();
+        fixture.Owner.Start(false, false);
+        var policy = new Dictionary<int, double> { [0] = 1 };
+        Func<CancellationToken, Task<TimerBackendScoreAdministrationResult>> operation = operationIndex switch
+        {
+            0 => token => fixture.Owner.SetMapTierAndRequeueScoresAsync("surf_admin_cancel", 2, policy, token),
+            1 => token => fixture.Owner.RequeueMapScorePolicyAsync("surf_admin_cancel", policy, token),
+            _ => token => fixture.Owner.RequeueAllScorePoliciesAsync(policy, token),
+        };
+        var commands = 0;
+        fixture.Store.Db.Aop.OnLogExecuting = (_, _) => Interlocked.Increment(ref commands);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation(cancellation.Token));
+        Assert.Equal(0, commands);
+        await operation(CancellationToken.None);
+        Assert.True(commands > 0);
+    }
+
+    [Fact]
+    public async Task DisposalAllowsAnActiveAdministrativeTransactionToFinish()
+    {
+        using var fixture = new Fixture();
+        var map = await fixture.Store.GetMapInfo("surf_admin_dispose");
+        fixture.Owner.Start(false, false);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        fixture.Store.Db.Aop.OnLogExecuting = (sql, _) =>
+        {
+            if (!sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)
+                || !sql.Contains("surf_maps", StringComparison.OrdinalIgnoreCase)) return;
+            entered.TrySetResult();
+            if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Admin transaction was not released.");
+        };
+        var request = Task.Run(() => fixture.Owner.SetMapTierAndRequeueScoresAsync(
+            map.MapName, 2, new Dictionary<int, double> { [0] = 1 }));
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            fixture.Owner.Dispose();
+            Assert.False(request.IsCompleted);
+        }
+        finally { release.Set(); }
+        Assert.Equal<byte?>(2, (await request.WaitAsync(TimeSpan.FromSeconds(5))).CurrentTier);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => fixture.Owner.GetAllMapNamesAsync());
+    }
+
+    [Fact]
+    public async Task RepeatedNewGenerationsCannotHideUnresolvedWorkerFailures()
+    {
+        using var fixture = new Fixture(worker: true);
+        fixture.Owner.Start(false, false);
+        await fixture.Owner.StopWorkerAsync(default);
+        var map = await fixture.Store.GetMapInfo("surf_busy_failure");
+        var pendingSince = DateTime.UtcNow.AddMinutes(-20);
+        for (var index = 0; index < 10; index++)
+        {
+            var requestedAt = pendingSince.AddMinutes(index * 2);
+            await fixture.Store.EnqueueScoreRecalcAsync(map.MapId, 0, 0, 1, requestedAt);
+            fixture.Store.Db.Aop.OnLogExecuting = (sql, _) =>
+            {
+                if (sql.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)
+                    && sql.Contains("surf_player_track_scores", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Persistent score failure");
+            };
+            try { await fixture.Store.ProcessScoreRecalcOutboxBatchAsync(requestedAt.AddSeconds(5), $"busy-failure-{index}"); }
+            finally { fixture.Store.Db.Aop.OnLogExecuting = null; }
+        }
+        // A fresh enqueue resets the delivery budget and brings retry close to now.
+        await fixture.Store.EnqueueScoreRecalcAsync(map.MapId, 0, 0, 1, DateTime.UtcNow);
+        var health = await fixture.Owner.GetWorkerHealthAsync();
+        Assert.Equal(1, health.PendingCount);
+        Assert.Equal(0, health.DeadLetterCount);
+        Assert.InRange(Math.Abs((health.OldestPendingSinceUtc!.Value - pendingSince).TotalSeconds), 0, 1);
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(3));
+        using var client = new HttpClient { BaseAddress = Address(app) };
+        using var response = await client.GetAsync("/health/worker");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("\"status\":\"degraded\"", await response.Content.ReadAsStringAsync());
+
+        var pending = await fixture.Store.Db.Queryable<ScoreRecalcOutboxEntity>()
+            .Where(x => x.MapId == map.MapId).SingleAsync();
+        await fixture.Store.ProcessScoreRecalcOutboxBatchAsync(pending.AvailableAtUtc, "recovered");
+        Assert.Null((await fixture.Owner.GetWorkerHealthAsync()).OldestPendingSinceUtc);
+        var next = DateTime.UtcNow.AddMinutes(1);
+        await fixture.Store.EnqueueScoreRecalcAsync(map.MapId, 0, 0, 1, next);
+        Assert.InRange(Math.Abs(((await fixture.Owner.GetWorkerHealthAsync()).OldestPendingSinceUtc!.Value - next).TotalSeconds), 0, 1);
+    }
+
+    [Fact]
+    public async Task DedicatedWorkerFailsStartupBeforeScanningWhenOutboxIsMissing()
+    {
+        using var fixture = new Fixture(worker: true);
+        fixture.Store.Db.DbMaintenance.DropTable<ScoreRecalcOutboxEntity>();
+        var service = new TimerBackendStorageHostedService(
+            fixture.Owner, new TimerBackendOptions("postgresql", "unused", false, false, true),
+            WriteOptions(false), NullLogger<TimerBackendStorageHostedService>.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.StartAsync(default));
+        Assert.Contains("surf_score_recalc_outbox", exception.Message);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => fixture.Owner.CheckReadyAsync());
+    }
+
+    [Fact]
+    public async Task DedicatedWorkerReadinessContinuesToRequireOutboxAfterStartup()
+    {
+        using var fixture = new Fixture(worker: true);
+        fixture.Owner.Start(false, false);
+        await fixture.Owner.StopWorkerAsync(default);
+        fixture.Store.Db.DbMaintenance.DropTable<ScoreRecalcOutboxEntity>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Owner.CheckReadyAsync());
+        Assert.Contains("surf_score_recalc_outbox", exception.Message);
+    }
+
+    [Fact]
+    public async Task PreCancelledRequestExecutesNoSqlAndDoesNotCancelNextRequest()
+    {
+        using var fixture = new Fixture();
+        fixture.Owner.Start(false, false);
+        var commands = 0;
+        fixture.Store.Db.Aop.OnLogExecuting = (_, _) => Interlocked.Increment(ref commands);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => fixture.Owner.GetAllMapNamesAsync(cancellation.Token));
+        Assert.Equal(0, commands);
+        await fixture.Owner.GetAllMapNamesAsync();
+        Assert.True(commands > 0);
+    }
+
+    [Fact]
+    public async Task DisposalRetainsStorageUntilActiveRequestFinished()
+    {
+        using var fixture = new Fixture();
+        fixture.Owner.Start(false, false);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        fixture.Store.Db.Aop.OnLogExecuting = (_, _) =>
+        {
+            entered.TrySetResult();
+            if (!release.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("Test did not release query.");
+        };
+        var request = Task.Run(() => fixture.Owner.GetAllMapNamesAsync());
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            fixture.Owner.Dispose();
+            Assert.False(request.IsCompleted);
+        }
+        finally { release.Set(); }
+
+        await request.WaitAsync(TimeSpan.FromSeconds(3));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => fixture.Owner.GetAllMapNamesAsync());
+    }
+
+    [Fact]
+    public async Task RestTimeoutCancelsSqlAndReturns504ThenRecovers()
+    {
+        using var fixture = new Fixture();
+        fixture.Owner.Start(false, false);
+        var delaySql = true;
+        await using var app = await StartAppAsync(fixture.Owner, onRequest: () =>
+            fixture.Store.Db.Aop.OnLogExecuting = delaySql ? (_, _) => Thread.Sleep(200) : null);
+        using var client = new HttpClient { BaseAddress = Address(app) };
+
+        try
+        {
+            using var response = await client.GetAsync("/api/v1/maps").WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+            Assert.Contains("request_timeout", await response.Content.ReadAsStringAsync());
+        }
+        finally { delaySql = false; }
+
+        using var recovered = await client.GetAsync("/api/v1/maps");
+        Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
+    }
+
+    [Fact]
+    public async Task RpcServerBudgetCancelsSqlAndReturnsDeadlineExceeded()
+    {
+        using var fixture = new Fixture();
+        fixture.Owner.Start(false, false, requireWriteSchema: true);
+        await using var app = await StartAppAsync(fixture.Owner, http2: true, onRequest: () =>
+            fixture.Store.Db.Aop.OnLogExecuting = (_, _) => Thread.Sleep(200));
+        using var channel = GrpcChannel.ForAddress(Address(app));
+        var client = MagicOnionClient.Create<ITimerWriteServiceV1>(channel);
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<RpcException>(async () =>
+                await client.EnsurePlayerProfileAsync(new EnsurePlayerProfileRequest
+                {
+                    SteamId = 76561198000000001,
+                    Name = "Timeout test",
+                }));
+            Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
+        }
+        finally { fixture.Store.Db.Aop.OnLogExecuting = null; }
+
+        Assert.Equal(0, await fixture.Store.Db.Queryable<PlayerEntity>().CountAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task WorkerHealthExposesPersistedDeadLettersAs503()
+    {
+        using var fixture = new Fixture(worker: true);
+        fixture.Owner.Start(false, false);
+        var now = DateTime.UtcNow;
+        await fixture.Store.Db.Insertable(new ScoreRecalcOutboxEntity
+        {
+            MapId = 999, RequestedGeneration = 1, StyleFactor = 1,
+            AvailableAtUtc = now, CreatedAtUtc = now, UpdatedAtUtc = now, DeadLetteredAtUtc = now,
+        }).ExecuteCommandAsync();
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(3));
+        using var client = new HttpClient { BaseAddress = Address(app) };
+
+        using var worker = await client.GetAsync("/health/worker");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, worker.StatusCode);
+        Assert.Contains("\"deadLetterCount\":1", await worker.Content.ReadAsStringAsync());
+        using var ready = await client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("RequestTimeoutSeconds", "0")]
+    [InlineData("WorkerShutdownTimeoutSeconds", "121")]
+    [InlineData("WorkerMaxLagSeconds", "invalid")]
+    public void InvalidRuntimeBudgetsFailFast(string key, string value)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { [$"TimerBackend:Runtime:{key}"] = value }).Build();
+        Assert.Throws<InvalidOperationException>(() => TimerBackendRuntimeOptions.FromConfiguration(configuration));
+    }
+
+    [Fact]
+    public void WorkerHealthDetectsStalledScansAndOldWorkWithoutDeadLetters()
+    {
+        var now = DateTime.UtcNow;
+        var stalled = new TimerBackendWorkerHealth { Enabled = true, StartedAtUtc = now.AddMinutes(-10) };
+        Assert.Equal("degraded", WorkerHealthPolicy.Evaluate(stalled, TimeSpan.FromMinutes(5), now).Status);
+        var delayed = stalled with { LastSuccessfulScanUtc = now, PendingCount = 1, OldestPendingSinceUtc = now.AddMinutes(-10) };
+        Assert.Equal("degraded", WorkerHealthPolicy.Evaluate(delayed, TimeSpan.FromMinutes(5), now).Status);
+    }
+
+    private static async Task<WebApplication> StartAppAsync(
+        TimerBackendStorage storage, bool http2 = false, TimeSpan? timeout = null, Action? onRequest = null)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0, listener =>
+            listener.Protocols = http2 ? HttpProtocols.Http2 : HttpProtocols.Http1));
+        builder.Services.AddSingleton(storage);
+        builder.Services.ConfigureHttpJsonOptions(BackendJsonOptions.Configure);
+        TimerBackendRuntimeRegistration.Add(builder.Services, new TimerBackendRuntimeOptions
+        {
+            RequestTimeout = timeout ?? TimeSpan.FromMilliseconds(50),
+        });
+        var write = WriteOptions(http2);
+        builder.Services.AddSingleton(write);
+        TimerWriteApiRegistration.Add(builder.Services, write);
+        var app = builder.Build();
+        app.Use(async (context, next) => { onRequest?.Invoke(); await next(context); });
+        app.UseRouting();
+        app.UseRequestTimeouts();
+        TimerReadEndpoints.Map(app);
+        TimerWriteApiRegistration.Map(app, write);
+        await app.StartAsync();
+        return app;
+    }
+
+    private static Uri Address(WebApplication app)
+        => new(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single());
+
+    private static TimerWriteApiOptions WriteOptions(bool enabled)
+        => TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["TimerBackend:WriteApi:Enabled"] = enabled.ToString() }).Build());
+
+    private sealed class Fixture : IDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), $"timer-resilience-{Guid.NewGuid():N}.db");
+        public StorageServiceImpl Store { get; }
+        public TimerBackendStorage Owner { get; }
+
+        public Fixture(bool worker = false)
+        {
+            Store = new StorageServiceImpl(DbType.Sqlite, $"Data Source={_path};Pooling=False",
+                NullLogger<StorageServiceImpl>.Instance, enableScoreRecalcWorker: worker);
+            Store.Db.CurrentConnectionConfig.ConfigureExternalServices.EntityService = (_, column) =>
+            {
+                if (column.IsIdentity) column.DataType = "INTEGER";
+            };
+            Store.Init(startScoreRecalcWorker: false);
+            Owner = new TimerBackendStorage(Store);
+        }
+
+        public void Dispose()
+        {
+            Owner.StopWorkerAsync(default).GetAwaiter().GetResult();
+            Owner.Dispose();
+            File.Delete(_path);
+        }
+    }
+}

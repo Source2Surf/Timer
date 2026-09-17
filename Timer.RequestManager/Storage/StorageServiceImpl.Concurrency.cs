@@ -23,7 +23,7 @@ internal sealed partial class StorageServiceImpl
             throw new InvalidOperationException("Map locks require an active transaction.");
         var query = _db.Queryable<MapEntity>().Where(x => x.MapId == mapId);
         if (_db.CurrentConnectionConfig.DbType != SqlSugar.DbType.Sqlite) query = query.TranLock(DbLockType.Wait);
-        if (await query.FirstAsync() is null) throw new InvalidOperationException($"Map {mapId} does not exist.");
+        if (await query.FirstAsync(OperationCancellation) is null) throw new InvalidOperationException($"Map {mapId} does not exist.");
     }
 
     private async Task WithRecordTransactionAsync(Func<Task> action)
@@ -32,10 +32,14 @@ internal sealed partial class StorageServiceImpl
         // Never retry a connection loss at COMMIT: its outcome can be ambiguous.
         for (var attempt = 0; ; attempt++)
         {
+            OperationCancellation.ThrowIfCancellationRequested();
             await BeginRecordTransactionAsync();
             try
             {
                 await action();
+                OperationCancellation.ThrowIfCancellationRequested();
+                // Commit/rollback deliberately do not take the request token. Once COMMIT is
+                // sent, finish resolving its outcome; an ambiguous reply is replayed by Inbox ID.
                 await _db.Ado.CommitTranAsync();
                 return;
             }
@@ -50,7 +54,7 @@ internal sealed partial class StorageServiceImpl
                 }
                 if (!rolledBack || attempt >= 2 || !IsTransactionConflict(ex)) throw;
                 _logger.LogWarning(ex, "Retrying record transaction after a lock conflict (attempt {Attempt}).", attempt + 1);
-                await Task.Delay(Random.Shared.Next(20, 60) * (attempt + 1));
+                await Task.Delay(Random.Shared.Next(20, 60) * (attempt + 1), OperationCancellation);
             }
         }
     }
@@ -68,10 +72,16 @@ internal sealed partial class StorageServiceImpl
             saved = false;
             await LockMapAsync(replay.MapId);
             var run = _db.Queryable<RunEntity>().Where(x => x.Id == replay.RunId && x.MapId == replay.MapId && x.SteamId == replay.SteamId);
-            if (await run.FirstAsync() is null) return;
+            if (await run.FirstAsync(OperationCancellation) is null) return;
             // The map lock serializes duplicate uploads and record removal.
             // External replay storage is accessed outside this transaction.
-            await _db.Storageable(replay).ExecuteCommandAsync();
+            var exists = await _db.Queryable<ReplayEntity>()
+                .Where(x => x.MapId == replay.MapId && x.RunId == replay.RunId && x.SteamId == replay.SteamId)
+                .AnyAsync(OperationCancellation);
+            if (exists)
+                await _db.Updateable(replay).ExecuteCommandAsync(OperationCancellation);
+            else
+                await _db.Insertable(replay).ExecuteCommandAsync(OperationCancellation);
             saved = true;
         });
         return saved;

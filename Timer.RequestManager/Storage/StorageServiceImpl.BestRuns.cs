@@ -26,7 +26,7 @@ internal sealed partial class StorageServiceImpl
         // Map-wide and scoped seeds share a gate. Cache entries mean completed work,
         // so concurrent readers cannot observe a partially populated best-run table.
         var gate = _bestRunSeedLocks.GetOrAdd(seedKey, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
+        await gate.WaitAsync(OperationCancellation);
 
         try
         {
@@ -51,7 +51,7 @@ internal sealed partial class StorageServiceImpl
                     baseQuery = baseQuery.Where(x => x.Stage > 0);
                 }
 
-                var rows = await QuerySeedBestRows(baseQuery).ToListAsync();
+                var rows = await QuerySeedBestRows(baseQuery).ToListAsync(OperationCancellation);
                 await UpsertSeedBestRowsAsync(mapId, runType, rows);
             });
             _bestRunMapSeededCache.TryAdd(seedKey, 0);
@@ -77,7 +77,7 @@ internal sealed partial class StorageServiceImpl
         }
 
         var gate = _bestRunSeedLocks.GetOrAdd((mapId, runType), _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
+        await gate.WaitAsync(OperationCancellation);
 
         try
         {
@@ -96,8 +96,8 @@ internal sealed partial class StorageServiceImpl
                                                 && x.Style   == style
                                                 && x.Track   == track
                                                 && x.Stage   == stage);
-                var rows = await QuerySeedBestRows(baseQuery).ToListAsync();
-                await UpsertSeedBestRowsAsync(mapId, runType, rows);
+                var rows = await QuerySeedBestRows(baseQuery).ToListAsync(OperationCancellation);
+                await UpsertSeedBestRowsAsync(mapId, runType, rows, style, track, stage);
             });
             _bestRunSeededCache.TryAdd(seedKey, 0);
         }
@@ -123,7 +123,12 @@ internal sealed partial class StorageServiceImpl
                 .MergeTable()
                 .Where(x => x.RowNum == 1);
 
-    private async Task UpsertSeedBestRowsAsync(ulong mapId, RunType runType, List<SeedBestRunRow> rows)
+    private async Task UpsertSeedBestRowsAsync(ulong mapId,
+                                               RunType runType,
+                                               List<SeedBestRunRow> rows,
+                                               int? style = null,
+                                               ushort? track = null,
+                                               ushort? stage = null)
     {
         if (rows.Count == 0)
         {
@@ -132,7 +137,18 @@ internal sealed partial class StorageServiceImpl
 
         // Skip unchanged rows in memory so a cold map read does not issue one
         // update per player. The map lock protects this comparison until commit.
-        var existingRows = await QueryBestRuns().Where(x => x.MapId == mapId && x.RunType == runType).ToListAsync();
+        var existingQuery = QueryBestRuns().Where(x => x.MapId == mapId && x.RunType == runType);
+        if (style is not null && track is not null && stage is not null)
+        {
+            var scopedStyle = style.Value;
+            var scopedTrack = track.Value;
+            var scopedStage = stage.Value;
+            existingQuery = existingQuery.Where(x => x.Style == scopedStyle
+                                                     && x.Track == scopedTrack
+                                                     && x.Stage == scopedStage);
+        }
+
+        var existingRows = await existingQuery.ToListAsync(OperationCancellation);
         var existing = new Dictionary<(long steamId, int style, ushort track, ushort stage), PlayerBestRunEntity>(existingRows.Count);
         foreach (var best in existingRows)
         {
@@ -169,9 +185,9 @@ internal sealed partial class StorageServiceImpl
         // The map lock makes the comparison above authoritative. Write only
         // improvements, in bounded batches, without a second existence probe.
         foreach (var batch in inserts.Chunk(500))
-            await _db.Insertable(batch).ExecuteCommandAsync();
+            await _db.Insertable(batch).ExecuteCommandAsync(OperationCancellation);
         foreach (var batch in updates.Chunk(500))
-            await _db.Updateable(batch).UpdateColumns(x => new { x.RunId, x.BestTime, x.UpdatedAt }).ExecuteCommandAsync();
+            await _db.Updateable(batch).UpdateColumns(x => new { x.RunId, x.BestTime, x.UpdatedAt }).ExecuteCommandAsync(OperationCancellation);
     }
 
     private void RemoveBestRunSeedCacheForMap(ulong mapId)

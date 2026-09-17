@@ -7,7 +7,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="ModSharp.Sharp.Shared" Version="*" PrivateAssets="all" />
+		<PackageReference Include="ModSharp.Sharp.Shared" Version="2.1.136" PrivateAssets="all" />
 	</ItemGroup>
 
 </Project>

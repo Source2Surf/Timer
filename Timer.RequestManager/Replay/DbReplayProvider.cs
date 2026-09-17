@@ -37,13 +37,15 @@ internal sealed class DbReplayProvider : IReplayProvider
 
     public Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)
     {
-        var key = $"{mapName.ToLowerInvariant()}/style_{style}/{track}/{steamId}_{runId}.replay";
+        // Each attempt owns an immutable object key. A partial retry must not truncate an
+        // object referenced by an earlier successful SQL commit.
+        var key = $"{mapName.ToLowerInvariant()}/style_{style}/{track}/{steamId}_{runId}_{Guid.NewGuid():N}.replay";
         return UploadReplayCoreAsync(key, mapName, steamId, runId, replayData);
     }
 
     public Task UploadStageReplayAsync(string mapName, int style, int track, int stage, ulong steamId, ulong runId, byte[] replayData)
     {
-        var key = $"{mapName.ToLowerInvariant()}/style_{style}/{track}/stage_{stage}/{steamId}_{runId}.replay";
+        var key = $"{mapName.ToLowerInvariant()}/style_{style}/{track}/stage_{stage}/{steamId}_{runId}_{Guid.NewGuid():N}.replay";
         return UploadReplayCoreAsync(key, mapName, steamId, runId, replayData);
     }
 
@@ -134,17 +136,12 @@ internal sealed class DbReplayProvider : IReplayProvider
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "DB write failed after uploading replay {url}, attempting cleanup", url);
-
-            try
-            {
-                await _replayStorage.DeleteAsync(url);
-            }
-            catch (Exception cleanupEx)
-            {
-                _logger.LogWarning(cleanupEx, "Failed to clean up orphaned replay {url}", url);
-            }
-
+            // COMMIT may have succeeded even when its reply was lost. Eager compensation
+            // could delete the very object now referenced by the durable replay row.
+            // Preserve uncertain uploads for later reconciliation with SQL metadata.
+            _logger.LogError(ex,
+                "Replay metadata operation failed for {url}; retaining the uploaded object because its commit outcome may be unknown.",
+                url);
             throw;
         }
     }

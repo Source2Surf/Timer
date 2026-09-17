@@ -5,6 +5,7 @@ using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Common.Enums;
 using Source2Surf.Timer.Shared.Models;
 using SqlSugar;
+using Timer.RequestManager.Backend;
 using Timer.RequestManager.Storage;
 using Xunit;
 using Xunit.Abstractions;
@@ -26,7 +27,10 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         var stores = new List<StorageServiceImpl>();
         StorageServiceImpl NewStore()
         {
-            var store = new StorageServiceImpl(dialect, Environment.GetEnvironmentVariable(environment)!, NullLogger<StorageServiceImpl>.Instance);
+            var store = new StorageServiceImpl(dialect,
+                                               Environment.GetEnvironmentVariable(environment)!,
+                                               NullLogger<StorageServiceImpl>.Instance,
+                                               enableScoreRecalcWorker: false);
             stores.Add(store);
             return store;
         }
@@ -35,7 +39,10 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         var third = NewStore();
         try
         {
-            first.Init();
+            // The opt-in integration database is explicitly disposable, but it may be reused
+            // across local runs. Outbox workers scan globally, so stale pending rows from an
+            // interrupted prior test would make claim-count assertions nondeterministic.
+            await first.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
             var tag = Guid.NewGuid().ToString("N");
             var player = new SteamID(76561198000000000UL + (ulong)Random.Shared.NextInt64(1, 1000000000));
             var playerValue = checked((long)player.AsPrimitive());
@@ -47,7 +54,8 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
             {
                 await first.Db.Insertable(new RunEntity
                 {
-                    MapId = map.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunType = RunType.Main, Time = 80, Date = DateTime.UtcNow,
+                    MapId = map.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunType = RunType.Main, Time = 80,
+                    DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
                 }).ExecuteCommandAsync();
             }
 
@@ -75,7 +83,8 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
             // best row. The SQL-only read paths do not acquire these write locks.
             await first.Db.Insertable(new RunEntity
             {
-                MapId = mapB.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunType = RunType.Stage, Stage = 1, Time = 80, Date = DateTime.UtcNow,
+                MapId = mapB.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunType = RunType.Stage, Stage = 1, Time = 80,
+                DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
             }).ExecuteCommandAsync();
             using (var hold = new SqlPause(first, IsBestRunWrite))
             {
@@ -199,6 +208,8 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
             Assert.Equal(0, await first.Db.Queryable<PlayerTrackScoreEntity>().Where(x => x.MapId == mapA.MapId).CountAsync());
             output.WriteLine($"{dialect}: rollback and finish/wipe ordering passed.");
 
+            await CheckOutboxConcurrency(first, second, third, mapB.MapId);
+            await CheckRunSubmissionConcurrency(first, second, mapB, mapC, playerValue, NewStore);
             await CheckBatching(first, tag, player.AsPrimitive() + 1000000000UL);
             await CheckPrimitiveMapping(first, mapB.MapId, playerValue);
             CheckLegacyReplayMigration(first, tag, playerValue);
@@ -207,6 +218,375 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         finally { foreach (var store in stores) store.Shutdown(); }
     }
 
+    private async Task CheckOutboxConcurrency(StorageServiceImpl first,
+                                              StorageServiceImpl second,
+                                              StorageServiceImpl third,
+                                              ulong mapId)
+    {
+        const int simultaneousInsertStyle = 71;
+        var simultaneousAt = DateTime.UtcNow.AddMinutes(-1);
+        await Task.WhenAll(
+            first.EnqueueScoreRecalcAsync(mapId, simultaneousInsertStyle, 0, 1, simultaneousAt),
+            second.EnqueueScoreRecalcAsync(mapId, simultaneousInsertStyle, 0, 1, simultaneousAt));
+        var simultaneous = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                      .Where(x => x.MapId == mapId && x.Style == simultaneousInsertStyle)
+                                      .SingleAsync();
+        Assert.Equal(2, simultaneous.RequestedGeneration);
+        Assert.Equal(1, await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                     .Where(x => x.MapId == mapId && x.Style == simultaneousInsertStyle)
+                                     .CountAsync());
+        Assert.Equal(1, await first.ProcessScoreRecalcOutboxBatchAsync(
+                         simultaneous.AvailableAtUtc, "simultaneous-insert-worker"));
+
+        var mapName = await first.Db.Queryable<MapEntity>()
+                                     .Where(x => x.MapId == mapId)
+                                     .Select(x => x.File)
+                                     .SingleAsync();
+        var rollbackPlayer = new SteamID(76561198000000000UL + (ulong)Random.Shared.NextInt64(1000000001, 1999999999));
+        await first.GetPlayerProfile(rollbackPlayer, "Outbox rollback");
+        var segmentsBeforeRollback = await first.Db.Queryable<RunSegmentEntity>().CountAsync();
+
+        first.Db.Aop.OnLogExecuting = (sql, _) =>
+        {
+            if (IsOutboxInsert(sql))
+            {
+                throw new InvalidOperationException("Injected real-database Outbox insert failure");
+            }
+        };
+        try
+        {
+            await Assert.ThrowsAnyAsync<Exception>(() => first.AddPlayerRecord(
+                rollbackPlayer,
+                mapName,
+                new RecordRequest
+                {
+                    Style = 72,
+                    Time = 70,
+                    Checkpoints = [new RecordRequest.CheckpointRecord { CheckpointIndex = 1, Time = 35 }],
+                }));
+        }
+        finally
+        {
+            first.Db.Aop.OnLogExecuting = null;
+        }
+
+        Assert.Equal(0, await first.Db.Queryable<RunEntity>()
+                                     .Where(x => x.MapId == mapId && x.Style == 72)
+                                     .CountAsync());
+        Assert.Equal(0, await first.Db.Queryable<PlayerBestRunEntity>()
+                                     .Where(x => x.MapId == mapId && x.Style == 72)
+                                     .CountAsync());
+        Assert.Equal(segmentsBeforeRollback, await first.Db.Queryable<RunSegmentEntity>().CountAsync());
+        Assert.Equal(0, await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                     .Where(x => x.MapId == mapId && x.Style == 72)
+                                     .CountAsync());
+
+        const int style = 73;
+        const ushort track = 2;
+        const int requestCount = 40;
+        var firstRequestedAt = DateTime.UtcNow.AddMinutes(-2);
+
+        await first.EnqueueScoreRecalcAsync(mapId, style, track, 1, firstRequestedAt);
+
+        static async Task EnqueueRange(StorageServiceImpl store,
+                                       ulong mapId,
+                                       int style,
+                                       ushort track,
+                                       int start,
+                                       int count,
+                                       DateTime firstRequestedAt)
+        {
+            for (var index = start; index < start + count; index++)
+            {
+                await store.EnqueueScoreRecalcAsync(mapId,
+                                                    style,
+                                                    track,
+                                                    1 + index / 100d,
+                                                    firstRequestedAt.AddSeconds(index));
+            }
+        }
+
+        await Task.WhenAll(EnqueueRange(first, mapId, style, track, 1, 20, firstRequestedAt),
+                           EnqueueRange(second, mapId, style, track, 21, 19, firstRequestedAt));
+
+        var merged = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                   .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                                   .SingleAsync();
+        Assert.Equal(requestCount, merged.RequestedGeneration);
+        Assert.Equal(0, merged.ProcessedGeneration);
+        Assert.InRange(Math.Abs((merged.AvailableAtUtc - firstRequestedAt.AddSeconds(5)).TotalSeconds), 0, 1);
+
+        var claims = await Task.WhenAll(
+            first.ProcessScoreRecalcOutboxBatchAsync(firstRequestedAt.AddMinutes(1), "concurrent-worker-a"),
+            second.ProcessScoreRecalcOutboxBatchAsync(firstRequestedAt.AddMinutes(1), "concurrent-worker-b"));
+        Assert.Equal(1, claims.Sum());
+
+        var initiallyCompleted = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                                .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                                                .SingleAsync();
+        Assert.Equal(requestCount, initiallyCompleted.ProcessedGeneration);
+        Assert.Null(initiallyCompleted.LeaseOwner);
+
+        var nextRequestedAt = DateTime.UtcNow;
+        await first.EnqueueScoreRecalcAsync(mapId, style, track, 2, nextRequestedAt);
+        var freshGeneration = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                             .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                                             .SingleAsync();
+        Assert.Equal(requestCount + 1, freshGeneration.RequestedGeneration);
+        Assert.Equal(requestCount, freshGeneration.ProcessedGeneration);
+        Assert.InRange(Math.Abs((freshGeneration.AvailableAtUtc - nextRequestedAt.AddSeconds(5)).TotalSeconds), 0, 1);
+        using (var completionPause = new SqlPause(first, IsOutboxCompletionUpdate))
+        using (var enqueueAttempted = new SqlSignal(second, IsMapLock))
+        {
+            var processing = Task.Run(() => first.ProcessScoreRecalcOutboxBatchAsync(
+                                          freshGeneration.AvailableAtUtc, "generation-worker"));
+            Task? enqueue = null;
+            try
+            {
+                await completionPause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                enqueue = Task.Run(() => second.EnqueueScoreRecalcAsync(
+                    mapId, style, track, 3, nextRequestedAt.AddSeconds(1)));
+                await enqueueAttempted.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                Assert.False(enqueue.IsCompleted); // Completion still owns the map transaction.
+            }
+            finally
+            {
+                completionPause.Release.Set();
+                await Task.WhenAll(processing, enqueue ?? Task.CompletedTask);
+            }
+        }
+
+        var newerGeneration = await third.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                             .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                                             .SingleAsync();
+        Assert.Equal(requestCount + 2, newerGeneration.RequestedGeneration);
+        Assert.Equal(requestCount + 1, newerGeneration.ProcessedGeneration);
+        Assert.Null(newerGeneration.LeaseOwner);
+        Assert.Equal(1, await third.ProcessScoreRecalcOutboxBatchAsync(
+                         newerGeneration.AvailableAtUtc, "latest-generation-worker"));
+
+        var finallyCompleted = await third.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                              .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                                              .SingleAsync();
+        Assert.Equal(finallyCompleted.RequestedGeneration, finallyCompleted.ProcessedGeneration);
+
+        var leaseExpiryRequestedAt = DateTime.UtcNow;
+        await first.EnqueueScoreRecalcAsync(mapId, style, track, 4, leaseExpiryRequestedAt);
+        var leaseExpiryRequest = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                                .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                                                .SingleAsync();
+        using (var lateCompletionPause = new SqlPause(first, IsOutboxCompletionUpdate))
+        using (var recoveryAttempted = new SqlSignal(second, IsMapLock))
+        {
+            var lateOwner = Task.Run(() => first.ProcessScoreRecalcOutboxBatchAsync(
+                                         leaseExpiryRequest.AvailableAtUtc, "expired-owner"));
+            Task<int>? recovery = null;
+            try
+            {
+                await lateCompletionPause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                recovery = Task.Run(() => second.ProcessScoreRecalcOutboxBatchAsync(
+                    leaseExpiryRequest.AvailableAtUtc.AddMinutes(2), "recovery-owner"));
+                await recoveryAttempted.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                Assert.False(recovery.IsCompleted);
+            }
+            finally
+            {
+                lateCompletionPause.Release.Set();
+                await Task.WhenAll(lateOwner, recovery ?? Task.FromResult(0));
+            }
+        }
+
+        var recovered = await third.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                       .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                                       .SingleAsync();
+        Assert.Equal(recovered.RequestedGeneration, recovered.ProcessedGeneration);
+        Assert.Null(recovered.LeaseOwner);
+        Assert.Null(recovered.LeaseUntilUtc);
+
+        // A worker can stall before taking the map lock, lose its lease, and resume only after a
+        // newer generation has completed. The in-transaction generation fence must prevent
+        // that old StyleFactor from becoming the final score state.
+        var staleFactorRequestedAt = DateTime.UtcNow.AddMinutes(-1);
+        await first.EnqueueScoreRecalcAsync(mapId, style: 0, track: 0, styleFactor: 1,
+                                            nowUtc: staleFactorRequestedAt);
+        var staleFactorRequest = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                               .Where(x => x.MapId == mapId && x.Style == 0 && x.Track == 0)
+                                               .SingleAsync();
+        uint newerWorkerPoints = 0;
+        using (var beforeMapLockPause = new SqlPause(first, IsMapLock))
+        {
+            var staleWorker = Task.Run(() => first.ProcessScoreRecalcOutboxBatchAsync(
+                                           staleFactorRequest.AvailableAtUtc, "stale-factor-owner"));
+            try
+            {
+                await beforeMapLockPause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                await second.EnqueueScoreRecalcAsync(mapId, style: 0, track: 0, styleFactor: 3,
+                                                     nowUtc: staleFactorRequestedAt.AddSeconds(1));
+                Assert.Equal(1, await second.ProcessScoreRecalcOutboxBatchAsync(
+                                 staleFactorRequest.AvailableAtUtc.AddMinutes(2), "new-factor-owner"));
+                newerWorkerPoints = await third.Db.Queryable<PlayerTrackScoreEntity>()
+                                               .Where(x => x.MapId == mapId && x.Style == 0 && x.Track == 0)
+                                               .Select(x => x.Points)
+                                               .SingleAsync();
+                Assert.True(newerWorkerPoints > 0);
+            }
+            finally
+            {
+                beforeMapLockPause.Release.Set();
+                await staleWorker;
+            }
+        }
+
+        Assert.Equal(newerWorkerPoints, await third.Db.Queryable<PlayerTrackScoreEntity>()
+                                                   .Where(x => x.MapId == mapId && x.Style == 0 && x.Track == 0)
+                                                   .Select(x => x.Points)
+                                                   .SingleAsync());
+        output.WriteLine($"{first.Db.CurrentConnectionConfig.DbType}: SQL Outbox concurrent merge, claim and generation handoff passed.");
+    }
+
+    private async Task CheckRunSubmissionConcurrency(StorageServiceImpl first,
+                                                     StorageServiceImpl second,
+                                                     MapProfile mapB,
+                                                     MapProfile mapC,
+                                                     long steamId,
+                                                     Func<StorageServiceImpl> newStore)
+    {
+        const int sameIdStyle = 15;
+        const ushort sameIdTrack = 31;
+        var sameId = Guid.NewGuid();
+        var sameIdText = sameId.ToString("N");
+        var command = CreateSubmissionCommand(sameId, steamId, mapB.MapName,
+                                              sameIdStyle, sameIdTrack, 70_000_000);
+
+        // Eight real SQL scopes issue one hundred calls, retaining meaningful cross-process
+        // contention without opening one hundred database connections at once.
+        var workers = Enumerable.Range(0, 8).Select(_ => newStore()).ToArray();
+        try
+        {
+            var batches = await Task.WhenAll(workers.Select((worker, workerIndex) => Task.Run(async () =>
+            {
+                var outcomes = new List<TimerBackendRunSubmissionResult>();
+                for (var index = workerIndex; index < 100; index += workers.Length)
+                {
+                    outcomes.Add(await worker.SubmitBackendRunAsync(command));
+                }
+
+                return outcomes;
+            })));
+            var outcomes = batches.SelectMany(x => x).ToArray();
+            Assert.Equal(1, outcomes.Count(x => x.Disposition == TimerBackendSubmissionDisposition.Accepted));
+            Assert.Equal(99, outcomes.Count(x => x.Disposition == TimerBackendSubmissionDisposition.AlreadyApplied));
+
+            var accepted = Assert.Single(outcomes, x => x.Disposition == TimerBackendSubmissionDisposition.Accepted);
+            Assert.Equal(1, await first.Db.Queryable<RunSubmissionEntity>()
+                                       .Where(x => x.SubmissionId == sameIdText)
+                                       .CountAsync());
+            Assert.Equal(1, await first.Db.Queryable<RunEntity>()
+                                       .Where(x => x.MapId == mapB.MapId && x.SteamId == steamId
+                                                   && x.Style == sameIdStyle && x.Track == sameIdTrack)
+                                       .CountAsync());
+            Assert.Equal(2, await first.Db.Queryable<RunSegmentEntity>()
+                                       .Where(x => x.RunId == accepted.RunId)
+                                       .CountAsync());
+            var outbox = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                    .Where(x => x.MapId == mapB.MapId && x.Style == sameIdStyle && x.Track == sameIdTrack)
+                                    .SingleAsync();
+            Assert.Equal(1, outbox.RequestedGeneration);
+
+            // Different-map payloads cannot both claim one global submission key. The
+            // inbox unique index decides the winner; its loser must roll back every dependent
+            // row and surface a permanent payload conflict rather than a transient SQL error.
+            const int crossMapStyle = 14;
+            const ushort crossMapTrack = 30;
+            var crossMapId = Guid.NewGuid();
+            var crossMapIdText = crossMapId.ToString("N");
+            var left = CaptureSubmissionAsync(first.SubmitBackendRunAsync(
+                CreateSubmissionCommand(crossMapId, steamId, mapB.MapName,
+                                        crossMapStyle, crossMapTrack, 69_000_000)));
+            var right = CaptureSubmissionAsync(second.SubmitBackendRunAsync(
+                CreateSubmissionCommand(crossMapId, steamId, mapC.MapName,
+                                        crossMapStyle, crossMapTrack, 68_000_000)));
+            var crossMapOutcomes = await Task.WhenAll(left, right);
+            var crossMapAccepted = Assert.Single(crossMapOutcomes, x => x.Result is not null).Result!;
+            Assert.Single(crossMapOutcomes, x => x.Error is TimerBackendSubmissionConflictException);
+
+            Assert.Equal(1, await first.Db.Queryable<RunSubmissionEntity>()
+                                       .Where(x => x.SubmissionId == crossMapIdText)
+                                       .CountAsync());
+            Assert.Equal(1, await first.Db.Queryable<RunEntity>()
+                                       .Where(x => (x.MapId == mapB.MapId || x.MapId == mapC.MapId)
+                                                   && x.SteamId == steamId && x.Style == crossMapStyle
+                                                   && x.Track == crossMapTrack)
+                                       .CountAsync());
+            Assert.Equal(2, await first.Db.Queryable<RunSegmentEntity>()
+                                       .Where(x => x.RunId == crossMapAccepted.RunId)
+                                       .CountAsync());
+            var crossMapOutboxes = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                              .Where(x => (x.MapId == mapB.MapId || x.MapId == mapC.MapId)
+                                                          && x.Style == crossMapStyle && x.Track == crossMapTrack)
+                                              .ToListAsync();
+            Assert.Single(crossMapOutboxes);
+            Assert.Equal(1, crossMapOutboxes[0].RequestedGeneration);
+        }
+        finally
+        {
+            // NewStore registered every worker in RunSuite's owning collection; its outer
+            // finally disposes all scopes exactly once, including failure paths here.
+        }
+
+        output.WriteLine($"{first.Db.CurrentConnectionConfig.DbType}: 100 same-id submissions and cross-map inbox conflict passed.");
+    }
+
+    private static async Task<(TimerBackendRunSubmissionResult? Result, Exception? Error)> CaptureSubmissionAsync(
+        Task<TimerBackendRunSubmissionResult> submission)
+    {
+        try
+        {
+            return (await submission, null);
+        }
+        catch (Exception exception)
+        {
+            return (null, exception);
+        }
+    }
+
+    private static TimerBackendRunSubmissionCommand CreateSubmissionCommand(Guid submissionId,
+                                                                              long steamId,
+                                                                              string mapName,
+                                                                              int style,
+                                                                              ushort track,
+                                                                              long timeMicros)
+        => new ()
+        {
+            SubmissionId = submissionId,
+            SteamId = steamId,
+            MapName = mapName,
+            Kind = TimerBackendRunKind.Main,
+            Style = style,
+            Track = track,
+            TimeMicros = timeMicros,
+            Jumps = 8,
+            Strafes = 12,
+            Sync = 98,
+            Motion = new TimerBackendMotion { VelocityStartX = 1, VelocityEndZ = 2, VelocityAvgY = 3 },
+            Checkpoints =
+            [
+                new TimerBackendSubmissionCheckpoint
+                {
+                    CheckpointIndex = 1, TimeMicros = timeMicros / 2, Sync = 97,
+                    Motion = new TimerBackendMotion { VelocityStartY = 4, VelocityMaxZ = 5 },
+                },
+                new TimerBackendSubmissionCheckpoint
+                {
+                    CheckpointIndex = 2, TimeMicros = timeMicros - 1, Sync = 96,
+                    Motion = new TimerBackendMotion { VelocityEndX = 6, VelocityAvgZ = 7 },
+                },
+            ],
+            FinishedAtUtc = new DateTime(2026, 9, 15, 1, 2, 3, DateTimeKind.Utc),
+            RulesetVersion = 1,
+            StyleFactor = 1,
+        };
+
     private async Task CheckBatching(StorageServiceImpl store, string tag, ulong playerBase)
     {
         const int count = 2000;
@@ -214,7 +594,13 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         foreach (var batch in Enumerable.Range(0, count).Chunk(500))
         {
             await store.Db.Insertable(batch.Select(i => new PlayerEntity { SteamId = checked((long)(playerBase + (ulong)i)), Name = "Batch test", UpdatedAt = DateTime.UtcNow }).ToArray()).ExecuteCommandAsync();
-            await store.Db.Insertable(batch.Select(i => new RunEntity { MapId = map.MapId, SteamId = checked((long)(playerBase + (ulong)i)), Time = 80 + i, Date = DateTime.UtcNow }).ToArray()).ExecuteCommandAsync();
+            await store.Db.Insertable(batch.Select(i => new RunEntity
+            {
+                MapId = map.MapId,
+                SteamId = checked((long)(playerBase + (ulong)i)),
+                Time = 80 + i,
+                DateUnixTimeMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(DateTime.UtcNow),
+            }).ToArray()).ExecuteCommandAsync();
         }
         var commands = 0;
         var scoreWrites = 0;
@@ -321,6 +707,24 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
     private static bool IsPlayerUpdate(string sql) => sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && sql.Contains("surf_players");
     private static bool IsBestRunWrite(string sql) => sql.Contains("surf_player_best_runs")
         && (sql.TrimStart().StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) || sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsOutboxInsert(string sql)
+        => sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase)
+           && sql.TrimStart().StartsWith("INSERT", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsOutboxCompletionUpdate(string sql)
+    {
+        if (!sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase)
+            || !sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var whereIndex = sql.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase);
+        var processedGenerationIndex = sql.IndexOf("ProcessedGeneration", StringComparison.OrdinalIgnoreCase);
+        return processedGenerationIndex >= 0
+               && (whereIndex < 0 || processedGenerationIndex < whereIndex);
+    }
 
     private sealed class SqlPause : IDisposable
     {
