@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Grpc.Core;
@@ -13,12 +16,16 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sharp.Shared.Units;
+using Source2Surf.Timer.Backend.Contracts;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
 using Source2Surf.Timer.Common.Entities;
+using Source2Surf.Timer.Shared.Models;
 using SqlSugar;
 using Timer.Backend.Configuration;
 using Timer.Backend.Endpoints;
@@ -263,6 +270,233 @@ public sealed class BackendResilienceTests
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
     }
 
+    [Fact]
+    public async Task LeaderboardOutputCacheServesWarmResponsesAndLeavesOtherReadsUncached()
+    {
+        using var fixture = new Fixture();
+        var map = await fixture.Store.GetMapInfo($"surf_cache_warm_{Guid.NewGuid():N}");
+        var player = new SteamID(76561198000000001UL);
+        await fixture.Store.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = 80 });
+        await fixture.Store.AddPlayerRecord(new SteamID(76561198000000002UL), map.MapName,
+            new RecordRequest { Time = 90 });
+        for (var index = 2; index < 8; index++)
+        {
+            await fixture.Store.AddPlayerRecord(
+                new SteamID(76561198000000000UL + (ulong)index + 1),
+                map.MapName, new RecordRequest { Time = 90 + index });
+        }
+        fixture.Owner.Start(false, false);
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(5));
+        using var client = new HttpClient { BaseAddress = Address(app) };
+        var path = $"/api/v1/maps/{map.MapName}/leaderboard?limit=8";
+
+        using var initial = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, initial.StatusCode);
+        var initialBody = await initial.Content.ReadAsStringAsync();
+        var entityTag = initial.Headers.ETag?.Tag;
+        Assert.False(string.IsNullOrWhiteSpace(entityTag));
+        using var compressedClient = new HttpClient { BaseAddress = Address(app) };
+        using var compressedRequest = new HttpRequestMessage(HttpMethod.Get, path);
+        compressedRequest.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
+        using var compressed = await compressedClient.SendAsync(compressedRequest);
+        Assert.Equal(HttpStatusCode.OK, compressed.StatusCode);
+        Assert.Equal(entityTag, compressed.Headers.ETag?.Tag);
+        Assert.Equal("gzip", compressed.Content.Headers.ContentEncoding.Single());
+        await using var compressedStream = await compressed.Content.ReadAsStreamAsync();
+        using var gzip = new GZipStream(compressedStream, CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip);
+        Assert.Equal(initialBody, await reader.ReadToEndAsync());
+
+        fixture.Store.Db.DbMaintenance.DropTable<RunEntity>();
+        using var warm = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, warm.StatusCode);
+        Assert.Equal(initialBody, await warm.Content.ReadAsStringAsync());
+
+        using var conditional = new HttpRequestMessage(HttpMethod.Get, path);
+        conditional.Headers.TryAddWithoutValidation("If-None-Match", entityTag);
+        using var notModified = await client.SendAsync(conditional);
+        Assert.Equal(HttpStatusCode.NotModified, notModified.StatusCode);
+        Assert.Empty(await notModified.Content.ReadAsByteArrayAsync());
+
+        using var otherLimit = await client.GetAsync(
+            $"/api/v1/maps/{map.MapName}/leaderboard?limit=1");
+        Assert.Equal(HttpStatusCode.InternalServerError, otherLimit.StatusCode);
+
+        using var personal = await client.GetAsync(
+            $"/api/v1/players/{player.AsPrimitive()}/maps/{map.MapName}/records");
+        Assert.Equal(HttpStatusCode.InternalServerError, personal.StatusCode);
+    }
+
+    [Fact]
+    public async Task LeaderboardOutputCacheExpiresAndKeepsRouteKeysSeparate()
+    {
+        using var fixture = new Fixture();
+        var map = await fixture.Store.GetMapInfo($"surf_cache_expiry_{Guid.NewGuid():N}");
+        var player = new SteamID(76561198000000003UL);
+        await fixture.Store.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = 80 });
+        await fixture.Store.AddPlayerStageRecord(new SteamID(76561198000000004UL), map.MapName,
+            new RecordRequest { Stage = 1, Time = 60 });
+        fixture.Owner.Start(false, false);
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(5),
+            leaderboardCacheDuration: TimeSpan.FromSeconds(1));
+        using var client = new HttpClient { BaseAddress = Address(app) };
+        var path = $"/api/v1/maps/{map.MapName}/leaderboard?limit=1";
+
+        using var initial = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, initial.StatusCode);
+        Assert.Equal(80_000_000, await ReadFirstTimeMicrosAsync(initial));
+        var initialTag = initial.Headers.ETag?.Tag;
+
+        await fixture.Store.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = 70 });
+        using (var withinTtl = await client.GetAsync(path))
+        {
+            Assert.Equal(HttpStatusCode.OK, withinTtl.StatusCode);
+            var time = await ReadFirstTimeMicrosAsync(withinTtl);
+            Assert.Contains(time, new[] { 70_000_000L, 80_000_000L });
+        }
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        long latestTime = 0;
+        string? latestTag = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            latestTime = await ReadFirstTimeMicrosAsync(response);
+            latestTag = response.Headers.ETag?.Tag;
+            if (latestTime == 70_000_000 && latestTag != initialTag) break;
+            await Task.Delay(100);
+        }
+
+        Assert.Equal(70_000_000, latestTime);
+        Assert.NotEqual(initialTag, latestTag);
+
+        using var stage = await client.GetAsync(
+            $"/api/v1/maps/{map.MapName}/stage-leaderboard?stage=1&limit=1");
+        Assert.Equal(HttpStatusCode.OK, stage.StatusCode);
+        Assert.Equal(60_000_000, await ReadFirstTimeMicrosAsync(stage));
+
+        using var invalid = await client.GetAsync(
+            $"/api/v1/maps/{map.MapName}/leaderboard?limit=0");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using var missing = await client.GetAsync(
+            "/api/v1/maps/surf_cache_missing/leaderboard?limit=1");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
+    public async Task LeaderboardOutputCacheCoalescesColdRequestsAndRecoversAfterFailure()
+    {
+        using var fixture = new Fixture();
+        var map = await fixture.Store.GetMapInfo($"surf_cache_concurrent_{Guid.NewGuid():N}");
+        await fixture.Store.AddPlayerRecord(new SteamID(76561198000000005UL), map.MapName,
+            new RecordRequest { Time = 80 });
+        fixture.Owner.Start(false, false);
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(5));
+        using var client = new HttpClient { BaseAddress = Address(app) };
+        var basePath = $"/api/v1/maps/{map.MapName}/leaderboard";
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 64)
+            .Select(_ => client.GetAsync($"{basePath}?limit=1")));
+        try
+        {
+            Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+            var bodies = await Task.WhenAll(responses.Select(response => response.Content.ReadAsStringAsync()));
+            Assert.All(bodies, responseBody => Assert.Equal(bodies[0], responseBody));
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
+
+        fixture.Store.Db.DbMaintenance.DropTable<RunEntity>();
+        using var cached = await client.GetAsync($"{basePath}?limit=1");
+        Assert.Equal(HttpStatusCode.OK, cached.StatusCode);
+
+        using var differentKey = await client.GetAsync($"{basePath}?limit=2");
+        Assert.Equal(HttpStatusCode.InternalServerError, differentKey.StatusCode);
+    }
+
+    [Fact]
+    public async Task WorkerHealthAggregatePreservesPendingAgeAndEmptyState()
+    {
+        using var fixture = new Fixture(worker: true);
+        fixture.Owner.Start(false, false);
+        await fixture.Owner.StopWorkerAsync(default);
+        var now = DateTime.UtcNow;
+        var oldest = now.AddMinutes(-2);
+        var newer = now.AddMinutes(-1);
+        await fixture.Store.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
+        await fixture.Store.Db.Insertable(new[]
+        {
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 0, RequestedGeneration = 1, ProcessedGeneration = 0,
+                StyleFactor = 1, PendingSinceUtc = null, AvailableAtUtc = now,
+                CreatedAtUtc = oldest, UpdatedAtUtc = now,
+            },
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 1, RequestedGeneration = 2, ProcessedGeneration = 1,
+                StyleFactor = 1, PendingSinceUtc = newer, AvailableAtUtc = now.AddMinutes(5),
+                LeaseOwner = "future-worker", LeaseUntilUtc = now.AddMinutes(5),
+                CreatedAtUtc = now, UpdatedAtUtc = now,
+            },
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 2, RequestedGeneration = 3, ProcessedGeneration = 3,
+                StyleFactor = 1, AvailableAtUtc = now, DeadLetteredAtUtc = now,
+                CreatedAtUtc = now, UpdatedAtUtc = now,
+            },
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 3, RequestedGeneration = 4, ProcessedGeneration = 4,
+                StyleFactor = 1, AvailableAtUtc = now, CreatedAtUtc = now, UpdatedAtUtc = now,
+            },
+        }).ExecuteCommandAsync();
+
+        var sqlCalls = 0;
+        fixture.Store.Db.Aop.OnLogExecuting = (_, _) => Interlocked.Increment(ref sqlCalls);
+        try
+        {
+            var health = await fixture.Owner.GetWorkerHealthAsync();
+            Assert.True(health.Enabled);
+            Assert.Equal(2, health.PendingCount);
+            Assert.Equal(1, health.DeadLetterCount);
+            Assert.Equal(DateTimeKind.Utc, health.OldestPendingSinceUtc!.Value.Kind);
+            Assert.InRange(Math.Abs((health.OldestPendingSinceUtc.Value - oldest).TotalSeconds), 0, 1);
+            Assert.Equal(1, Volatile.Read(ref sqlCalls));
+
+            await fixture.Store.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
+            Interlocked.Exchange(ref sqlCalls, 0);
+            health = await fixture.Owner.GetWorkerHealthAsync();
+            Assert.Equal(0, health.PendingCount);
+            Assert.Equal(0, health.DeadLetterCount);
+            Assert.Null(health.OldestPendingSinceUtc);
+            Assert.Equal(1, Volatile.Read(ref sqlCalls));
+        }
+        finally
+        {
+            fixture.Store.Db.Aop.OnLogExecuting = null;
+        }
+
+        using var disabled = new Fixture();
+        disabled.Owner.Start(false, false);
+        var disabledSql = 0;
+        disabled.Store.Db.Aop.OnLogExecuting = (_, _) => Interlocked.Increment(ref disabledSql);
+        try
+        {
+            var health = await disabled.Owner.GetWorkerHealthAsync();
+            Assert.False(health.Enabled);
+            Assert.Equal(0, Volatile.Read(ref disabledSql));
+        }
+        finally
+        {
+            disabled.Store.Db.Aop.OnLogExecuting = null;
+        }
+    }
+
     [Theory]
     [InlineData("RequestTimeoutSeconds", "0")]
     [InlineData("WorkerShutdownTimeoutSeconds", "121")]
@@ -284,25 +518,49 @@ public sealed class BackendResilienceTests
         Assert.Equal("degraded", WorkerHealthPolicy.Evaluate(delayed, TimeSpan.FromMinutes(5), now).Status);
     }
 
+    private static async Task<long> ReadFirstTimeMicrosAsync(HttpResponseMessage response)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("records").EnumerateArray().First()
+            .GetProperty("timeMicros").GetInt64();
+    }
+
     private static async Task<WebApplication> StartAppAsync(
-        TimerBackendStorage storage, bool http2 = false, TimeSpan? timeout = null, Action? onRequest = null)
+        TimerBackendStorage storage,
+        bool http2 = false,
+        TimeSpan? timeout = null,
+        TimeSpan? leaderboardCacheDuration = null,
+        Action? onRequest = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0, listener =>
             listener.Protocols = http2 ? HttpProtocols.Http2 : HttpProtocols.Http1));
         builder.Services.AddSingleton(storage);
+        builder.Services.AddResponseCompression();
         builder.Services.ConfigureHttpJsonOptions(BackendJsonOptions.Configure);
         TimerBackendRuntimeRegistration.Add(builder.Services, new TimerBackendRuntimeOptions
         {
             RequestTimeout = timeout ?? TimeSpan.FromMilliseconds(50),
-        });
+        }, leaderboardCacheDuration);
         var write = WriteOptions(http2);
         builder.Services.AddSingleton(write);
         TimerWriteApiRegistration.Add(builder.Services, write);
         var app = builder.Build();
+        app.UseResponseCompression();
+        app.UseExceptionHandler(exceptionApplication => exceptionApplication.Run(async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new ApiErrorDto
+            {
+                Code = "internal_error",
+                Message = "The request could not be completed.",
+                RequestId = context.TraceIdentifier,
+            }, BackendJsonContext.Default.ApiErrorDto, cancellationToken: context.RequestAborted);
+        }));
         app.Use(async (context, next) => { onRequest?.Invoke(); await next(context); });
         app.UseRouting();
         app.UseRequestTimeouts();
+        app.UseOutputCache();
         TimerReadEndpoints.Map(app);
         TimerWriteApiRegistration.Map(app, write);
         await app.StartAsync();

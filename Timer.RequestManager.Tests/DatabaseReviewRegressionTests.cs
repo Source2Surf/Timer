@@ -41,6 +41,80 @@ public sealed class DatabaseReviewRegressionTests
     public Task PostgreSqlOutboxAgeMigrationPreservesExistingPendingWork()
         => OutboxAgeMigrationPreservesExistingPendingWork(DbType.PostgreSQL, "TIMER_TEST_POSTGRES");
 
+    [DatabaseFact("TIMER_TEST_MYSQL")]
+    public Task MySqlWorkerHealthAggregationMatchesOutboxState()
+        => WorkerHealthAggregationMatchesOutboxState(DbType.MySql, "TIMER_TEST_MYSQL");
+
+    [DatabaseFact("TIMER_TEST_POSTGRES")]
+    public Task PostgreSqlWorkerHealthAggregationMatchesOutboxState()
+        => WorkerHealthAggregationMatchesOutboxState(DbType.PostgreSQL, "TIMER_TEST_POSTGRES");
+
+    private static async Task WorkerHealthAggregationMatchesOutboxState(DbType type, string variable)
+    {
+        using var fixture = new Fixture(type, variable);
+        var setup = fixture.NewStore();
+        var healthReader = fixture.NewStore(worker: true);
+        await setup.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
+
+        var now = DateTime.UtcNow;
+        var oldest = now.AddMinutes(-2);
+        var newer = now.AddMinutes(-1);
+        await setup.Db.Insertable(new[]
+        {
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 0, RequestedGeneration = 1, ProcessedGeneration = 0,
+                StyleFactor = 1, PendingSinceUtc = null, AvailableAtUtc = now,
+                CreatedAtUtc = oldest, UpdatedAtUtc = now,
+            },
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 1, RequestedGeneration = 2, ProcessedGeneration = 1,
+                StyleFactor = 1, PendingSinceUtc = newer, AvailableAtUtc = now.AddMinutes(5),
+                LeaseOwner = "future-worker", LeaseUntilUtc = now.AddMinutes(5),
+                CreatedAtUtc = now, UpdatedAtUtc = now,
+            },
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 2, RequestedGeneration = 3, ProcessedGeneration = 3,
+                StyleFactor = 1, AvailableAtUtc = now, DeadLetteredAtUtc = now,
+                CreatedAtUtc = now, UpdatedAtUtc = now,
+            },
+            new ScoreRecalcOutboxEntity
+            {
+                MapId = 999, Style = 3, RequestedGeneration = 4, ProcessedGeneration = 4,
+                StyleFactor = 1, AvailableAtUtc = now, CreatedAtUtc = now, UpdatedAtUtc = now,
+            },
+        }).ExecuteCommandAsync();
+
+        var health = await healthReader.GetWorkerHealthAsync();
+        Assert.True(health.Enabled);
+        Assert.Equal(2, health.PendingCount);
+        Assert.Equal(1, health.DeadLetterCount);
+        Assert.Equal(DateTimeKind.Utc, health.OldestPendingSinceUtc!.Value.Kind);
+        Assert.InRange(Math.Abs((health.OldestPendingSinceUtc.Value - oldest).TotalSeconds), 0, 1);
+
+        await setup.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
+        health = await healthReader.GetWorkerHealthAsync();
+        Assert.Equal(0, health.PendingCount);
+        Assert.Equal(0, health.DeadLetterCount);
+        Assert.Null(health.OldestPendingSinceUtc);
+
+        var disabled = fixture.NewStore();
+        var disabledSql = 0;
+        disabled.Db.Aop.OnLogExecuting = (_, _) => Interlocked.Increment(ref disabledSql);
+        try
+        {
+            var disabledHealth = await disabled.GetWorkerHealthAsync();
+            Assert.False(disabledHealth.Enabled);
+            Assert.Equal(0, Volatile.Read(ref disabledSql));
+        }
+        finally
+        {
+            disabled.Db.Aop.OnLogExecuting = null;
+        }
+    }
+
     private static async Task OutboxAgeMigrationPreservesExistingPendingWork(DbType type, string variable)
     {
         using var fixture = new Fixture(type, variable);

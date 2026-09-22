@@ -84,6 +84,7 @@ app.UseExceptionHandler(exceptionApplication => exceptionApplication.Run(async c
 }));
 app.UseRouting();
 app.UseRequestTimeouts();
+app.UseOutputCache();
 TimerReadEndpoints.Map(app);
 TimerWriteApiRegistration.Map(app, writeApiOptions);
 app.Run();

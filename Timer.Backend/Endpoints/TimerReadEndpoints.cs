@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Backend.Contracts;
 using Source2Surf.Timer.Shared.Models;
@@ -43,11 +44,13 @@ internal static class TimerReadEndpoints
            .Produces<ApiErrorDto>(StatusCodes.Status400BadRequest)
            .Produces<ApiErrorDto>(StatusCodes.Status404NotFound);
         api.MapGet("/maps/{mapName}/leaderboard", GetMainLeaderboardAsync)
+           .CacheOutput("TimerLeaderboard")
            .Produces<RecordListResponse>(StatusCodes.Status200OK)
            .Produces(StatusCodes.Status304NotModified)
            .Produces<ApiErrorDto>(StatusCodes.Status400BadRequest)
            .Produces<ApiErrorDto>(StatusCodes.Status404NotFound);
         api.MapGet("/maps/{mapName}/stage-leaderboard", GetStageLeaderboardAsync)
+           .CacheOutput("TimerLeaderboard")
            .Produces<RecordListResponse>(StatusCodes.Status200OK)
            .Produces(StatusCodes.Status304NotModified)
            .Produces<ApiErrorDto>(StatusCodes.Status400BadRequest)
