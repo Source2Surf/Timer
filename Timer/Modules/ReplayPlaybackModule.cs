@@ -62,8 +62,8 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
     private readonly Dictionary<(int style, int track, int stage), ReplayContent> _replayCache = [];
 
     // Spatial index over each cached replay's frame positions, kept in lock-step with _replayCache.
-    // Used by time-difference HUDs to find the WR frame closest to a player's current position
-    // in O(log n) instead of O(n). See ClosestFrameIndex for the algorithm details.
+    // Used by time-difference HUDs to avoid a full replay scan in typical closest-frame lookups.
+    // See ClosestFrameIndex for the algorithm details and worst-case bound.
     private readonly Dictionary<(int style, int track, int stage), ClosestFrameIndex> _closestFrameIndices = [];
 
     // Bot management
@@ -497,11 +497,12 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
     public ReplayContent? GetCachedReplay(int style, int track, int stage)
         => _replayCache.TryGetValue((style, track, stage), out var content) ? content : null;
 
-    public int FindClosestFrameIndex(int style, int track, int stage, in Vector position, out float distanceSquared)
+    public int FindClosestFrameIndex(int style, int track, int stage, in Vector position, int preferredFrameIndex,
+                                     out float distanceSquared)
     {
         if (_closestFrameIndices.TryGetValue((style, track, stage), out var index))
         {
-            return index.FindClosest(position, out distanceSquared);
+            return index.FindClosest(position, preferredFrameIndex, out distanceSquared);
         }
 
         distanceSquared = float.PositiveInfinity;

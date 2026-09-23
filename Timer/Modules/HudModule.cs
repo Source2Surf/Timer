@@ -327,21 +327,28 @@ internal class HudModule : IModule, IHudModule, ITimerModuleListener, IZoneModul
             return null;
         }
 
-        if (timerInfo.Time <= 0f)
-        {
-            return null;
-        }
-
-        var pos = pawn.GetAbsOrigin();
-        var idx = _replayModule.FindClosestFrameIndex(timerInfo.Style, timerInfo.Track, stage: 0, pos, out var distSq);
-
-        if (idx < 0 || distSq > MaxPositionDiffDistSq)
+        if (!float.IsFinite(timerInfo.Time) || timerInfo.Time <= 0f)
         {
             return null;
         }
 
         var replay = _replayModule.GetCachedReplay(timerInfo.Style, timerInfo.Track, stage: 0);
-        if (replay is null)
+        if (replay is null || replay.Frames.Count == 0)
+        {
+            return null;
+        }
+
+        // Spatially identical frames are common while stationary and at route crossings.
+        // Prefer the frame nearest the player's current elapsed-time projection so an exact
+        // spatial tie cannot jump to an unrelated point in the replay timeline.
+        var projectedFrame = replay.Header.PreFrame + ((double) timerInfo.Time / TimerConstants.TickInterval);
+        var preferredFrame = (int) Math.Clamp(Math.Round(projectedFrame), 0d, replay.Frames.Count - 1d);
+
+        var pos = pawn.GetAbsOrigin();
+        var idx = _replayModule.FindClosestFrameIndex(timerInfo.Style, timerInfo.Track, stage: 0, pos,
+                                                      preferredFrame, out var distSq);
+
+        if (idx < 0 || distSq > MaxPositionDiffDistSq)
         {
             return null;
         }

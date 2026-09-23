@@ -283,7 +283,7 @@ internal sealed partial class StorageServiceImpl
                                         PlayerBestRunId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.RunId, null)),
                                         ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
                                         PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
-                                                                                           (float?) x.BestTime,
+                                                                                           (double?) x.BestTime,
                                                                                            null)),
                                     })
                                     .FirstAsync(OperationCancellation);
@@ -333,7 +333,7 @@ internal sealed partial class StorageServiceImpl
                                         PlayerBestRunId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.RunId, null)),
                                         ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
                                         PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
-                                                                                           (float?) x.BestTime,
+                                                                                           (double?) x.BestTime,
                                                                                            null)),
                                     })
                                     .FirstAsync(OperationCancellation);
@@ -427,7 +427,7 @@ internal sealed partial class StorageServiceImpl
         return segments;
     }
 
-    private static EAttemptResult ResolveAttemptResult(float newTime, float? serverBestTime, float? playerBestTime)
+    private static EAttemptResult ResolveAttemptResult(float newTime, float? serverBestTime, double? playerBestTime)
     {
         if (serverBestTime is null || newTime < serverBestTime.Value)
         {

@@ -10,6 +10,7 @@
   <Project Path="Timer.Backend/Timer.Backend.csproj" />
   <Project Path="Timer.RequestManager/Timer.RequestManager.csproj" />
   <Project Path="Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
+  <Project Path="Timer.Benchmarks/Timer.Benchmarks.csproj" />
   <Project Path="Timer.Shared/Timer.Shared.csproj" />
   <Project Path="Timer.Tests/Timer.Tests.csproj" />
   <Project Path="Timer/Timer.csproj">

@@ -227,7 +227,10 @@ internal sealed partial class StorageServiceImpl
 
         public float? ServerBestTime { get; set; }
 
-        public float? PlayerBestTime { get; set; }
+        // SqlSugar's MySQL-family materializer maps a nullable float CASE aggregate
+        // to zero when the projection targets a DTO. Keep this value double-typed
+        // so an existing personal best remains distinguishable from no value.
+        public double? PlayerBestTime { get; set; }
     }
 
 }

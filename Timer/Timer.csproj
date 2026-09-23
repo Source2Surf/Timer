@@ -13,6 +13,7 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="Timer.Tests" />
+		<InternalsVisibleTo Include="Timer.Benchmarks" />
 		<InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
 	</ItemGroup>
 

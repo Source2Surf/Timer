@@ -35,12 +35,15 @@ public interface IReplayModule
     ReplayContent? GetCachedReplay(int style, int track, int stage);
 
     /// <summary>
-    ///     Returns the index of the replay frame whose Origin is closest to <paramref name="position" />.
-    ///     Returns <c>-1</c> when no replay is cached for <c>(style, track, stage)</c>.
+    ///     Returns the index of the finite replay frame whose Origin is closest to
+    ///     <paramref name="position" />. Equal-distance candidates prefer the index nearest
+    ///     <paramref name="preferredFrameIndex" />. Returns <c>-1</c> when no searchable replay
+    ///     frame is cached or the query position is not finite.
     /// </summary>
     /// <param name="distanceSquared">
     ///     Squared distance between <paramref name="position" /> and the closest frame's origin,
-    ///     or <see cref="float.PositiveInfinity" /> when no replay is cached.
+    ///     or <see cref="float.PositiveInfinity" /> when no frame can be returned.
     /// </param>
-    int FindClosestFrameIndex(int style, int track, int stage, in Vector position, out float distanceSquared);
+    int FindClosestFrameIndex(int style, int track, int stage, in Vector position, int preferredFrameIndex,
+                              out float distanceSquared);
 }

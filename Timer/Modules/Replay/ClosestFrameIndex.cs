@@ -28,11 +28,10 @@ using Source2Surf.Timer.Shared.Models.Replay;
 namespace Source2Surf.Timer.Modules.Replay;
 
 /// <summary>
-///     Spatial index over replay frame positions for "closest frame to player" lookups
-///     (used for live time-difference HUDs).
-///     Bucketed k-d tree with AVX2 leaf evaluation: O(log n) traversal, SIMD distance
-///     computation in leaf buckets. See Timer.Benchmarks results — KdTreeSimd dominates
-///     the realistic surf workload while keeping memory low (~16 bytes/frame).
+///     Spatial index over finite replay frame positions for "closest frame to player" lookups
+///     (used for live time-difference HUDs). Bucketed k-d tree with SIMD leaf evaluation:
+///     balanced-tree traversal with worst-case O(n) nearest-neighbor search and approximately
+///     16 bytes of storage per indexed frame.
 /// </summary>
 internal sealed class ClosestFrameIndex
 {
@@ -41,9 +40,8 @@ internal sealed class ClosestFrameIndex
     private static readonly int BucketSize = Vector512<float>.Count;
 
     // Top recursion levels are dispatched to Parallel.Invoke. After NthElement
-    // partitions a range, the two child ranges read/write disjoint slices of the
-    // arrays so they can build concurrently. Past depth 3 (= up to 8 leaves) the
-    // remaining subtrees are too small for the per-task overhead to pay off.
+    // partitions a range, the two child ranges read/write disjoint slices. The
+    // depth cap and minimum range keep scheduling overhead bounded.
     private const int ParallelDepth = 3;
     private const int ParallelMin   = 2048;
 
@@ -52,36 +50,59 @@ internal sealed class ClosestFrameIndex
     private readonly float[] _zs;
     private readonly int[]   _orig;
 
-    public int FrameCount => _xs.Length;
-
     public ClosestFrameIndex(IReadOnlyList<ReplayFrameData> frames)
     {
-        var n = frames.Count;
-        _xs   = new float[n];
-        _ys   = new float[n];
-        _zs   = new float[n];
-        _orig = new int[n];
+        var n     = frames.Count;
+        var xs    = new float[n];
+        var ys    = new float[n];
+        var zs    = new float[n];
+        var orig  = new int[n];
+        var count = 0;
 
-        for (var i = 0; i < n; i++)
+        for (var originalIndex = 0; originalIndex < n; originalIndex++)
         {
-            var o = frames[i].Origin;
-            _xs[i]   = o.X;
-            _ys[i]   = o.Y;
-            _zs[i]   = o.Z;
-            _orig[i] = i;
+            var o = frames[originalIndex].Origin;
+            if (!float.IsFinite(o.X) || !float.IsFinite(o.Y) || !float.IsFinite(o.Z))
+            {
+                continue;
+            }
+
+            xs[count]   = o.X;
+            ys[count]   = o.Y;
+            zs[count]   = o.Z;
+            orig[count] = originalIndex;
+            count++;
         }
 
-        BuildRec(0, n, 0, 0);
+        if (count != n)
+        {
+            Array.Resize(ref xs,   count);
+            Array.Resize(ref ys,   count);
+            Array.Resize(ref zs,   count);
+            Array.Resize(ref orig, count);
+        }
+
+        _xs   = xs;
+        _ys   = ys;
+        _zs   = zs;
+        _orig = orig;
+
+        BuildRec(0, count, 0, 0);
     }
 
     /// <summary>
-    ///     Returns the index of the replay frame whose Origin is closest to <paramref name="position" />,
-    ///     or -1 if the index is empty.
+    ///     Returns the original index of the finite replay frame whose Origin is closest to
+    ///     <paramref name="position" />, or -1 if no finite frame or query position is available.
+    ///     Equal-distance candidates prefer the original index nearest
+    ///     <paramref name="preferredFrameIndex" />; the lower original index breaks a remaining tie.
     /// </summary>
-    public int FindClosest(in Vector position, out float distSq)
+    public int FindClosest(in Vector position, int preferredFrameIndex, out float distSq)
     {
-        var n = _xs.Length;
-        if (n == 0)
+        var n  = _xs.Length;
+        var qx = position.X;
+        var qy = position.Y;
+        var qz = position.Z;
+        if (n == 0 || !float.IsFinite(qx) || !float.IsFinite(qy) || !float.IsFinite(qz))
         {
             distSq = float.PositiveInfinity;
             return -1;
@@ -89,10 +110,37 @@ internal sealed class ClosestFrameIndex
 
         var bestSq = float.PositiveInfinity;
         var bestI  = -1;
-        SearchRec(0, n, 0, position.X, position.Y, position.Z, ref bestSq, ref bestI);
+        SearchRec(0, n, 0, qx, qy, qz, preferredFrameIndex, ref bestSq, ref bestI);
 
         distSq = bestSq;
         return bestI < 0 ? -1 : _orig[bestI];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsBetter(float candidateSq, int candidateIdx, float bestSq, int bestIdx, int preferredFrameIndex)
+    {
+        if (candidateSq < bestSq)
+        {
+            return true;
+        }
+
+        if (candidateSq != bestSq)
+        {
+            return false;
+        }
+
+        if (bestIdx < 0)
+        {
+            return true;
+        }
+
+        var candidateOriginal = _orig[candidateIdx];
+        var bestOriginal      = _orig[bestIdx];
+        var candidateOffset   = Math.Abs((long) candidateOriginal - preferredFrameIndex);
+        var bestOffset        = Math.Abs((long) bestOriginal      - preferredFrameIndex);
+
+        return candidateOffset < bestOffset
+               || (candidateOffset == bestOffset && candidateOriginal < bestOriginal);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -119,9 +167,8 @@ internal sealed class ClosestFrameIndex
         var next = NextAxis(axis);
         if (depth < ParallelDepth && count > ParallelMin)
         {
-            // Subtree ranges are disjoint after partition, so they can build concurrently.
-            // Long replays (e.g. 1-hour runs ~= 230k frames) see this scale near-linearly
-            // up to the parallel-depth cap.
+            // The partitioned subtree ranges are disjoint, so concurrent recursion
+            // requires no synchronization around array writes.
             Parallel.Invoke(
                 () => BuildRec(lo,      mid, next, depth + 1),
                 () => BuildRec(mid + 1, hi,  next, depth + 1));
@@ -133,7 +180,8 @@ internal sealed class ClosestFrameIndex
         }
     }
 
-    private void SearchRec(int lo, int hi, int axis, float qx, float qy, float qz, ref float bestSq, ref int bestIdx)
+    private void SearchRec(int lo, int hi, int axis, float qx, float qy, float qz, int preferredFrameIndex,
+                           ref float bestSq, ref int bestIdx)
     {
         var count = hi - lo;
         if (count <= 0)
@@ -143,7 +191,7 @@ internal sealed class ClosestFrameIndex
 
         if (count <= BucketSize)
         {
-            ScanLeaf(lo, hi, qx, qy, qz, ref bestSq, ref bestIdx);
+            ScanLeaf(lo, hi, qx, qy, qz, preferredFrameIndex, ref bestSq, ref bestIdx);
             return;
         }
 
@@ -157,7 +205,7 @@ internal sealed class ClosestFrameIndex
         var dy = py - qy;
         var dz = pz - qz;
         var d  = (dx * dx) + (dy * dy) + (dz * dz);
-        if (d < bestSq)
+        if (IsBetter(d, mid, bestSq, bestIdx, preferredFrameIndex))
         {
             bestSq  = d;
             bestIdx = mid;
@@ -182,16 +230,17 @@ internal sealed class ClosestFrameIndex
         }
 
         var next = NextAxis(axis);
-        SearchRec(nearLo, nearHi, next, qx, qy, qz, ref bestSq, ref bestIdx);
+        SearchRec(nearLo, nearHi, next, qx, qy, qz, preferredFrameIndex, ref bestSq, ref bestIdx);
 
-        if (diff * diff < bestSq)
+        if (diff * diff <= bestSq)
         {
-            SearchRec(farLo, farHi, next, qx, qy, qz, ref bestSq, ref bestIdx);
+            SearchRec(farLo, farHi, next, qx, qy, qz, preferredFrameIndex, ref bestSq, ref bestIdx);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ScanLeaf(int lo, int hi, float qx, float qy, float qz, ref float bestSq, ref int bestIdx)
+    private void ScanLeaf(int lo, int hi, float qx, float qy, float qz, int preferredFrameIndex,
+                          ref float bestSq, ref int bestIdx)
     {
         // Take refs to array data once; SIMD LoadUnsafe + Unsafe.Add avoids the
         // bounds check the JIT cannot eliminate from indexed access on the AVX-512
@@ -226,17 +275,16 @@ internal sealed class ClosestFrameIndex
                         Vector512.Multiply(dy, dy)),
                     Vector512.Multiply(dz, dz));
 
-                // Skip the per-lane scan entirely when no lane can improve the current best.
-                // bestSq decreases monotonically as the search progresses, so most leaves
-                // visited deep in the tree never beat it.
+                // Skip the per-lane scan entirely when no lane can match or improve the
+                // current best. Equal distances still need their temporal tie-break checked.
                 var bestVec = Vector512.Create(bestSq);
-                if (Vector512.LessThanAny(dv, bestVec))
+                if (Vector512.LessThanOrEqualAny(dv, bestVec))
                 {
                     dv.StoreUnsafe(ref dists[0]);
                     for (var j = 0; j < Vector512<float>.Count; j++)
                     {
                         var dvj = dists[j];
-                        if (dvj < bestSq)
+                        if (IsBetter(dvj, i + j, bestSq, bestIdx, preferredFrameIndex))
                         {
                             bestSq  = dvj;
                             bestIdx = i + j;
@@ -273,13 +321,13 @@ internal sealed class ClosestFrameIndex
                     Vector256.Multiply(dz, dz));
 
                 var bestVec = Vector256.Create(bestSq);
-                if (Vector256.LessThanAny(dv, bestVec))
+                if (Vector256.LessThanOrEqualAny(dv, bestVec))
                 {
                     dv.StoreUnsafe(ref dists[0]);
                     for (var j = 0; j < Vector256<float>.Count; j++)
                     {
                         var dvj = dists[j];
-                        if (dvj < bestSq)
+                        if (IsBetter(dvj, i + j, bestSq, bestIdx, preferredFrameIndex))
                         {
                             bestSq  = dvj;
                             bestIdx = i + j;
@@ -298,7 +346,7 @@ internal sealed class ClosestFrameIndex
             var ey = Unsafe.Add(ref yRef, (nint) i) - qy;
             var ez = Unsafe.Add(ref zRef, (nint) i) - qz;
             var ds = (ex * ex) + (ey * ey) + (ez * ez);
-            if (ds < bestSq)
+            if (IsBetter(ds, i, bestSq, bestIdx, preferredFrameIndex))
             {
                 bestSq  = ds;
                 bestIdx = i;

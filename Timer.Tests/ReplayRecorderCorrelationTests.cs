@@ -451,6 +451,7 @@ public sealed class ReplayRecorderCorrelationTests
                                          int track,
                                          int stage,
                                          in Sharp.Shared.Types.Vector position,
+                                         int preferredFrameIndex,
                                          out float distanceSquared)
         {
             distanceSquared = float.PositiveInfinity;
