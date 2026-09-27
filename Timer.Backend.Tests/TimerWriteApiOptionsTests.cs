@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.Configuration;
 using Timer.Backend.Configuration;
 using Xunit;
@@ -100,6 +101,48 @@ public sealed class TimerWriteApiOptionsTests
         var values = EnabledValues();
         values.Remove("TimerBackend:WriteApi:StyleFactors:0");
         values["TimerBackend:WriteApi:StyleFactors:1"] = "1";
+        Assert.Throws<InvalidOperationException>(() => TimerWriteApiOptions.FromConfiguration(Build(values)));
+    }
+
+    [Fact]
+    public void ImplicitStyleZeroDefaultIsNotReportedAsExplicit()
+    {
+        var implicitOptions = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build());
+        var explicitOptions = TimerWriteApiOptions.FromConfiguration(Build(EnabledValues()));
+
+        Assert.False(implicitOptions.HasExplicitStyleFactors);
+        Assert.True(explicitOptions.HasExplicitStyleFactors);
+    }
+
+    [Fact]
+    public void LocalPortsDefaultToEveryListener()
+    {
+        var options = TimerWriteApiOptions.FromConfiguration(Build(EnabledValues()));
+
+        Assert.Empty(options.LocalPorts);
+    }
+
+    [Fact]
+    public void LocalPortsAcceptArraysAndScalars()
+    {
+        var arrayValues = EnabledValues();
+        arrayValues["TimerBackend:WriteApi:LocalPorts:0"] = "5082";
+        arrayValues["TimerBackend:WriteApi:LocalPorts:1"] = "5083";
+        var scalarValues = EnabledValues();
+        scalarValues["TimerBackend:WriteApi:LocalPorts"] = "5082";
+
+        Assert.Equal(new[] { 5082, 5083 }, TimerWriteApiOptions.FromConfiguration(Build(arrayValues)).LocalPorts.Order());
+        Assert.Equal(new[] { 5082 }, TimerWriteApiOptions.FromConfiguration(Build(scalarValues)).LocalPorts);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("65536")]
+    [InlineData("grpc")]
+    public void InvalidLocalPortFailsFast(string port)
+    {
+        var values = EnabledValues();
+        values["TimerBackend:WriteApi:LocalPorts:0"] = port;
         Assert.Throws<InvalidOperationException>(() => TimerWriteApiOptions.FromConfiguration(Build(values)));
     }
 

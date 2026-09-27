@@ -32,8 +32,11 @@ internal static class TimerBackendRuntimeRegistration
         {
             outputCache.SizeLimit = 100 * 1024 * 1024;
             outputCache.MaximumBodySize = 64 * 1024 * 1024;
+            // Request locking would hand the first request's exception to every coalesced
+            // waiter, so one client disconnect or timeout would fail them all with 500.
             outputCache.AddPolicy("TimerLeaderboard", policy =>
-                policy.Expire(leaderboardCacheDuration ?? TimeSpan.FromSeconds(15)));
+                policy.Expire(leaderboardCacheDuration ?? TimeSpan.FromSeconds(15))
+                      .SetLocking(false));
         });
     }
 }

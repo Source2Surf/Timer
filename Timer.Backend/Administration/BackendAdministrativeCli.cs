@@ -110,7 +110,7 @@ internal static class BackendAdministrativeCli
         TimerWriteApiOptions writeApiOptions)
     {
         ArgumentNullException.ThrowIfNull(storage);
-        ArgumentNullException.ThrowIfNull(writeApiOptions);
+        EnsureExplicitScorePolicy(writeApiOptions);
 
         var administration = new TimerBackendScoreAdministration(storage);
         return invocation.Operation switch
@@ -124,6 +124,23 @@ internal static class BackendAdministrativeCli
                 invocation.MapName!, writeApiOptions.StyleFactors),
             _ => throw new InvalidOperationException($"{invocation.Operation} is not an administrative score command."),
         };
+    }
+
+    /// <summary>
+    /// Score commands persist these factors onto every board they queue. The implicit style-0
+    /// default a write instance falls back to would silently replace the serving policy when
+    /// the command runs without that instance's configuration, so require it explicitly.
+    /// </summary>
+    internal static void EnsureExplicitScorePolicy(TimerWriteApiOptions writeApiOptions)
+    {
+        ArgumentNullException.ThrowIfNull(writeApiOptions);
+
+        if (!writeApiOptions.HasExplicitStyleFactors || !writeApiOptions.StyleFactors.ContainsKey(0))
+        {
+            throw new InvalidOperationException(
+                $"Score administration requires {TimerWriteApiOptions.SectionName}:StyleFactors to be configured "
+              + "explicitly, including style 0, with the same factors as the serving write instance.");
+        }
     }
 
     internal static string FormatCompletion(

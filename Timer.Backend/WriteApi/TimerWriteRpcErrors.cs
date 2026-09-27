@@ -12,6 +12,7 @@ internal static class TimerWriteRpcErrors
     private const string NotFoundMessage = "The requested resource does not exist.";
     private const string ConflictMessage = "The submission conflicts with a prior request.";
     private const string InternalFailureMessage = "The request could not be completed.";
+    private const string NotServedOnListenerMessage = "The write API is not served on this listener.";
 
     public static RpcException InvalidArgument()
         => new (new Status(StatusCode.InvalidArgument, InvalidArgumentMessage));
@@ -24,6 +25,10 @@ internal static class TimerWriteRpcErrors
 
     public static RpcException InternalMappingFailure()
         => new (new Status(StatusCode.Internal, InternalFailureMessage));
+
+    // Same status a client sees when the write API is disabled: the service is absent here.
+    public static RpcException NotServedOnListener()
+        => new (new Status(StatusCode.Unimplemented, NotServedOnListenerMessage));
 
     public static RpcException Translate(Exception exception, ILogger logger)
     {

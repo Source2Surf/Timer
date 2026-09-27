@@ -19,13 +19,28 @@ internal sealed class TimerWriteApiOptions
 
     public IReadOnlyDictionary<int, double> StyleFactors { get; }
 
+    /// <summary>
+    /// False when <see cref="StyleFactors"/> is only the implicit style-0 default. Score
+    /// administration must not treat that default as the serving instance's policy.
+    /// </summary>
+    public bool HasExplicitStyleFactors { get; }
+
+    /// <summary>
+    /// Local listener ports that may serve write RPCs. Empty means every Kestrel listener.
+    /// </summary>
+    public IReadOnlySet<int> LocalPorts { get; }
+
     private TimerWriteApiOptions(bool enabled,
                                  int rulesetVersion,
-                                 IReadOnlyDictionary<int, double> styleFactors)
+                                 IReadOnlyDictionary<int, double> styleFactors,
+                                 bool hasExplicitStyleFactors,
+                                 IReadOnlySet<int> localPorts)
     {
         Enabled = enabled;
         RulesetVersion = rulesetVersion;
         StyleFactors = styleFactors;
+        HasExplicitStyleFactors = hasExplicitStyleFactors;
+        LocalPorts = localPorts;
     }
 
     public static TimerWriteApiOptions FromConfiguration(IConfiguration configuration)
@@ -37,7 +52,8 @@ internal sealed class TimerWriteApiOptions
         {
             if (!string.Equals(setting.Key, "Enabled", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(setting.Key, "RulesetVersion", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(setting.Key, "StyleFactors", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(setting.Key, "StyleFactors", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(setting.Key, "LocalPorts", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
                     $"{SectionName}:{setting.Key} is not supported.");
@@ -51,10 +67,12 @@ internal sealed class TimerWriteApiOptions
                                                 $"{SectionName}:RulesetVersion",
                                                 minimum: 0);
         var styleFactors = ParseStyleFactors(section.GetSection("StyleFactors"));
+        var hasExplicitStyleFactors = styleFactors.Count != 0;
+        var localPorts = ParseLocalPorts(section.GetSection("LocalPorts"));
 
         // A fresh backend accepts the main style at factor 1 without additional setup.
         // Once custom factors are configured, style 0 must remain explicit.
-        if (styleFactors.Count == 0)
+        if (!hasExplicitStyleFactors)
         {
             styleFactors.Add(0, 1d);
         }
@@ -77,7 +95,42 @@ internal sealed class TimerWriteApiOptions
         return new TimerWriteApiOptions(
             enabled,
             rulesetVersion,
-            new ReadOnlyDictionary<int, double>(styleFactors));
+            new ReadOnlyDictionary<int, double>(styleFactors),
+            hasExplicitStyleFactors,
+            localPorts);
+    }
+
+    private static HashSet<int> ParseLocalPorts(IConfigurationSection section)
+    {
+        var localPorts = new HashSet<int>();
+
+        // Accept a single scalar (environment variable) as well as a JSON array.
+        var rawPorts = new List<(string Path, string? Value)>();
+        if (!string.IsNullOrWhiteSpace(section.Value))
+        {
+            rawPorts.Add((section.Path, section.Value));
+        }
+
+        foreach (var child in section.GetChildren())
+        {
+            rawPorts.Add((child.Path, child.Value));
+        }
+
+        foreach (var (path, value) in rawPorts)
+        {
+            if (!int.TryParse(value,
+                              NumberStyles.None,
+                              CultureInfo.InvariantCulture,
+                              out var port)
+                || port is < 1 or > 65535)
+            {
+                throw new InvalidOperationException($"{path} must be a port number from 1 through 65535.");
+            }
+
+            localPorts.Add(port);
+        }
+
+        return localPorts;
     }
 
     private static Dictionary<int, double> ParseStyleFactors(IConfigurationSection section)

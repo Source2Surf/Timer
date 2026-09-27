@@ -50,6 +50,24 @@ public sealed class BackendConfigurationTests
     }
 
     [Fact]
+    public void ConnectionStringsFallbackAppliesWhenPrimaryValueIsBlank()
+    {
+        // Mirrors the shipped appsettings.json, which declares an empty primary value.
+        var values = new Dictionary<string, string?>
+        {
+            ["TimerBackend:Database:Type"] = "mysql",
+            ["TimerBackend:Database:ConnectionString"] = "",
+            ["ConnectionStrings:TimerBackend"] = "Server=localhost;Database=timer",
+        };
+
+        var options = TimerBackendOptions.FromConfiguration(new ConfigurationBuilder()
+                                                             .AddInMemoryCollection(values)
+                                                             .Build());
+
+        Assert.Equal("Server=localhost;Database=timer", options.ConnectionString);
+    }
+
+    [Fact]
     public void OutboxWorkerCanBeExplicitlyEnabled()
     {
         var values = ValidValues();

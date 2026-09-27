@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using Microsoft.Extensions.Configuration;
 using Timer.Backend.Administration;
+using Timer.Backend.Configuration;
 using Xunit;
 
 namespace Timer.Backend.Tests;
@@ -54,6 +57,41 @@ public sealed class BackendAdministrativeCliTests
     }
 
     [Fact]
+    public void ScoreAdministrationRejectsTheImplicitStyleZeroDefault()
+    {
+        var implicitPolicy = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build());
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            BackendAdministrativeCli.EnsureExplicitScorePolicy(implicitPolicy));
+
+        Assert.Contains("StyleFactors", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ScoreAdministrationRequiresStyleZeroEvenWhenTheWriteApiIsDisabled()
+    {
+        var withoutStyleZero = BuildWriteOptions(new()
+        {
+            ["TimerBackend:WriteApi:StyleFactors:1"] = "0.5",
+        });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            BackendAdministrativeCli.EnsureExplicitScorePolicy(withoutStyleZero));
+    }
+
+    [Fact]
+    public void ScoreAdministrationAcceptsAnExplicitPolicy()
+    {
+        var explicitPolicy = BuildWriteOptions(new()
+        {
+            ["TimerBackend:WriteApi:StyleFactors:0"] = "1",
+            ["TimerBackend:WriteApi:StyleFactors:1"] = "0.5",
+        });
+
+        BackendAdministrativeCli.EnsureExplicitScorePolicy(explicitPolicy);
+    }
+
+    [Fact]
     public void OrdinaryServerArgumentsRemainUntouched()
     {
         var invocation = BackendAdministrativeCli.Parse(["--urls", "http://127.0.0.1:5081"]);
@@ -61,4 +99,7 @@ public sealed class BackendAdministrativeCliTests
         Assert.Equal(BackendAdministrativeOperation.Serve, invocation.Operation);
         Assert.Equal(["--urls", "http://127.0.0.1:5081"], invocation.ConfigurationArguments);
     }
+
+    private static TimerWriteApiOptions BuildWriteOptions(Dictionary<string, string?> values)
+        => TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
 }

@@ -29,14 +29,21 @@ internal static class TimerWriteApiRegistration
         // Deliberately do not widen TimerBackendStorage. This separate facade shares the
         // owner's lifecycle/scope while keeping REST-facing storage publicly read-only.
         services.AddSingleton<TimerBackendWriteStorage>();
-        services.AddGrpc(options =>
+        services.AddGrpc(grpc =>
         {
             // A legal v1 request contains at most 63 compact checkpoints and is only a
             // few KiB. Keep bounded headroom for future append-only fields without accepting
             // the 4 MiB framework default into the public deserialization path.
-            options.MaxReceiveMessageSize = MaxMessageSizeBytes;
-            options.MaxSendMessageSize = MaxMessageSizeBytes;
-            options.EnableDetailedErrors = false;
+            grpc.MaxReceiveMessageSize = MaxMessageSizeBytes;
+            grpc.MaxSendMessageSize = MaxMessageSizeBytes;
+            grpc.EnableDetailedErrors = false;
+
+            // Endpoint routing is not bound to a Kestrel listener, so without this the
+            // unauthenticated write service is reachable on the read port too (e.g. over TLS).
+            if (options.LocalPorts.Count != 0)
+            {
+                grpc.Interceptors.Add<TimerWriteListenerInterceptor>();
+            }
         });
         services.AddMagicOnion();
     }

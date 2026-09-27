@@ -386,7 +386,7 @@ public sealed class BackendResilienceTests
     }
 
     [Fact]
-    public async Task LeaderboardOutputCacheCoalescesColdRequestsAndRecoversAfterFailure()
+    public async Task LeaderboardOutputCacheServesConcurrentColdRequestsAndRecoversAfterFailure()
     {
         using var fixture = new Fixture();
         var map = await fixture.Store.GetMapInfo($"surf_cache_concurrent_{Guid.NewGuid():N}");
@@ -416,6 +416,32 @@ public sealed class BackendResilienceTests
 
         using var differentKey = await client.GetAsync($"{basePath}?limit=2");
         Assert.Equal(HttpStatusCode.InternalServerError, differentKey.StatusCode);
+    }
+
+    [Fact]
+    public async Task AbortedLeaderboardRequestDoesNotFailConcurrentIdenticalRequests()
+    {
+        using var fixture = new Fixture();
+        var map = await fixture.Store.GetMapInfo($"surf_cache_abort_{Guid.NewGuid():N}");
+        await fixture.Store.AddPlayerRecord(new SteamID(76561198000000006UL), map.MapName,
+            new RecordRequest { Time = 80 });
+        fixture.Owner.Start(false, false);
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(5), onRequest: () =>
+            fixture.Store.Db.Aop.OnLogExecuting = (_, _) => Thread.Sleep(200));
+        using var abortingClient = new HttpClient { BaseAddress = Address(app) };
+        using var waitingClient = new HttpClient { BaseAddress = Address(app) };
+        var path = $"/api/v1/maps/{map.MapName}/leaderboard?limit=1";
+
+        // The first request owns the cold cache key and disconnects while its SQL is running.
+        // A concurrent identical request must not inherit that client's cancellation.
+        using var abort = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        var aborted = abortingClient.GetAsync(path, abort.Token);
+        await Task.Delay(50);
+        using var waiting = await waitingClient.GetAsync(path);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => aborted);
+
+        Assert.Equal(HttpStatusCode.OK, waiting.StatusCode);
+        Assert.Equal(80_000_000, await ReadFirstTimeMicrosAsync(waiting));
     }
 
     [Fact]

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -92,6 +94,60 @@ public sealed class TimerWriteLoopbackTests
     }
 
     [Fact]
+    public async Task WriteApiIsServedOnlyOnConfiguredLocalPorts()
+    {
+        var writePort = GetFreeLoopbackPort();
+        var readPort = GetFreeLoopbackPort();
+        var options = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["TimerBackend:WriteApi:Enabled"] = "true",
+                ["TimerBackend:WriteApi:StyleFactors:0"] = "1",
+                ["TimerBackend:WriteApi:LocalPorts:0"] = writePort.ToString(CultureInfo.InvariantCulture),
+            }).Build());
+        using var loggerFactory = LoggerFactory.Create(static builder => builder.SetMinimumLevel(LogLevel.None));
+        using var storage = TimerBackendStorageFactory.Create(
+            "postgresql",
+            "Host=127.0.0.1;Port=1;Database=timer;Username=timer;Password=timer",
+            loggerFactory);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ApplicationName = typeof(TimerWriteServiceV1).Assembly.GetName().Name,
+            EnvironmentName = "Testing",
+            ContentRootPath = AppContext.BaseDirectory,
+        });
+        builder.WebHost.ConfigureKestrel(serverOptions =>
+        {
+            // Both listeners speak HTTP/2, as a TLS read port with default protocols would.
+            serverOptions.Listen(IPAddress.Loopback, writePort, listen => listen.Protocols = HttpProtocols.Http2);
+            serverOptions.Listen(IPAddress.Loopback, readPort, listen => listen.Protocols = HttpProtocols.Http2);
+        });
+        builder.Services.AddSingleton(options);
+        builder.Services.AddSingleton(storage);
+        TimerWriteApiRegistration.Add(builder.Services, options);
+        await using var application = builder.Build();
+        TimerWriteApiRegistration.Map(application, options);
+        await application.StartAsync();
+
+        try
+        {
+            using var writeChannel = GrpcChannel.ForAddress($"http://127.0.0.1:{writePort}");
+            var allowed = await Assert.ThrowsAsync<RpcException>(() =>
+                CallStatusAsync(MagicOnionClient.Create<ITimerWriteServiceV1>(writeChannel)));
+            Assert.Equal(StatusCode.InvalidArgument, allowed.StatusCode);
+
+            using var readChannel = GrpcChannel.ForAddress($"http://127.0.0.1:{readPort}");
+            var rejected = await Assert.ThrowsAsync<RpcException>(() =>
+                CallStatusAsync(MagicOnionClient.Create<ITimerWriteServiceV1>(readChannel)));
+            Assert.Equal(StatusCode.Unimplemented, rejected.StatusCode);
+        }
+        finally
+        {
+            await application.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task MagicOnionLoopbackRejectsPayloadAboveConfiguredReceiveLimit()
     {
         await using var server = await LoopbackServer.StartAsync();
@@ -110,6 +166,13 @@ public sealed class TimerWriteLoopbackTests
             CallSubmitAsync(client, request));
 
         Assert.Equal(StatusCode.ResourceExhausted, exception.StatusCode);
+    }
+
+    private static int GetFreeLoopbackPort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     private static async Task CallStatusAsync(ITimerWriteServiceV1 client)

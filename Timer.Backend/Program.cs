@@ -43,6 +43,8 @@ var runtimeOptions = TimerBackendRuntimeOptions.FromConfiguration(builder.Config
 if (administrativeInvocation.Operation is BackendAdministrativeOperation.SetTier
     or BackendAdministrativeOperation.RecalculateScores)
 {
+    // Fail before connecting: these commands write the configured factors onto every board.
+    BackendAdministrativeCli.EnsureExplicitScorePolicy(writeApiOptions);
     using var loggerFactory = LoggerFactory.Create(logging => logging.AddSimpleConsole());
     using var storage = TimerBackendStorageFactory.Create(
         backendOptions.DatabaseType, backendOptions.ConnectionString, loggerFactory,
@@ -71,6 +73,13 @@ builder.Services.ConfigureHttpJsonOptions(BackendJsonOptions.Configure);
 TimerWriteApiRegistration.Add(builder.Services, writeApiOptions);
 
 var app = builder.Build();
+if (writeApiOptions.Enabled && writeApiOptions.LocalPorts.Count == 0)
+{
+    app.Logger.LogWarning(
+        "The unauthenticated write API is served on every Kestrel listener. Set {Setting} to the gRPC listener's port to restrict it.",
+        $"{TimerWriteApiOptions.SectionName}:LocalPorts");
+}
+
 app.UseResponseCompression();
 app.UseExceptionHandler(exceptionApplication => exceptionApplication.Run(async context =>
 {

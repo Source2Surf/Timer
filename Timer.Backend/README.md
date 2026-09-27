@@ -207,7 +207,8 @@ both ports to loopback; deployment and network access policy are operator-owned.
     "AllowReadRepair": false,
     "EnableOutboxWorker": false,
     "WriteApi": {
-      "Enabled": false
+      "Enabled": false,
+      "LocalPorts": [5082]
     },
     "Database": {
       "Type": "postgresql",
@@ -238,6 +239,13 @@ both ports to loopback; deployment and network access policy are operator-owned.
 - `WriteApi:Enabled` is `false` by default. When enabled without other write
   settings, ruleset v1 and factor 1.0 for style 0 apply. Only configured styles
   accept remote submissions; an omitted style is treated as disabled.
+- `WriteApi:LocalPorts` lists the local listener ports that serve write RPCs,
+  e.g. `[5082]`. Kestrel routes every endpoint on every listener, so without it
+  the write service is also reachable on the read port whenever that port speaks
+  HTTP/2 (for example HTTPS with the default protocols). The check uses the
+  connection's local port, not the client-supplied host header; calls on other
+  listeners get `Unimplemented`. The host logs a warning when the write API is
+  enabled without this setting.
 
 With all mutation switches disabled, request handling uses typed SQLSugar reads only,
 so the backend can run with a database role limited to `SELECT` on the Timer
@@ -276,7 +284,10 @@ compatible dead-lettered Outbox rows without waiting for a new PB/WR. A style
 omitted from `StyleFactors` is deliberately left untouched and reported as
 skipped; configure that style explicitly with factor `0` and rerun the command
 when the desired policy is to remove its scores. The administrative commands
-require an explicit style-0 factor, as the normal write configuration does.
+refuse to run unless `WriteApi:StyleFactors` is configured explicitly and
+includes style 0: the implicit style-0 factor 1.0 that a write instance uses when
+no factors are configured does not apply to them. Launch them with the same
+factors as the serving write instance.
 
 ## v1 routes
 
@@ -348,7 +359,8 @@ callers must preserve it to avoid scores without a corresponding player total.
 
 When `WriteApi:Enabled=true`, the host maps `ITimerWriteServiceV1` without
 built-in API-key authentication. Anyone who can reach the write port can submit
-data; the operator is responsible for restricting network access. The backend still
+data; the operator is responsible for restricting network access, and should set
+`WriteApi:LocalPorts` so the read port cannot serve writes. The backend still
 owns `StyleFactor` and the accepted ruleset, never accepting client-supplied
 score policy. Incoming and outgoing gRPC messages are limited to 64 KiB and
 detailed framework errors remain disabled. The sender confirms ambiguous

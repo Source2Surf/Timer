@@ -29,8 +29,13 @@ internal sealed record TimerBackendOptions(string DatabaseType,
         ArgumentNullException.ThrowIfNull(configuration);
 
         var databaseType = configuration[$"{SectionName}:Database:Type"];
-        var connectionString = configuration[$"{SectionName}:Database:ConnectionString"]
-                               ?? configuration.GetConnectionString("TimerBackend");
+        // The shipped appsettings.json declares an empty primary value; treat blank as unset
+        // so ConnectionStrings:TimerBackend (or its environment variable) still applies.
+        var connectionString = configuration[$"{SectionName}:Database:ConnectionString"];
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            connectionString = configuration.GetConnectionString("TimerBackend");
+        }
         var initializeSchemaRaw = configuration[$"{SectionName}:InitializeSchema"];
         var allowReadRepairRaw = configuration[$"{SectionName}:AllowReadRepair"];
         var enableOutboxWorkerRaw = configuration[$"{SectionName}:EnableOutboxWorker"];

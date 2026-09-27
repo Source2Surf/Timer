@@ -181,6 +181,30 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(new[] { 60f, 70f }, records.Select(record => record.Time));
     }
 
+    [Fact]
+    public async Task PlayerReadApiIncludesPlayerNames()
+    {
+        var storage = CreateStorage();
+        var map = await storage.GetMapInfo("surf_player_names");
+        await storage.GetPlayerProfile(Player, "Player One");
+        await AddRun(storage, map.MapId, 80);
+        await AddRun(storage, map.MapId, 10, stage: 1);
+
+        var main = await storage.GetPlayerRecordsForReadApiAsync(Player.AsPrimitive(),
+                                                                  "surf_player_names",
+                                                                  stageRecords: false,
+                                                                  limit: 10,
+                                                                  allowReadRepair: true);
+        var stages = await storage.GetPlayerRecordsForReadApiAsync(Player.AsPrimitive(),
+                                                                    "surf_player_names",
+                                                                    stageRecords: true,
+                                                                    limit: 10,
+                                                                    allowReadRepair: true);
+
+        Assert.Equal("Player One", Assert.Single(main).PlayerName);
+        Assert.Equal("Player One", Assert.Single(stages).PlayerName);
+    }
+
     [Theory]
     [InlineData(true, true)]
     [InlineData(true, false)]

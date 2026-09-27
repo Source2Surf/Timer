@@ -144,6 +144,8 @@ internal sealed partial class StorageServiceImpl
             result.Add(ToRunRecord(run));
         }
 
+        await PopulatePlayerNamesAsync(result);
+
         return result;
     }
 
