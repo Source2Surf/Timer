@@ -47,6 +47,7 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
     private readonly string?                                    _legacyDatabasePath;
     private readonly Func<string, bool>                         _legacyDatabaseExists;
     private bool                                                _initialized;
+    private long                                                _claimSequence;
 
     public RunSubmissionSpool(InterfaceBridge bridge, ILogger<RunSubmissionSpool> logger)
         : this(logger, legacyDatabasePath: GetLegacyDatabasePath(bridge))
@@ -130,10 +131,10 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
                                                             : SubmissionSpoolEnqueueDisposition.ConflictingSubmissionId);
             }
 
-            // Quarantined entries intentionally count toward the cap. They remain visible to
-            // the sender's in-process diagnostics and must not permit an unbounded dead letter
-            // accumulation while the plugin remains online.
-            if (_entries.Count >= _capacity)
+            // Quarantined entries count toward the cap so dead letters stay bounded, but they
+            // were already logged when quarantined and can never be sent. Evict the oldest one
+            // rather than refusing every new run once enough of them have accumulated.
+            if (_entries.Count >= _capacity && !TryEvictOldestQuarantined())
             {
                 return new SubmissionSpoolEnqueueResult(submissionId, SubmissionSpoolEnqueueDisposition.CapacityExceeded);
             }
@@ -151,15 +152,38 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
         }
     }
 
+    private bool TryEvictOldestQuarantined()
+    {
+        RunSubmissionQueueEntry? oldest = null;
+        foreach (var entry in _entries.Values)
+        {
+            if (entry.QuarantinedAtUtc is { } quarantinedAt
+                && (oldest is null || quarantinedAt < oldest.QuarantinedAtUtc!.Value))
+            {
+                oldest = entry;
+            }
+        }
+
+        return oldest is not null && _entries.Remove(oldest.SubmissionId);
+    }
+
     /// <summary>
     /// Claims at most <paramref name="maximumCount"/> due entries for one sender. A fresh
     /// opaque token is issued for each batch. All non-quarantined entries remain eligible for
     /// unbounded retry while this process is alive.
     /// </summary>
+    /// <param name="finalAttemptForClaimsUpTo">
+    /// During a shutdown drain, also claims entries still waiting out a retry backoff whose
+    /// last claim is at or before this <see cref="CurrentClaimSequence"/> value, so each gets
+    /// one last attempt before the volatile queue is discarded. An entry that fails again was
+    /// claimed after that point and is not re-claimed by this rule. A sequence rather than a
+    /// timestamp keeps the ordering exact even when both fall within one clock tick.
+    /// </param>
     internal IReadOnlyList<RunSubmissionSpoolLease> ClaimDueBatch(int       maximumCount,
                                                                     string    leaseOwner,
                                                                     DateTime? nowUtc = null,
-                                                                    bool      retryIndefinitely = false)
+                                                                    bool      retryIndefinitely = false,
+                                                                    long?     finalAttemptForClaimsUpTo = null)
     {
         if (maximumCount is <= 0 or > MaximumBatchSize)
         {
@@ -180,19 +204,22 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
 
             var leaseToken = string.Concat(leaseOwner, ":", Guid.NewGuid().ToString("N"));
             var candidates = _entries.Values
-                                     .Where(entry => entry.QuarantinedAtUtc is null && IsDue(entry, now))
+                                     .Where(entry => entry.QuarantinedAtUtc is null
+                                                     && (IsDue(entry, now) || NeedsFinalAttempt(entry, now, finalAttemptForClaimsUpTo)))
                                      .OrderBy(entry => entry.NextAttemptAtUtc)
                                      .ThenBy(entry => entry.CreatedAtUtc)
                                      .Take(maximumCount)
                                      .ToList();
             var claimed = new List<RunSubmissionSpoolLease>(candidates.Count);
+            var claimSequence = candidates.Count == 0 ? _claimSequence : ++_claimSequence;
 
             foreach (var entry in candidates)
             {
                 entry.AttemptCount++;
-                entry.LeaseToken    = leaseToken;
-                entry.LeaseUntilUtc = now + LeaseDuration;
-                entry.UpdatedAtUtc  = now;
+                entry.LeaseToken       = leaseToken;
+                entry.LeaseUntilUtc    = now + LeaseDuration;
+                entry.LastClaimSequence = claimSequence;
+                entry.UpdatedAtUtc     = now;
 
                 // Do not hand a mutable internal request to a transport. In particular, a
                 // caller mutating its request after enqueue must not change the retry payload.
@@ -378,6 +405,25 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
     {
         return entry.NextAttemptAtUtc <= now
                && (entry.LeaseUntilUtc is null || entry.LeaseUntilUtc.Value <= now);
+    }
+
+    private static bool NeedsFinalAttempt(RunSubmissionQueueEntry entry, DateTime now, long? finalAttemptForClaimsUpTo)
+    {
+        return finalAttemptForClaimsUpTo is { } upTo
+               && (entry.LeaseUntilUtc is null || entry.LeaseUntilUtc.Value <= now)
+               && entry.LastClaimSequence <= upTo;
+    }
+
+    /// <summary>The sequence number of the most recent claim; zero before any claim.</summary>
+    internal long CurrentClaimSequence
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _claimSequence;
+            }
+        }
     }
 
     private static string TruncateError(string error)
@@ -579,6 +625,7 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
         public string?                   LeaseToken       { get; set; }
         public DateTime?                 LeaseUntilUtc    { get; set; }
         public DateTime?                 QuarantinedAtUtc { get; set; }
+        public long                      LastClaimSequence { get; set; }
         public string?                   LastError        { get; set; }
     }
 }

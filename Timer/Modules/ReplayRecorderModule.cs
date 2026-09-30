@@ -456,8 +456,12 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         var time = stageTimerInfo.Time;
 
+        frame.StageFinishPending = true;
+
         _bridge.ModSharp.InvokeFrameAction(() =>
         {
+            frame.StageFinishPending = false;
+
             var newStageTicks = frame.NewStageTicks[lastStage];
 
             var delay              = timer_replay_stage_postrun_time.GetFloat();
@@ -652,9 +656,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         // Temp file in same directory as final → atomic same-partition File.Move
         var mapName = _bridge.CurrentMapName;
 
-        var tempPath = ReplayShared.BuildReplayPath(_replayDirectory, mapName, style, track, stage, null);
-
-        tempPath = Path.ChangeExtension(tempPath, ".tmp");
+        var tempPath = ReplayShared.BuildFallbackTempPath(_replayDirectory, mapName, style, track, stage);
 
         var mapId = _mapInfoModule.GetCurrentMapProfile().MapId;
 
@@ -825,7 +827,11 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                 var providerReady = _replayProviderProxy.IsAvailable;
                 var uploadNonPB   = _replayProviderProxy.UploadNonPersonalBest;
 
-                var isNewBest    = false;
+                // Use the authoritative record result, as the fallback path does. The playback
+                // notify below only reports whether this run replaced the server-best cache, which
+                // is false for a PB that is not the WR and must not suppress its upload.
+                var isNewBest    = context.AttemptResult is EAttemptResult.NewPersonalRecord
+                                                         or EAttemptResult.NewServerRecord;
                 var shouldUpload = false;
 
                 // Evaluate the playback notify on the game main thread (it touches bot state).
@@ -833,22 +839,17 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                 {
                     if (IsCurrentReplayMap(mapId))
                     {
-                        isNewBest = NotifyPlaybackSaved(_playbackModule,
-                                                        style,
-                                                        track,
-                                                        stage,
-                                                        replayContent,
-                                                        context);
+                        NotifyPlaybackSaved(_playbackModule,
+                                            style,
+                                            track,
+                                            stage,
+                                            replayContent,
+                                            context);
                     }
                     else
                     {
                         // The file and remote upload still belong to the captured map, but the
                         // playback cache is map-local and has already been reset for a new map.
-                        // Use the authoritative record result for the upload gate when the cache
-                        // notification is intentionally fenced off.
-                        isNewBest = context.AttemptResult is EAttemptResult.NewPersonalRecord
-                            or EAttemptResult.NewServerRecord;
-
                         _logger.LogInformation(
                             "Suppressing replay playback cache update for stale map {MapId}; current map has changed.",
                             mapId);
@@ -897,6 +898,11 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                          track,
                                          stage);
                     }
+                }
+
+                if (context.AttemptResult == EAttemptResult.NoNewRecord)
+                {
+                    DeleteUnreferencedReplayFile(filePath, _logger);
                 }
             }
             catch (Exception e)
@@ -989,31 +995,10 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             }
         });
 
-        var fallbackContext = new ReplaySaveContext
-        {
-            SteamId       = steamId,
-            FinishTime    = header.Time,
-            AttemptResult = EAttemptResult.NoNewRecord,
-        };
-
-        var fallbackContent = new ReplayContent
-        {
-            Header = header,
-            Frames = frames,
-        };
-
-        _ = _bridge.ModSharp.InvokeFrameActionAsync(() =>
-        {
-            if (IsCurrentReplayMap(key.MapId))
-            {
-                NotifyPlaybackSaved(_playbackModule,
-                                    style,
-                                    track,
-                                    stage,
-                                    fallbackContent,
-                                    fallbackContext);
-            }
-        });
+        // Do not push this replay into the playback cache yet: its run is still unconfirmed and
+        // may be rejected. The cache only compares times, so an unconfirmed run could otherwise
+        // become the WR bot for the rest of the map. ProcessFallbackRecord notifies playback once
+        // the record-saved event confirms the run.
 
         // If a fallback record already exists for this exact key, its temp file has a different
         // Guid name (fallback paths are Guid-suffixed), so the blind overwrite below would orphan
@@ -1030,6 +1015,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             MapName      = mapName,
             WriteTask    = writeTask,
             CreatedAt    = createdAt,
+            Content      = new ReplayContent { Header = header, Frames = frames },
         };
 
 #if DEBUG
@@ -1078,35 +1064,41 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         var logger              = _logger;
         var attemptResult       = recordEvent.RecordType;
         var recordSteamId       = recordEvent.SteamId.AsPrimitive();
+        var inMemoryContent     = fallback.Content;
+
+        // The run is confirmed; if its temp file cannot be used, a PB/WR must still reach playback
+        // from the copy held in memory (the playback cache is not fed until confirmation).
+        async Task NotifyPlaybackFromMemoryAsync()
+        {
+            if (inMemoryContent is null
+                || attemptResult is not (EAttemptResult.NewPersonalRecord or EAttemptResult.NewServerRecord))
+            {
+                return;
+            }
+
+            var memoryContext = new ReplaySaveContext
+            {
+                SteamId       = recordSteamId,
+                FinishTime    = recordEvent.Time,
+                AttemptResult = attemptResult,
+            };
+
+            await bridge.ModSharp.InvokeFrameActionAsync(() =>
+            {
+                if (IsCurrentReplayMap(mapId))
+                {
+                    NotifyPlaybackSaved(playbackModule, style, track, stage, inMemoryContent, memoryContext);
+                }
+            }).ConfigureAwait(false);
+        }
 
         Task.Run(async () =>
         {
             try
             {
-                await writeTask.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
-            }
-            catch (TimeoutException)
-            {
-                logger.LogWarning("Fallback WriteTask timed out (10s) for {SteamId} style={Style} track={Track} stage={Stage} attemptId={AttemptId}. Re-queuing for later retry",
-                                  steamId,
-                                  style,
-                                  track,
-                                  stage,
-                                  attemptId);
-
-                var reinsertKey = new ReplayMatchKey(mapId, steamId, style, track, stage, attemptId);
-
-                var reinsertRecord = new FallbackReplayRecord
-                {
-                    TempFilePath = tempPath,
-                    MapName      = mapName,
-                    WriteTask    = writeTask,
-                    CreatedAt    = createdAt,
-                };
-
-                _ = bridge.ModSharp.InvokeFrameActionAsync(() => { _fallbackRecords[reinsertKey] = reinsertRecord; });
-
-                return;
+                // Wait for the write however long it takes: this runs off the main thread, and a
+                // record re-queued after a timeout was never looked at again, losing the replay.
+                await writeTask.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1117,6 +1109,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                 track,
                                 stage,
                                 attemptId);
+
+                await NotifyPlaybackFromMemoryAsync().ConfigureAwait(false);
 
                 return;
             }
@@ -1144,6 +1138,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                 stage,
                                 tempPath);
 
+                await NotifyPlaybackFromMemoryAsync().ConfigureAwait(false);
+
                 return;
             }
 
@@ -1157,6 +1153,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                 tempPath);
 
                 DeleteFallbackTempAndSidecar(tempPath);
+
+                await NotifyPlaybackFromMemoryAsync().ConfigureAwait(false);
 
                 return;
             }
@@ -1188,6 +1186,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                 tempPath,
                                 finalPath);
 
+                await NotifyPlaybackFromMemoryAsync().ConfigureAwait(false);
+
                 return;
             }
 
@@ -1199,10 +1199,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             };
 
             // Derive isNewBest from the record event's authoritative RecordType — NOT from the
-            // OnNew*ReplaySaved return value. SavePendingReplayAsFallback already eagerly notified
-            // playback for this run, so the cache holds this run's time and the second notify here
-            // returns false (existing.Time <= this run's time), which would wrongly suppress the
-            // upload of a genuine new PB/WR that happened to take the fallback path.
+            // OnNew*ReplaySaved return value, which only reports whether this run replaced the
+            // server-best playback cache and is false for a PB that is not the WR.
             var isNewBest = attemptResult is EAttemptResult.NewPersonalRecord or EAttemptResult.NewServerRecord;
 
             if (deserialized is { } content)
@@ -1272,6 +1270,11 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                         stage);
                     }
                 }
+            }
+
+            if (attemptResult == EAttemptResult.NoNewRecord)
+            {
+                DeleteUnreferencedReplayFile(finalPath, logger);
             }
 #if DEBUG
             logger.LogInformation("Successfully processed fallback record for {SteamId} style={Style} track={Track} stage={Stage} attemptId={AttemptId}: renamed {TempPath} → {FinalPath}",
@@ -1401,6 +1404,23 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
     ///     Fans a saved replay out to the playback module — main (stage == 0) or stage
     ///     variant. Must run on the game main thread (it touches bot state).
     /// </summary>
+    /// <summary>
+    ///     Playback only ever loads the current WR's file (ReplayPlaybackModule loads by the WR's
+    ///     run id), and a run that set no new record is slower than the player's own best, so its
+    ///     file would otherwise accumulate on disk forever. Called after any upload has read it.
+    /// </summary>
+    private static void DeleteUnreferencedReplayFile(string path, ILogger logger)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Failed to delete non-record replay file {Path}", path);
+        }
+    }
+
     private static bool NotifyPlaybackSaved(IReplayPlaybackModule playbackModule,
                                             int                   style,
                                             int                   track,
@@ -1603,5 +1623,22 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             MoveType       = pawn.MoveType,
             Velocity       = pawn.GetAbsVelocity(),
         });
+
+        // Frames are otherwise only trimmed at timer start, so a player idling without a run
+        // (in a zone, AFK) grows this buffer by ~4 KB/s for as long as they stay. Trim once it is
+        // well past the pre-run window, so RemoveRange runs about once a minute, not every tick.
+        var maxPreFrame = (int) (timer_replay_prerun_time.GetFloat() * TimerConstants.Tickrate);
+
+        if (frameData.Frames.Count > maxPreFrame + IdleFrameTrimSlack
+            && frameData.PostFrameTimer is null
+            && frameData.StagePostFrameTimer is null
+            && !frameData.StageFinishPending
+            && _timerModule.GetTimerInfo(slot) is not { Status: not ETimerStatus.Stopped }
+            && _timerModule.GetStageTimerInfo(slot) is not { Status: not ETimerStatus.Stopped })
+        {
+            ReplayShared.TrimIdleFrames(frameData, maxPreFrame);
+        }
     }
+
+    private const int IdleFrameTrimSlack = TimerConstants.Tickrate * 60;
 }

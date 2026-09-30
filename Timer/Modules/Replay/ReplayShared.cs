@@ -32,6 +32,8 @@ namespace Source2Surf.Timer.Modules.Replay;
 internal static class ReplayShared
 {
     public const char HeaderFrameSeparator = '\n';
+
+    internal const ulong MaxDecompressedReplayBytes = 512UL * 1024 * 1024;
     public static readonly byte[] HeaderFrameSeparatorBytes = [(byte)HeaderFrameSeparator];
 
     /// <summary>
@@ -42,6 +44,14 @@ internal static class ReplayShared
         => stage == 0
             ? BuildMainReplayPath(replayDirectory, mapName, style, track, runId)
             : BuildStageReplayPath(replayDirectory, mapName, style, track, stage, runId);
+
+    /// <summary>
+    ///     Builds a unique fallback temp path in the final replay's directory. Appends ".tmp"
+    ///     instead of using Path.ChangeExtension: the temp name ends in ".replay.{guid}", so
+    ///     ChangeExtension would replace the GUID and every player would share one file.
+    /// </summary>
+    public static string BuildFallbackTempPath(string replayDirectory, string mapName, int style, int track, int stage)
+        => BuildReplayPath(replayDirectory, mapName, style, track, stage, null) + ".tmp";
 
     private static string BuildMainReplayPath(string replayDirectory, string mapName, int style, int track, long? runId)
     {
@@ -320,6 +330,37 @@ internal static class ReplayShared
     }
 
     /// <summary>
+    /// Bounds the buffer of a player with no run in progress, keeping the most recent
+    /// maxPreFrame frames as pre-run data. Unlike <see cref="TrimPreRunFrames"/>, which runs
+    /// at timer start and resets the per-run indices itself, this shifts the stored frame
+    /// indices so they keep pointing at the same frames (clamped at 0 for dropped ones).
+    /// Callers must only use it while no main/stage run or post-run capture is in progress.
+    /// </summary>
+    public static void TrimIdleFrames(PlayerFrameData frameData, int maxPreFrame)
+    {
+        var excess = frameData.Frames.Count - Math.Max(maxPreFrame, 0);
+
+        if (excess <= 0)
+        {
+            return;
+        }
+
+        frameData.Frames.RemoveRange(0, excess);
+        ShiftFrameIndices(frameData.NewStageTicks, excess);
+        ShiftFrameIndices(frameData.StageTimerStartTicks, excess);
+        frameData.TimerStartFrame  = Math.Max(0, frameData.TimerStartFrame  - excess);
+        frameData.TimerFinishFrame = Math.Max(0, frameData.TimerFinishFrame - excess);
+    }
+
+    private static void ShiftFrameIndices(List<int> indices, int removed)
+    {
+        for (var i = 0; i < indices.Count; i++)
+        {
+            indices[i] = Math.Max(0, indices[i] - removed);
+        }
+    }
+
+    /// <summary>
     /// Ensure the replay directory structure exists (style and stage subdirectories).
     /// Creates style_0 through style_{MAX_STYLE-1} directories, each with a stage subdirectory.
     /// </summary>
@@ -461,7 +502,10 @@ internal static class ReplayShared
             return ReplayFrameStorage.Deserialize(payload, version);
         }
 
-        if (capacity > (ulong)Array.MaxLength)
+        // The declared size comes from the (possibly remote or corrupt) payload itself. A 24-hour
+        // 64-tick run is ~5.5M frames, a few hundred MB, so a larger claim is not a real replay
+        // and must not make us rent a multi-GB buffer.
+        if (capacity > MaxDecompressedReplayBytes)
             throw new InvalidDataException("Decompressed replay exceeds the supported buffer size.");
 
         var buffer = ArrayPool<byte>.Shared.Rent((int)capacity);

@@ -376,17 +376,20 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
             or StatusCode.Cancelled
             or StatusCode.Internal
             or StatusCode.Unknown
-            or StatusCode.ResourceExhausted;
+            or StatusCode.ResourceExhausted
+            // A proxy's plain 404 during a backend redeploy is not a backend verdict.
+            || RunSubmissionSender.IsHttpIntermediaryNotFound(exception);
 
     private static string NormalizeRemotePlayerName(string? name, long steamId)
     {
-        var normalized = (name ?? string.Empty).Trim();
+        // Strip control characters before trimming: removing one can expose surrounding
+        // whitespace, and the backend rejects names with leading/trailing whitespace.
+        var normalized = string.Concat((name ?? string.Empty).Where(character => !char.IsControl(character))).Trim();
         if (normalized.Length > 192)
         {
-            normalized = normalized[..192];
+            normalized = normalized[..192].TrimEnd();
         }
 
-        normalized = string.Concat(normalized.Where(character => !char.IsControl(character)));
         return normalized.Length == 0 ? $"Player {steamId}" : normalized;
     }
 

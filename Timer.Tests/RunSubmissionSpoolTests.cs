@@ -50,20 +50,43 @@ public sealed class RunSubmissionSpoolTests
     }
 
     [Fact]
-    public void CapacityCountsQueuedAndPermanentlyQuarantinedEntries()
+    public void FullQueueEvictsTheOldestQuarantinedEntryInsteadOfRefusingNewRuns()
     {
         using var spool  = CreateSpool(capacity: 2);
         var       first  = CreateRequest(Guid.NewGuid());
         var       second = CreateRequest(Guid.NewGuid());
         var       third  = CreateRequest(Guid.NewGuid());
+        var       fourth = CreateRequest(Guid.NewGuid());
 
         Assert.Equal(SubmissionSpoolEnqueueDisposition.Enqueued, spool.Enqueue(first, TestNow).Disposition);
         Assert.Equal(SubmissionSpoolEnqueueDisposition.Enqueued, spool.Enqueue(second, TestNow).Disposition);
         var firstLease = Assert.Single(spool.ClaimDueBatch(1, "quarantine-first", TestNow));
         Assert.True(spool.Quarantine(firstLease.SubmissionId, firstLease.LeaseToken, "validation failure", TestNow));
-
-        Assert.Equal(SubmissionSpoolEnqueueDisposition.CapacityExceeded, spool.Enqueue(third, TestNow).Disposition);
         Assert.Equal(new SubmissionSpoolSnapshot(2, 1, 1), spool.GetSnapshot());
+
+        // The dead letter makes room; live entries are never evicted.
+        Assert.Equal(SubmissionSpoolEnqueueDisposition.Enqueued, spool.Enqueue(third, TestNow).Disposition);
+        Assert.Equal(new SubmissionSpoolSnapshot(2, 2, 0), spool.GetSnapshot());
+        Assert.Equal(SubmissionSpoolEnqueueDisposition.CapacityExceeded, spool.Enqueue(fourth, TestNow).Disposition);
+    }
+
+    [Fact]
+    public void ShutdownDrainGivesBackedOffEntriesOneFinalAttempt()
+    {
+        using var spool = CreateSpool();
+        Assert.Equal(SubmissionSpoolEnqueueDisposition.Enqueued,
+                     spool.Enqueue(CreateRequest(Guid.NewGuid()), TestNow).Disposition);
+        var lease = Assert.Single(spool.ClaimDueBatch(1, "before-drain", TestNow));
+        Assert.True(spool.Retry(lease.SubmissionId, lease.LeaseToken, "offline", TestNow));
+
+        // Same clock reading as the earlier claim: ordering must not depend on clock resolution.
+        var drainSequence = spool.CurrentClaimSequence;
+        Assert.Empty(spool.ClaimDueBatch(1, "drain", TestNow));
+        var finalLease = Assert.Single(spool.ClaimDueBatch(1, "drain", TestNow, finalAttemptForClaimsUpTo: drainSequence));
+
+        // A final attempt that fails again backs off normally instead of looping until the deadline.
+        Assert.True(spool.Retry(finalLease.SubmissionId, finalLease.LeaseToken, "still offline", TestNow));
+        Assert.Empty(spool.ClaimDueBatch(1, "drain", TestNow, finalAttemptForClaimsUpTo: drainSequence));
     }
 
     [Theory]

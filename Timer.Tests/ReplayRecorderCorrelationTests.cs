@@ -27,6 +27,44 @@ namespace Timer.Tests;
 public sealed class ReplayRecorderCorrelationTests
 {
     [Fact]
+    public void IdleFrameTrimKeepsThePreRunWindowAndShiftsStoredIndices()
+    {
+        var frameData = new PlayerFrameData { Name = "idle" };
+        for (var i = 0; i < 100; i++)
+        {
+            frameData.Frames.Add(new ReplayFrameData());
+        }
+
+        frameData.StageTimerStartTicks.AddRange([10, 90]);
+        frameData.NewStageTicks.Add(95);
+        frameData.TimerStartFrame = 5;
+
+        ReplayShared.TrimIdleFrames(frameData, maxPreFrame: 20);
+
+        Assert.Equal(20, frameData.Frames.Count);
+        // Indices still point at the same frames; ones whose frames were dropped clamp to 0,
+        // and the per-stage lists keep their shape so stage lookups stay in range.
+        Assert.Equal(new[] { 0, 10 }, frameData.StageTimerStartTicks);
+        Assert.Equal(new[] { 15 }, frameData.NewStageTicks);
+        Assert.Equal(0, frameData.TimerStartFrame);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public void FallbackTempPathsAreUniquePerReplay(int stage)
+    {
+        var first = ReplayShared.BuildFallbackTempPath("replays", "surf_x", 0, 0, stage);
+        var second = ReplayShared.BuildFallbackTempPath("replays", "surf_x", 0, 0, stage);
+
+        // Two players finishing the same map/style/track must never share a fallback file.
+        Assert.NotEqual(first, second);
+        Assert.EndsWith(".tmp", first, StringComparison.Ordinal);
+        Assert.Equal(Path.GetDirectoryName(ReplayShared.BuildReplayPath("replays", "surf_x", 0, 0, stage, 42)),
+                     Path.GetDirectoryName(first));
+    }
+
+    [Fact]
     public void PendingReplayStoreKeepsMapAndAttemptCorrelationsIndependent()
     {
         var store = new PendingReplayStore();

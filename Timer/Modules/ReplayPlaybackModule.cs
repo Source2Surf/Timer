@@ -688,9 +688,12 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
         }
         else
         {
+            // + 1 starts after the current replay, as FindNextReplay does; without it the scan
+            // found the bot's own replay first and a stage bot never rotated.
             startIndex = (bot.Stage   * maxTrack * maxStyle)
                          + (bot.Track * maxStyle)
-                         + bot.Style;
+                         + bot.Style
+                         + 1;
         }
 
         var config = bot.Config;
@@ -922,6 +925,10 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
 
             bot.Frames = content.Frames;
             bot.Header = content.Header;
+            // An idle bot is a wildcard (Style/Track -1). Give it the replay's identity: the bot
+            // name lookup (GetTrackName) throws on -1, and rotation continues from these values.
+            bot.Style = style;
+            bot.Track = track;
 
             if (stage > 0)
             {
@@ -935,6 +942,13 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
     private static bool IsReplayBotMatch(ReplayBotData bot, int style, int track, int stage)
     {
         if ((bot.Style != style && bot.Style >= 0) || (bot.Track != track && bot.Track >= 0))
+        {
+            return false;
+        }
+
+        // A wildcard (idle) bot matches any key, so apply its configured filters here, as
+        // FindNextReplay/FindNextStageReplay do, instead of adopting a disallowed style/track.
+        if (!bot.IsTrackAllowed(track) || !bot.Config.Styles.Contains(style))
         {
             return false;
         }

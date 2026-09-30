@@ -50,6 +50,7 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
     private Task?                          _worker;
     private int                            _initialized;
     private int                            _drainRequested;
+    private long                           _drainClaimSequence;
     private int                            _shutdownState;
     private int                            _resourcesDisposed;
 
@@ -232,6 +233,7 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
                 return;
             }
 
+            Interlocked.Exchange(ref _drainClaimSequence, _spool.CurrentClaimSequence);
             Volatile.Write(ref _drainRequested, 1);
             worker         = _worker;
             workerStopping = _workerStopping;
@@ -288,10 +290,13 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
+                // Read the drain flag once per iteration: the claim and the exit decision must
+                // agree, or a drain requested mid-iteration would exit before its final attempts.
+                var draining = Volatile.Read(ref _drainRequested) != 0;
                 bool processed;
                 try
                 {
-                    processed = await DispatchDueBatchAsync(cancellationToken).ConfigureAwait(false);
+                    processed = await DispatchDueBatchAsync(draining, cancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -305,7 +310,7 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
                     processed = false;
                 }
 
-                if (Volatile.Read(ref _drainRequested) != 0 && !processed)
+                if (draining && !processed)
                 {
                     break;
                 }
@@ -332,11 +337,15 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
         }
     }
 
-    private async Task<bool> DispatchDueBatchAsync(CancellationToken cancellationToken)
+    private async Task<bool> DispatchDueBatchAsync(bool draining, CancellationToken cancellationToken)
     {
+        // While draining for shutdown, also give entries waiting out a retry backoff one last
+        // attempt: the backend may have recovered, and the volatile queue is discarded next.
+        long? finalAttemptForClaimsUpTo = draining ? Interlocked.Read(ref _drainClaimSequence) : null;
         var leases = _spool.ClaimDueBatch(_options.BatchSize,
                                            _leaseOwner,
-                                           retryIndefinitely: true);
+                                           retryIndefinitely: true,
+                                           finalAttemptForClaimsUpTo: finalAttemptForClaimsUpTo);
 
         if (leases.Count == 0)
         {
@@ -381,11 +390,22 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
         {
             QuarantineLease(lease, DescribePermanentFailure(exception));
         }
+        catch (RpcException exception) when (exception.StatusCode == StatusCode.NotFound
+                                            && IsOlderThan(lease, NotFoundRetryWindow))
+        {
+            // A map or player still missing hours after the finish will not be provisioned by
+            // retrying. Stop occupying a queue slot with a request that can never succeed.
+            QuarantineLease(lease, $"Backend still reports NotFound more than {NotFoundRetryWindow.TotalHours:0} hours after the run finished.");
+        }
         catch (Exception exception)
         {
             ResolveAmbiguousOutcome(lease, DescribeRetryableFailure("SubmitRun", exception), cancellationToken);
         }
     }
+
+    private static bool IsOlderThan(RunSubmissionSpoolLease lease, TimeSpan age)
+        => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lease.Request.FinishedAtUnixTimeMilliseconds
+           > (long)age.TotalMilliseconds;
 
     private void ResolveAmbiguousOutcome(RunSubmissionSpoolLease lease,
                                          string                  reason,
@@ -488,14 +508,31 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
         // NotFound is intentionally absent: player-profile or map provisioning can race a run
         // submission, so it receives the same idempotent retry path as an
         // unavailable backend rather than being silently dead-lettered.
+        // A 404 synthesized from a non-gRPC HTTP response (e.g. a proxy while the backend is
+        // being redeployed) did not come from the backend and is retried. A proxy's 401/403
+        // usually means an auth misconfiguration that retrying cannot fix, so it stays permanent.
         return exception is RpcException { StatusCode: StatusCode.Unauthenticated
                                            or StatusCode.PermissionDenied
                                            or StatusCode.InvalidArgument
                                            or StatusCode.FailedPrecondition
                                            or StatusCode.AlreadyExists
                                            or StatusCode.OutOfRange
-                                           or StatusCode.Unimplemented };
+                                           or StatusCode.Unimplemented } rpcException
+               && !IsHttpIntermediaryNotFound(rpcException);
     }
+
+    /// <summary>
+    /// True when Grpc.Net.Client synthesized Unimplemented from a plain HTTP 404 that carried no
+    /// grpc-status, i.e. something in front of the backend (such as a proxy mid-redeploy)
+    /// answered, not the backend's own gRPC service.
+    /// </summary>
+    internal static bool IsHttpIntermediaryNotFound(RpcException exception)
+        => exception.StatusCode == StatusCode.Unimplemented
+           && exception.Status.Detail?.StartsWith(HttpIntermediaryStatusDetailPrefix, StringComparison.Ordinal) == true;
+
+    private const string HttpIntermediaryStatusDetailPrefix = "Bad gRPC response. HTTP status code: ";
+
+    private static readonly TimeSpan NotFoundRetryWindow = TimeSpan.FromHours(6);
 
     private static string DescribePermanentFailure(Exception exception)
     {

@@ -263,7 +263,11 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                     if (_zoneModule.CurrentTrackHasCheckpoints(timerInfo.Track)
                         && timerInfo.CurrentCheckpointInfo is { } currentCp)
                     {
-                        currentCp.Sync = timerInfo.Sync;
+                        // The last segment ends at the End zone. Without its tick the checkpoint's
+                        // Time is 0, which remote submissions reject and local saves store as-is.
+                        currentCp.TimerTick   = timerInfo.TimerTick;
+                        currentCp.EndVelocity = velocity;
+                        currentCp.Sync        = timerInfo.Sync;
                         timerInfo.AddCheckpoint(currentCp);
                     }
 

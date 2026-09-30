@@ -191,12 +191,98 @@ public sealed class RunSubmissionSenderTests : IDisposable
 
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => sender.EnqueueAndWaitAsync(CreateRequest(Guid.NewGuid()), cancellation.Token));
+            () => sender.EnqueueAndWaitAsync(CreateRequest(Guid.NewGuid(), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
+                                             cancellation.Token));
 
         await WaitForAsync(() => transport.SubmitCalls > 0, TimeSpan.FromSeconds(2));
         Assert.Equal(1, transport.SubmitCalls);
         Assert.Equal(0, transport.StatusCalls);
         Assert.Equal(new SubmissionSpoolSnapshot(1, 1, 0), GetSpool().GetSnapshot());
+    }
+
+    [Fact]
+    public async Task NotFoundLongAfterTheFinishIsQuarantined()
+    {
+        var transport = new FakeTransport
+        {
+            Submit = (_, _) => throw new RpcException(new Status(StatusCode.NotFound, "map never provisioned")),
+        };
+        var sender = CreateSender(transport);
+
+        Assert.True(sender.Init());
+
+        var finishedLongAgo = DateTimeOffset.UtcNow.AddDays(-1).ToUnixTimeMilliseconds();
+        await Assert.ThrowsAsync<RunSubmissionRejectedException>(
+            () => sender.EnqueueAndWaitAsync(CreateRequest(Guid.NewGuid(), finishedLongAgo)).WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(new SubmissionSpoolSnapshot(1, 0, 1), GetSpool().GetSnapshot());
+    }
+
+    [Fact]
+    public async Task ProxyAuthFailuresStayPermanent()
+    {
+        var transport = new FakeTransport
+        {
+            Submit = (_, _) => throw new RpcException(new Status(StatusCode.PermissionDenied, "Bad gRPC response. HTTP status code: 403")),
+        };
+        var sender = CreateSender(transport);
+
+        Assert.True(sender.Init());
+
+        await Assert.ThrowsAsync<RunSubmissionRejectedException>(
+            () => sender.EnqueueAndWaitAsync(CreateRequest(Guid.NewGuid())).WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Theory]
+    [InlineData(StatusCode.Unimplemented, 404)]
+    public async Task HttpErrorsFromAProxyAreRetriedNotQuarantined(StatusCode statusCode, int httpStatus)
+    {
+        var transport = new FakeTransport
+        {
+            // Grpc.Net.Client's wording when a non-gRPC HTTP response carries no grpc-status.
+            Submit = (_, _) => throw new RpcException(new Status(statusCode, $"Bad gRPC response. HTTP status code: {httpStatus}")),
+        };
+        var sender = CreateSender(transport);
+
+        Assert.True(sender.Init());
+
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => sender.EnqueueAndWaitAsync(CreateRequest(Guid.NewGuid()), cancellation.Token));
+
+        await WaitForAsync(() => transport.SubmitCalls > 0, TimeSpan.FromSeconds(2));
+        Assert.Equal(new SubmissionSpoolSnapshot(1, 1, 0), GetSpool().GetSnapshot());
+    }
+
+    [Fact]
+    public async Task ShutdownGivesARunWaitingOutABackoffOneFinalAttempt()
+    {
+        var online = 0;
+        var offlineFailures = 0;
+        var transport = new FakeTransport
+        {
+            Submit = (request, _) =>
+            {
+                if (Volatile.Read(ref online) == 0)
+                {
+                    Interlocked.Increment(ref offlineFailures);
+                    throw new RpcException(new Status(StatusCode.Unavailable, "backend offline"));
+                }
+
+                return Task.FromResult(Canonical(request.SubmissionId));
+            },
+        };
+        var sender = CreateSender(transport);
+
+        Assert.True(sender.Init());
+        _ = sender.EnqueueAndWaitAsync(CreateRequest(Guid.NewGuid()));
+        // Wait for the first attempt to have actually failed, not merely started.
+        await WaitForAsync(() => Volatile.Read(ref offlineFailures) == 1, TimeSpan.FromSeconds(2));
+
+        // The backend recovers while the entry is still inside its retry backoff.
+        Volatile.Write(ref online, 1);
+        sender.Shutdown();
+
+        Assert.Equal(2, transport.SubmitCalls);
     }
 
     [Fact]
@@ -377,7 +463,7 @@ public sealed class RunSubmissionSenderTests : IDisposable
         }
     }
 
-    private static SubmitRunRequest CreateRequest(Guid submissionId)
+    private static SubmitRunRequest CreateRequest(Guid submissionId, long finishedAtUnixTimeMilliseconds = 1_725_000_000_000)
     {
         return new SubmitRunRequest
         {
@@ -391,7 +477,7 @@ public sealed class RunSubmissionSenderTests : IDisposable
             TimeMicros                    = 12_345_678,
             Motion                        = new MotionDto(),
             Checkpoints                   = [],
-            FinishedAtUnixTimeMilliseconds = 1_725_000_000_000,
+            FinishedAtUnixTimeMilliseconds = finishedAtUnixTimeMilliseconds,
             ContractVersion                = 1,
             RulesetVersion                 = 1,
         };

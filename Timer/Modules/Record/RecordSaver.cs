@@ -187,7 +187,20 @@ internal sealed class RecordSaver
 
                                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                                                                               {
-                                                                                  if (!_mapCache.IsCurrent(mapLoad)) return;
+                                                                                  if (!_mapCache.IsCurrent(mapLoad))
+                                                                                  {
+                                                                                      // Saved after a map change: still let the replay recorder
+                                                                                      // match its fallback file, as the remote path does.
+                                                                                      _lateReplayListener?.OnRecordSaved(new PlayerRecordSavedEvent(steamId,
+                                                                                          playerName,
+                                                                                          recordType,
+                                                                                          savedRecord,
+                                                                                          null,
+                                                                                          null,
+                                                                                          attemptId));
+                                                                                      return;
+                                                                                  }
+
                                                                                   var recordEvent
                                                                                       = new PlayerRecordSavedEvent(steamId,
                                                                                           playerName,
@@ -294,7 +307,20 @@ internal sealed class RecordSaver
 
                                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                                              {
-                                                 if (!_mapCache.IsCurrent(mapLoad)) return;
+                                                 if (!_mapCache.IsCurrent(mapLoad))
+                                                 {
+                                                     // Saved after a map change: still let the replay recorder
+                                                     // match its fallback file, as the remote path does.
+                                                     _lateReplayListener?.OnRecordSaved(new PlayerRecordSavedEvent(steamId,
+                                                         playerName,
+                                                         recordType,
+                                                         savedRecord,
+                                                         null,
+                                                         null,
+                                                         attemptId));
+                                                     return;
+                                                 }
+
                                                  var recordEvent = new PlayerRecordSavedEvent(steamId,
                                                      playerName,
                                                      recordType,

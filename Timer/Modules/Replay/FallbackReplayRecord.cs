@@ -18,6 +18,8 @@
 using System;
 using System.Threading.Tasks;
 
+using Source2Surf.Timer.Shared.Models.Replay;
+
 namespace Source2Surf.Timer.Modules.Replay;
 
 /// <summary>
@@ -33,6 +35,13 @@ internal sealed class FallbackReplayRecord
     /// late record-saved event arriving after a map change still writes under the correct map.
     /// </summary>
     public required string MapName { get; init; }
+
+    /// <summary>
+    /// The replay still held in memory when this record was created in this process (null when
+    /// restored from disk after a restart). Lets a confirmed PB/WR still reach playback if the
+    /// temp file cannot be written, read, or promoted.
+    /// </summary>
+    public ReplayContent? Content { get; init; }
 
     /// <summary>
     /// Background write task — must be awaited before File.Move or File.ReadAllBytes.

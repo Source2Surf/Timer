@@ -43,4 +43,11 @@ internal class PlayerFrameData
 
     public Guid? PostFrameTimer      { get; set; } = null;
     public Guid? StagePostFrameTimer { get; set; } = null;
+
+    /// <summary>
+    /// A stage finish captured its start tick but has not yet read its finish tick or pushed
+    /// <see cref="StagePostFrameTimer"/> (that happens in the next frame action). Frame indices
+    /// must not move in between, so idle trimming waits for this to clear.
+    /// </summary>
+    public bool StageFinishPending { get; set; }
 }
