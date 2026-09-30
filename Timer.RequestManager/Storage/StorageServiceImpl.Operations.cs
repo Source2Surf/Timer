@@ -29,6 +29,7 @@ internal sealed partial class StorageServiceImpl
         // CopyNew also isolates sibling tasks that inherited the same SqlSugarScope
         // execution context. Every request owns its connection, transaction and token.
         using var database = _rootDb.CopyNew();
+        AttachSlowSqlHook(database);
         var previousDb = _operationDb.Value;
         _operationDb.Value = database;
         var previous = _operationCancellation.Value;

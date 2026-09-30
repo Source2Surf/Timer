@@ -37,8 +37,8 @@ internal sealed partial class StorageServiceImpl : IRequestManager
                               ILogger<StorageServiceImpl> logger,
                               bool                        enableScoreRecalcWorker = true)
     {
-        _rootDb = CreateClient(dbType, connectionString);
         _logger = logger;
+        _rootDb = CreateClient(dbType, connectionString);
 
         if (enableScoreRecalcWorker)
         {

@@ -151,20 +151,22 @@ internal sealed partial class StorageServiceImpl
         }
     }
 
-    private static SqlSugarScope CreateClient(DbType dbType, string connectionString) =>
+    private SqlSugarScope CreateClient(DbType dbType, string connectionString) =>
         new (new ConnectionConfig
         {
             DbType                = dbType,
             ConnectionString      = connectionString,
             IsAutoCloseConnection = true,
             InitKeyType           = InitKeyType.Attribute,
+            // SqlSugar's own messages are bilingual by default. This setting is process-wide.
+            LanguageType          = LanguageType.English,
             // A mixed-version or incomplete entity must never delete a production
             // column merely because CodeFirst does not know about it.
             ConfigureExternalServices = new ConfigureExternalServices
             {
                 EntityNameService = (_, entity) => entity.IsDisabledDelete = true,
             },
-        });
+        }, ConfigureSqlLogging);
 
     private static byte GetTier(byte[]? tiers, int track)
     {
