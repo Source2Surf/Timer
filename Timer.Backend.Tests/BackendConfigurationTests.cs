@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Timer.Backend.Configuration;
+using Timer.Backend.Infrastructure;
 using Xunit;
 
 namespace Timer.Backend.Tests;
@@ -47,6 +51,23 @@ public sealed class BackendConfigurationTests
                                                              .Build());
 
         Assert.Equal("Server=localhost;Database=timer", options.ConnectionString);
+    }
+
+    [Fact]
+    public void HostShutdownBudgetCoversRequestDrainAndWorkerGracePeriod()
+    {
+        var services = new ServiceCollection();
+        TimerBackendRuntimeRegistration.Add(services, new TimerBackendRuntimeOptions
+        {
+            RequestTimeout = TimeSpan.FromSeconds(15),
+            WorkerShutdownTimeout = TimeSpan.FromSeconds(120),
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var host = provider.GetRequiredService<IOptions<HostOptions>>().Value;
+
+        // The 30 s default would cut the configured 120 s worker grace period short.
+        Assert.True(host.ShutdownTimeout >= TimeSpan.FromSeconds(135), host.ShutdownTimeout.ToString());
     }
 
     [Fact]

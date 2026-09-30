@@ -26,10 +26,11 @@ public sealed class MapProfileDto
     public int Bonuses { get; init; }
 
     /// <summary>
-    /// Per-track tiers. Index zero is the main track; the remaining indexes are
-    /// reserved for the other supported tracks.
+    /// Per-track tiers as a JSON number array. Index zero is the main track; the remaining
+    /// indexes are reserved for the other supported tracks. (A byte[] would serialize as a
+    /// base64 string, so the contract uses int.)
     /// </summary>
-    public required byte[] Tier { get; init; }
+    public required int[] Tier { get; init; }
 
     /// <summary>Total recorded play time, in microseconds.</summary>
     public long TotalPlayTimeMicros { get; init; }

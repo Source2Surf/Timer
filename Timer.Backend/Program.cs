@@ -1,9 +1,7 @@
 using System;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Source2Surf.Timer.Backend.Contracts;
 using Timer.Backend.Administration;
 using Timer.Backend.Configuration;
 using Timer.Backend.Endpoints;
@@ -55,6 +53,12 @@ if (administrativeInvocation.Operation is BackendAdministrativeOperation.SetTier
     if (!result.MapFound)
         throw new InvalidOperationException($"Map '{administrativeInvocation.MapName}' was not found.");
     Console.WriteLine(BackendAdministrativeCli.FormatCompletion(administrativeInvocation, result));
+    if (result.FailedMaps.Count > 0)
+    {
+        // Other maps were requeued, but make the partial failure visible to scripts.
+        Environment.ExitCode = 1;
+    }
+
     return;
 }
 
@@ -81,16 +85,7 @@ if (writeApiOptions.Enabled && writeApiOptions.LocalPorts.Count == 0)
 }
 
 app.UseResponseCompression();
-app.UseExceptionHandler(exceptionApplication => exceptionApplication.Run(async context =>
-{
-    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-    await context.Response.WriteAsJsonAsync(new ApiErrorDto
-    {
-        Code = "internal_error",
-        Message = "The request could not be completed.",
-        RequestId = context.TraceIdentifier,
-    }, BackendJsonContext.Default.ApiErrorDto, cancellationToken: context.RequestAborted);
-}));
+app.UseExceptionHandler(exceptionApplication => exceptionApplication.Run(BackendExceptionHandling.WriteErrorAsync));
 app.UseRouting();
 app.UseRequestTimeouts();
 app.UseOutputCache();

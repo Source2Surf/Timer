@@ -148,8 +148,9 @@ internal static class TimerReadEndpoints
                                                           string?             track,
                                                           string?             limit,
                                                           HttpContext         context,
-                                                          TimerBackendStorage storage)
-        => GetLeaderboardAsync(mapName, style, track, stage: null, limit, stageRecords: false, context, storage);
+                                                          TimerBackendStorage storage,
+                                                          ILoggerFactory      loggerFactory)
+        => GetLeaderboardAsync(mapName, style, track, stage: null, limit, stageRecords: false, context, storage, loggerFactory);
 
     private static Task<IResult> GetStageLeaderboardAsync(string              mapName,
                                                            string?             style,
@@ -157,8 +158,9 @@ internal static class TimerReadEndpoints
                                                            string?             stage,
                                                            string?             limit,
                                                            HttpContext         context,
-                                                           TimerBackendStorage storage)
-        => GetLeaderboardAsync(mapName, style, track, stage, limit, stageRecords: true, context, storage);
+                                                           TimerBackendStorage storage,
+                                                          ILoggerFactory      loggerFactory)
+        => GetLeaderboardAsync(mapName, style, track, stage, limit, stageRecords: true, context, storage, loggerFactory);
 
     private static async Task<IResult> GetLeaderboardAsync(string              mapName,
                                                             string?             style,
@@ -167,7 +169,8 @@ internal static class TimerReadEndpoints
                                                             string?             limit,
                                                             bool                stageRecords,
                                                             HttpContext         context,
-                                                            TimerBackendStorage storage)
+                                                            TimerBackendStorage storage,
+                                                          ILoggerFactory      loggerFactory)
     {
         if (!ApiRouteValidation.TryNormalizeMapName(mapName, out var canonicalMapName, out var error))
         {
@@ -201,7 +204,7 @@ internal static class TimerReadEndpoints
         var response = new RecordListResponse
         {
             MapName = canonicalMapName,
-            Records = ToRecordDtos(records),
+            Records = ToRecordDtos(records, loggerFactory),
         };
         var entityTag = EntityTags.For(response);
 
@@ -218,7 +221,8 @@ internal static class TimerReadEndpoints
 
     private static async Task<IResult> GetRecordCheckpointsAsync(string              runId,
                                                                    HttpContext         context,
-                                                                   TimerBackendStorage storage)
+                                                                   TimerBackendStorage storage,
+                                                          ILoggerFactory      loggerFactory)
     {
         if (!ApiRouteValidation.TryParseRunId(runId, out var parsedRunId, out var error))
         {
@@ -226,21 +230,31 @@ internal static class TimerReadEndpoints
         }
 
         var checkpoints = await storage.GetRecordCheckpointsAsync(unchecked((long)parsedRunId), context.RequestAborted);
-        var response = new RunCheckpointDto[checkpoints.Count];
+        var response = new List<RunCheckpointDto>(checkpoints.Count);
 
-        for (var index = 0; index < checkpoints.Count; index++)
+        foreach (var checkpoint in checkpoints)
         {
-            response[index] = TimerDtoMapper.ToDto(checkpoints[index]);
+            if (TimerDtoMapper.TryToDto(checkpoint, out var dto))
+            {
+                response.Add(dto);
+            }
+            else
+            {
+                loggerFactory.CreateLogger("Timer.Backend.ReadApi")
+                             .LogWarning("Skipping checkpoint {CheckpointId} of run {RunId} with an unrepresentable stored time {Time}.",
+                                         checkpoint.Id, checkpoint.RecordId, checkpoint.Time);
+            }
         }
 
-        return TypedResults.Ok(response);
+        return TypedResults.Ok(response.ToArray());
     }
 
     private static async Task<IResult> GetPlayerMainRecordsAsync(string              steamId,
                                                                    string              mapName,
                                                                    string?             limit,
                                                                    HttpContext         context,
-                                                                   TimerBackendStorage storage)
+                                                                   TimerBackendStorage storage,
+                                                          ILoggerFactory      loggerFactory)
     {
         if (!TryGetPlayerAndMap(steamId, mapName, context, out var parsedSteamId, out var canonicalMapName, out var errorResult))
         {
@@ -264,7 +278,7 @@ internal static class TimerReadEndpoints
         return TypedResults.Ok(new RecordListResponse
         {
             MapName = canonicalMapName,
-            Records = ToRecordDtos(records),
+            Records = ToRecordDtos(records, loggerFactory),
         });
     }
 
@@ -272,7 +286,8 @@ internal static class TimerReadEndpoints
                                                                     string              mapName,
                                                                     string?             limit,
                                                                     HttpContext         context,
-                                                                    TimerBackendStorage storage)
+                                                                    TimerBackendStorage storage,
+                                                          ILoggerFactory      loggerFactory)
     {
         if (!TryGetPlayerAndMap(steamId, mapName, context, out var parsedSteamId, out var canonicalMapName, out var errorResult))
         {
@@ -296,7 +311,7 @@ internal static class TimerReadEndpoints
         return TypedResults.Ok(new RecordListResponse
         {
             MapName = canonicalMapName,
-            Records = ToRecordDtos(records),
+            Records = ToRecordDtos(records, loggerFactory),
         });
     }
 
@@ -338,7 +353,7 @@ internal static class TimerReadEndpoints
         {
             SteamId         = TimerDtoMapper.ToUnsignedId(parsedSteamId),
             MapName         = canonicalMapName,
-            PlayTimeMicros  = TimerDtoMapper.ToMicroseconds(playTime),
+            PlayTimeMicros  = TimerDtoMapper.ToMicrosecondsOrZero(playTime),
             PlayCount       = playCount,
         });
     }
@@ -369,16 +384,26 @@ internal static class TimerReadEndpoints
         return true;
     }
 
-    private static RunRecordDto[] ToRecordDtos(IReadOnlyList<RunRecord> records)
+    private static RunRecordDto[] ToRecordDtos(IReadOnlyList<RunRecord> records, ILoggerFactory loggerFactory)
     {
-        var result = new RunRecordDto[records.Count];
+        var result = new List<RunRecordDto>(records.Count);
 
-        for (var index = 0; index < records.Count; index++)
+        foreach (var record in records)
         {
-            result[index] = TimerDtoMapper.ToDto(records[index]);
+            if (TimerDtoMapper.TryToDto(record, out var dto))
+            {
+                result.Add(dto);
+            }
+            else
+            {
+                // One corrupt legacy row must not turn the whole list into a 500.
+                loggerFactory.CreateLogger("Timer.Backend.ReadApi")
+                             .LogWarning("Skipping run {RunId} with an unrepresentable stored time {Time}.",
+                                         record.Id, record.Time);
+            }
         }
 
-        return result;
+        return result.ToArray();
     }
 }
 

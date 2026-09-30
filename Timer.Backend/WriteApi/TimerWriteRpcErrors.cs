@@ -12,6 +12,7 @@ internal static class TimerWriteRpcErrors
     private const string NotFoundMessage = "The requested resource does not exist.";
     private const string ConflictMessage = "The submission conflicts with a prior request.";
     private const string InternalFailureMessage = "The request could not be completed.";
+    private const string UnavailableMessage = "The timer database is unavailable.";
     private const string NotServedOnListenerMessage = "The write API is not served on this listener.";
 
     public static RpcException InvalidArgument()
@@ -49,6 +50,7 @@ internal static class TimerWriteRpcErrors
             TimerBackendPlayerNotFoundException => new RpcException(new Status(StatusCode.NotFound, NotFoundMessage)),
             TimerBackendSubmissionConflictException => new RpcException(new Status(StatusCode.AlreadyExists, ConflictMessage)),
             TimerBackendSubmissionPolicyException => RulesetMismatch(),
+            TimerBackendUnavailableException => LogAndUnavailable(exception, logger),
             _ => LogAndInternal(exception, logger),
         };
     }
@@ -57,6 +59,12 @@ internal static class TimerWriteRpcErrors
         => deadlineUtc != DateTime.MaxValue && deadlineUtc <= DateTime.UtcNow
             ? new RpcException(new Status(StatusCode.DeadlineExceeded, "The request deadline elapsed."))
             : new RpcException(new Status(StatusCode.Cancelled, "The request was cancelled."));
+
+    private static RpcException LogAndUnavailable(Exception exception, ILogger logger)
+    {
+        logger.LogWarning(exception, "Timer write RPC failed because the database is unavailable.");
+        return new RpcException(new Status(StatusCode.Unavailable, UnavailableMessage));
+    }
 
     private static RpcException LogAndInternal(Exception exception, ILogger logger)
     {

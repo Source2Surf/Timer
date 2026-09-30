@@ -20,6 +20,8 @@ public sealed class ApiRouteValidationTests
     [InlineData("surf/test")]
     [InlineData("surf\\test")]
     [InlineData("surf\ntest")]
+    [InlineData("surf_édge")]
+    [InlineData("surf edge")]
     public void InvalidMapNameIsRejected(string value)
         => Assert.False(ApiRouteValidation.TryNormalizeMapName(value, out _, out _));
 

@@ -135,6 +135,17 @@ public sealed class TimerWriteApiOptionsTests
         Assert.Equal(new[] { 5082 }, TimerWriteApiOptions.FromConfiguration(Build(scalarValues)).LocalPorts);
     }
 
+    [Fact]
+    public void LocalPortsSetAsBothScalarAndListFailsFast()
+    {
+        // An env scalar layered over an appsettings array would otherwise merge into both ports.
+        var values = EnabledValues();
+        values["TimerBackend:WriteApi:LocalPorts:0"] = "5082";
+        values["TimerBackend:WriteApi:LocalPorts"] = "6000";
+
+        Assert.Throws<InvalidOperationException>(() => TimerWriteApiOptions.FromConfiguration(Build(values)));
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("65536")]

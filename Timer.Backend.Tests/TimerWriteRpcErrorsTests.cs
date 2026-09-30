@@ -28,6 +28,17 @@ public sealed class TimerWriteRpcErrorsTests
     }
 
     [Fact]
+    public void DatabaseOutageMapsToUnavailableWithoutDetails()
+    {
+        var translated = TimerWriteRpcErrors.Translate(
+            new TimerBackendUnavailableException(new InvalidOperationException("private connection detail")),
+            NullLogger.Instance);
+
+        Assert.Equal(StatusCode.Unavailable, translated.StatusCode);
+        Assert.DoesNotContain("private", translated.Status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PlayerProfileValidationMapsToInvalidArgumentWithoutDetails()
     {
         var translated = TimerWriteRpcErrors.Translate(

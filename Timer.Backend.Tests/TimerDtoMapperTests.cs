@@ -49,7 +49,7 @@ public sealed class TimerDtoMapperTests
 
         Assert.Equal("42", dto.MapId);
         Assert.Equal(2_500_000, dto.TotalPlayTimeMicros);
-        Assert.Equal(new byte[] { 1, 6 }, dto.Tier);
+        Assert.Equal(new[] { 1, 6 }, dto.Tier);
     }
 
     [Theory]
@@ -63,6 +63,20 @@ public sealed class TimerDtoMapperTests
     [Fact]
     public void OversizedStoredDurationIsRejected()
         => Assert.Throws<OverflowException>(() => TimerDtoMapper.ToMicroseconds(float.MaxValue));
+
+    [Theory]
+    [InlineData(-0.001f)]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.MaxValue)]
+    public void UnrepresentableRecordTimeIsReportedWithoutThrowing(float seconds)
+    {
+        var record = new RunRecord { Id = 1, SteamId = 2, MapId = 3, Time = seconds, RunDate = DateTime.UtcNow };
+
+        Assert.False(TimerDtoMapper.TryToDto(record, out var dto));
+        Assert.Null(dto);
+        Assert.Equal(0, TimerDtoMapper.ToMicrosecondsOrZero(seconds));
+    }
 
     [Theory]
     [InlineData(0L, "0")]

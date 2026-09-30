@@ -27,16 +27,20 @@ internal static class ApiRouteValidation
             return false;
         }
 
-        foreach (var character in normalized)
+        var lowered = normalized.ToLowerInvariant();
+
+        // Same character set the write path accepts. Anything else cannot name a stored map, and
+        // on MySQL an accented name would otherwise match a different map through the collation.
+        foreach (var character in lowered)
         {
-            if (char.IsControl(character) || character is '/' or '\\')
+            if (!(character is >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '_' or '-'))
             {
                 error = "mapName contains an unsupported character.";
                 return false;
             }
         }
 
-        mapName = normalized.ToLowerInvariant();
+        mapName = lowered;
         return true;
     }
 

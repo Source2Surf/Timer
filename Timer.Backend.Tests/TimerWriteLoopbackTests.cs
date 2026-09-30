@@ -93,6 +93,23 @@ public sealed class TimerWriteLoopbackTests
         Assert.Equal("HTTP/2", await server.RequestProtocol.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    [Theory]
+    [InlineData(new byte[] { 0xC1, 0xFF, 0x00, 0x13 })]   // reserved MessagePack code
+    [InlineData(new byte[] { 0x05 })]                     // fixint where an array is expected
+    [InlineData(new byte[] { 0xDD, 0x80, 0x00, 0x00, 0x00 })] // array header claiming 2^31 elements
+    public async Task MalformedMessagePackIsReportedAsInvalidArgument(byte[] payload)
+    {
+        await using var server = await LoopbackServer.StartAsync();
+        using var channel = GrpcChannel.ForAddress(server.Address);
+        var raw = new Marshaller<byte[]>(static bytes => bytes, static bytes => bytes);
+        var method = new Method<byte[], byte[]>(MethodType.Unary, nameof(ITimerWriteServiceV1), "SubmitRunAsync", raw, raw);
+
+        var exception = await Assert.ThrowsAsync<RpcException>(async () =>
+            await channel.CreateCallInvoker().AsyncUnaryCall(method, null, new CallOptions(), payload));
+
+        Assert.Equal(StatusCode.InvalidArgument, exception.StatusCode);
+    }
+
     [Fact]
     public async Task WriteApiIsServedOnlyOnConfiguredLocalPorts()
     {

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using Timer.Backend.Configuration;
 using Timer.RequestManager.Backend;
@@ -12,7 +14,50 @@ namespace Timer.Backend.Administration;
 /// </summary>
 internal static class BackendAdministrativeCli
 {
+    private static readonly string[] CommandNames = ["migrate", "convert-run-dates", "set-tier", "recalc-scores", "keygen"];
+
     internal static BackendAdministrativeInvocation Parse(string[] args)
+    {
+        var invocation = ParseCommand(args);
+        EnsureOnlyConfigurationSwitches(invocation.ConfigurationArguments);
+        return invocation;
+    }
+
+    /// <summary>
+    /// Everything left after a command (or every argument when serving) is handed to the ASP.NET
+    /// command-line configuration provider, which silently drops bare words. A typo such as
+    /// "recalc-score all", a command placed after a switch, or an extra positional argument would
+    /// otherwise start the full server (with the write API and worker) instead of failing.
+    /// </summary>
+    private static void EnsureOnlyConfigurationSwitches(IReadOnlyList<string> args)
+    {
+        for (var index = 0; index < args.Count; index++)
+        {
+            var argument = args[index];
+            if (argument.StartsWith('-') || argument.StartsWith('/'))
+            {
+                if (!argument.Contains('='))
+                {
+                    index++; // "--Key Value": the next argument is this switch's value.
+                }
+
+                continue;
+            }
+
+            if (argument.Contains('='))
+            {
+                continue; // "Key=Value" is also accepted by the configuration provider.
+            }
+
+            var hint = CommandNames.Contains(argument, StringComparer.OrdinalIgnoreCase)
+                ? " Administrative commands must be the first argument."
+                : string.Empty;
+            throw new ArgumentException(
+                $"Unrecognized argument '{argument}'.{hint} Configuration switches use --Key=Value or --Key Value.");
+        }
+    }
+
+    private static BackendAdministrativeInvocation ParseCommand(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
 
@@ -156,10 +201,17 @@ internal static class BackendAdministrativeCli
         var tier = invocation.Operation == BackendAdministrativeOperation.SetTier
                      ? $" Tier {result.PreviousTier} -> {result.CurrentTier}."
                      : string.Empty;
-        return $"Completed score administration for {target}.{tier} "
-             + $"Queued {result.BoardsQueued} board(s) across {result.MapsAffected} map(s); "
-             + $"reactivated {result.DeadLettersRequeued} dead-lettered board(s); "
-             + $"skipped {result.DisabledStyleBoardsSkipped} board(s) whose styles are absent from the current policy.";
+        var completion = $"Completed score administration for {target}.{tier} "
+                       + $"Queued {result.BoardsQueued} board(s) across {result.MapsAffected} map(s); "
+                       + $"reactivated {result.DeadLettersRequeued} dead-lettered board(s); "
+                       + $"skipped {result.DisabledStyleBoardsSkipped} board(s) whose styles are absent from the current policy.";
+        return result.FailedMaps.Count == 0
+            ? completion
+            : completion
+            + Environment.NewLine
+            + $"{result.FailedMaps.Count} map(s) were NOT requeued:"
+            + Environment.NewLine
+            + string.Join(Environment.NewLine, result.FailedMaps.Select(failure => "  " + failure));
     }
 }
 

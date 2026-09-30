@@ -245,7 +245,10 @@ both ports to loopback; deployment and network access policy are operator-owned.
   HTTP/2 (for example HTTPS with the default protocols). The check uses the
   connection's local port, not the client-supplied host header; calls on other
   listeners get `Unimplemented`. The host logs a warning when the write API is
-  enabled without this setting.
+  enabled without this setting. Set it either as a JSON array or as a single
+  value (`TimerBackend__WriteApi__LocalPorts=5082`), not both. It only applies to
+  TCP listeners: a Unix-socket or named-pipe listener has no local port, so leave
+  `LocalPorts` unset if the gRPC proxy connects that way.
 
 With all mutation switches disabled, request handling uses typed SQLSugar reads only,
 so the backend can run with a database role limited to `SELECT` on the Timer
@@ -272,10 +275,15 @@ dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Back
 
 `set-tier` accepts tiers 1 through 255, changes only the main-track tier, and
 queues every affected configured main-track board in the same map-locked SQL
-transaction. Before committing, it rejects a tier whose rank-one score or a
-exact projection of any affected player's cross-style total cannot fit the
-persisted unsigned score fields. A failed queue write rolls the tier change
-back with the transaction.
+transaction. Before committing, it rejects a tier whose rank-one score on an
+affected board cannot fit the persisted unsigned score field. A player's total
+across boards is not a reason to reject: the score worker caps a total that
+would exceed the unsigned range at its maximum and logs a warning. A failed
+queue write rolls the tier change back with the transaction.
+
+`recalc-scores` applies the same per-board check to every board it requeues.
+With `all`, a map that fails the check is skipped and named in the output
+(exit code 1) while every other map is still requeued.
 
 Use `recalc-scores` after changing `WriteApi:StyleFactors` (or after repairing a
 score worker failure). It requeues all known score boards for its target using
@@ -294,7 +302,7 @@ factors as the serving write instance.
 | Route | Purpose |
 | --- | --- |
 | `GET /health/live` | Process liveness; does not query SQL. |
-| `GET /health/ready` | Typed SQL readiness query. Read-only roles probe `surf_maps`; write and dedicated-worker roles also require `surf_run_submissions`, `surf_score_recalc_outbox`, and the Inbox `SubmissionId` unique index. |
+| `GET /health/ready` | Typed SQL readiness query. Read-only roles probe `surf_maps`; write and dedicated-worker roles probe every table the write path uses. The full table/index metadata check (Inbox `SubmissionId` unique index, Outbox indexes) runs at startup and is re-verified at most every 5 minutes, by one probe at a time. With `AllowReadRepair` enabled, readiness also fails if the database principal cannot update or insert into `surf_player_best_runs` (the insert is always rolled back and is re-checked at most every 5 minutes). |
 | `GET /health/worker` | Worker scan freshness, pending work age and persisted dead letters; HTTP 503 when degraded. |
 | `GET /api/v1/maps` | Sorted canonical map names. |
 | `GET /api/v1/maps/{mapName}` | Existing map profile; never creates a map row. |

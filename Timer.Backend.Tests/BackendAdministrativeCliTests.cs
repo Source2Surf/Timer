@@ -92,6 +92,43 @@ public sealed class BackendAdministrativeCliTests
     }
 
     [Fact]
+    public void CompletionListsMapsThatWereNotRequeued()
+    {
+        var invocation = BackendAdministrativeCli.Parse(["recalc-scores", "all"]);
+        var result = new Timer.RequestManager.Backend.TimerBackendScoreAdministrationResult
+        {
+            MapFound = true,
+            MapsAffected = 1,
+            FailedMaps = ["surf_bad: Score factor 1 for style 0 on track 0 of map 'surf_bad' (tier 27) would produce an unrepresentable score."],
+        };
+
+        var completion = BackendAdministrativeCli.FormatCompletion(invocation, result);
+
+        Assert.Contains("1 map(s) were NOT requeued", completion, StringComparison.Ordinal);
+        Assert.Contains("surf_bad", completion, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("recalc-score", "all")]                               // typo of a command
+    [InlineData("--environment", "Production", "recalc-scores", "all")] // command after a switch
+    [InlineData("set-tier", "surf_x", "3", "4")]                       // extra positional argument
+    [InlineData("migrate", "now")]
+    public void ArgumentsThatWouldBeSilentlyDroppedAreRejected(params string[] args)
+    {
+        // The configuration provider ignores bare words, so these would otherwise start the server.
+        Assert.Throws<ArgumentException>(() => BackendAdministrativeCli.Parse(args));
+    }
+
+    [Fact]
+    public void ConfigurationSwitchFormsAreAccepted()
+    {
+        var invocation = BackendAdministrativeCli.Parse(
+            ["--urls", "http://127.0.0.1:5081", "--TimerBackend:Database:Type=mysql", "/environment", "Production", "Logging:LogLevel:Default=Warning"]);
+
+        Assert.Equal(BackendAdministrativeOperation.Serve, invocation.Operation);
+    }
+
+    [Fact]
     public void OrdinaryServerArgumentsRemainUntouched()
     {
         var invocation = BackendAdministrativeCli.Parse(["--urls", "http://127.0.0.1:5081"]);

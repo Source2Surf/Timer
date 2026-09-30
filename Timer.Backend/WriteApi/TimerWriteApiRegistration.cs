@@ -45,7 +45,8 @@ internal static class TimerWriteApiRegistration
                 grpc.Interceptors.Add<TimerWriteListenerInterceptor>();
             }
         });
-        services.AddMagicOnion();
+        services.AddMagicOnion(magicOnion =>
+            magicOnion.MessageSerializer = new TimerWriteMessageSerializerProvider());
     }
 
     public static void Map(IEndpointRouteBuilder endpoints, TimerWriteApiOptions options)

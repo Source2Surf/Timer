@@ -312,6 +312,11 @@ public sealed class BackendResilienceTests
         Assert.Equal(HttpStatusCode.OK, warm.StatusCode);
         Assert.Equal(initialBody, await warm.Content.ReadAsStringAsync());
 
+        // Parameters the endpoint ignores must not create a separate (uncached) entry.
+        using var junkQuery = await client.GetAsync($"{path}&cachebuster={Guid.NewGuid():N}");
+        Assert.Equal(HttpStatusCode.OK, junkQuery.StatusCode);
+        Assert.Equal(initialBody, await junkQuery.Content.ReadAsStringAsync());
+
         using var conditional = new HttpRequestMessage(HttpMethod.Get, path);
         conditional.Headers.TryAddWithoutValidation("If-None-Match", entityTag);
         using var notModified = await client.SendAsync(conditional);
@@ -416,6 +421,62 @@ public sealed class BackendResilienceTests
 
         using var differentKey = await client.GetAsync($"{basePath}?limit=2");
         Assert.Equal(HttpStatusCode.InternalServerError, differentKey.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReadRepairReadinessProbeLeavesNoRowsBehind()
+    {
+        using var fixture = new Fixture();
+        fixture.Owner.Start(false, allowReadRepair: true);
+
+        // The INSERT privilege probe writes a best-run row and must always roll it back.
+        await fixture.Owner.CheckReadyAsync();
+        await fixture.Owner.CheckReadyAsync();
+
+        Assert.Equal(0, await fixture.Store.Db.Queryable<PlayerBestRunEntity>().CountAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ReadsReport503WhenTheDatabaseCannotAnswerAtAll()
+    {
+        using var fixture = new Fixture();
+        fixture.Owner.Start(false, false);
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(5));
+        using var client = new HttpClient { BaseAddress = Address(app) };
+
+        // With the map table gone even the trivial reachability query fails, which is how a
+        // provider outage looks after SqlSugar has wrapped the driver exception.
+        fixture.Store.Db.DbMaintenance.DropTable<MapEntity>();
+
+        using var response = await client.GetAsync("/api/v1/maps");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("database_unavailable", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task OneCorruptStoredRunDoesNotFailTheWholeLeaderboard()
+    {
+        using var fixture = new Fixture();
+        var map = await fixture.Store.GetMapInfo($"surf_corrupt_row_{Guid.NewGuid():N}");
+        var good = new SteamID(76561198000000007UL);
+        var corrupt = new SteamID(76561198000000008UL);
+        await fixture.Store.AddPlayerRecord(good, map.MapName, new RecordRequest { Time = 80 });
+        await fixture.Store.AddPlayerRecord(corrupt, map.MapName, new RecordRequest { Time = 90 });
+        await fixture.Store.Db.Updateable<RunEntity>()
+                     .SetColumns(run => run.Time == -1f)
+                     .Where(run => run.SteamId == unchecked((long)corrupt.AsPrimitive()))
+                     .ExecuteCommandAsync();
+        fixture.Owner.Start(false, false);
+        await using var app = await StartAppAsync(fixture.Owner, timeout: TimeSpan.FromSeconds(5));
+        using var client = new HttpClient { BaseAddress = Address(app) };
+
+        using var response = await client.GetAsync($"/api/v1/maps/{map.MapName}/leaderboard");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var record = Assert.Single(document.RootElement.GetProperty("records").EnumerateArray());
+        Assert.Equal(good.AsPrimitive().ToString(), record.GetProperty("steamId").GetString());
     }
 
     [Fact]
@@ -573,16 +634,7 @@ public sealed class BackendResilienceTests
         TimerWriteApiRegistration.Add(builder.Services, write);
         var app = builder.Build();
         app.UseResponseCompression();
-        app.UseExceptionHandler(exceptionApplication => exceptionApplication.Run(async context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            await context.Response.WriteAsJsonAsync(new ApiErrorDto
-            {
-                Code = "internal_error",
-                Message = "The request could not be completed.",
-                RequestId = context.TraceIdentifier,
-            }, BackendJsonContext.Default.ApiErrorDto, cancellationToken: context.RequestAborted);
-        }));
+        app.UseExceptionHandler(exceptionApplication => exceptionApplication.Run(BackendExceptionHandling.WriteErrorAsync));
         app.Use(async (context, next) => { onRequest?.Invoke(); await next(context); });
         app.UseRouting();
         app.UseRequestTimeouts();

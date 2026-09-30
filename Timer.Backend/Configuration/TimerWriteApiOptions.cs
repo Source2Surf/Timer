@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using Microsoft.Extensions.Configuration;
 
 namespace Timer.Backend.Configuration;
@@ -104,14 +105,23 @@ internal sealed class TimerWriteApiOptions
     {
         var localPorts = new HashSet<int>();
 
-        // Accept a single scalar (environment variable) as well as a JSON array.
+        // Accept a single scalar (environment variable) or a JSON array, but not both: configuration
+        // layers merge rather than replace, so an env scalar on top of an appsettings array would
+        // silently keep the old ports allowed alongside the new one.
         var rawPorts = new List<(string Path, string? Value)>();
+        var children = section.GetChildren().ToList();
         if (!string.IsNullOrWhiteSpace(section.Value))
         {
+            if (children.Count != 0)
+            {
+                throw new InvalidOperationException(
+                    $"{section.Path} is set both as a single value and as a list (e.g. an environment variable over an appsettings array). Use one form; for a list in environment variables use {section.Path.Replace(":", "__")}__0, __1, ...");
+            }
+
             rawPorts.Add((section.Path, section.Value));
         }
 
-        foreach (var child in section.GetChildren())
+        foreach (var child in children)
         {
             rawPorts.Add((child.Path, child.Value));
         }

@@ -38,6 +38,18 @@ public sealed class BackendJsonContractTests
     }
 
     [Fact]
+    public void MapProfileTiersSerializeAsANumberArray()
+    {
+        var profile = new MapProfileDto { MapId = "1", MapName = "surf_contract", Tier = [1, 6] };
+
+        var options = new JsonOptions();
+        BackendJsonOptions.Configure(options);
+        var json = JsonSerializer.Serialize(profile, options.SerializerOptions);
+
+        Assert.Contains("\"tier\":[1,6]", json);
+    }
+
+    [Fact]
     public void MapCatalogSerializesNamesWithoutProfiles()
     {
         var response = new MapListResponse { MapNames = ["surf_a", "surf_b"] };
