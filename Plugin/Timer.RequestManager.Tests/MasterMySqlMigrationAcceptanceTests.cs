@@ -399,7 +399,7 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
         foreach (var argument in new[]
                  {
                      "run", "--no-build", "--no-restore", "--configuration", "Release",
-                     "--project", Path.Combine(repositoryRoot, "Timer.Backend", "Timer.Backend.csproj"), "--",
+                     "--project", Path.Combine(repositoryRoot, "Backend", "Timer.Backend", "Timer.Backend.csproj"), "--",
                  }.Concat(arguments))
         {
             startInfo.ArgumentList.Add(argument);
@@ -489,7 +489,7 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Timer.Backend", "Timer.Backend.csproj")))
+            if (File.Exists(Path.Combine(directory.FullName, "Backend", "Timer.Backend", "Timer.Backend.csproj")))
             {
                 return directory.FullName;
             }

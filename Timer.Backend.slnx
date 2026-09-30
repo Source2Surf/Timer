@@ -1,9 +1,13 @@
 <Solution>
-  <Project Path="Timer.Backend/Timer.Backend.csproj" />
-  <Project Path="Timer.Backend.Contracts/Timer.Backend.Contracts.csproj" />
-  <Project Path="Timer.Backend.Rpc.Contracts/Timer.Backend.Rpc.Contracts.csproj" />
-  <Project Path="Timer.RequestManager/Timer.RequestManager.csproj" />
-  <Project Path="Timer.Shared/Timer.Shared.csproj" />
-  <Project Path="Timer.Backend.Tests/Timer.Backend.Tests.csproj" />
-  <Project Path="Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
+  <Folder Name="/Backend/">
+    <Project Path="Backend/Timer.Backend/Timer.Backend.csproj" />
+    <Project Path="Backend/Timer.Backend.Contracts/Timer.Backend.Contracts.csproj" />
+    <Project Path="Backend/Timer.Backend.Rpc.Contracts/Timer.Backend.Rpc.Contracts.csproj" />
+    <Project Path="Backend/Timer.Backend.Tests/Timer.Backend.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Plugin/">
+    <Project Path="Plugin/Timer.RequestManager/Timer.RequestManager.csproj" />
+    <Project Path="Plugin/Timer.Shared/Timer.Shared.csproj" />
+    <Project Path="Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
+  </Folder>
 </Solution>

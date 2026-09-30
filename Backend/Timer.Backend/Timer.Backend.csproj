@@ -15,8 +15,8 @@
     <PackageReference Include="MagicOnion.Server" Version="7.10.2" />
     <ProjectReference Include="..\Timer.Backend.Contracts\Timer.Backend.Contracts.csproj" />
     <ProjectReference Include="..\Timer.Backend.Rpc.Contracts\Timer.Backend.Rpc.Contracts.csproj" />
-    <ProjectReference Include="..\Timer.RequestManager\Timer.RequestManager.csproj" />
-    <ProjectReference Include="..\Timer.Shared\Timer.Shared.csproj" />
+    <ProjectReference Include="..\..\Plugin\Timer.RequestManager\Timer.RequestManager.csproj" />
+    <ProjectReference Include="..\..\Plugin\Timer.Shared\Timer.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,7 @@
 Run the storage regression tests with:
 
 ```sh
-dotnet test Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj
+dotnet test Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj
 ```
 
 The default tests use isolated temporary SQLite files. The fixture adapts identity
@@ -49,7 +49,7 @@ Backend resilience acceptance is available through
 `pwsh -File scripts/test-backend-acceptance.ps1 -DisposableDatabases`.
 It requires both loopback test databases, runs the real master migration first,
 then executes storage/backend/plugin suites including TLS, and rejects skipped
-tests. See `Timer.Backend/README.md` for the destructive test-database setup.
+tests. See `Backend/Timer.Backend/README.md` for the destructive test-database setup.
 
 `DatabaseCancellationTests` checks both production providers with independent
 connections: cancelling a locked submission does not block a concurrent read or

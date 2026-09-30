@@ -10,7 +10,7 @@ if (-not $BackupConfirmed)
     throw 'Stop every writer and verify a restorable database backup first. Re-run with -BackupConfirmed only after that check.'
 }
 
-$projectPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'Timer.Backend/Timer.Backend.csproj'
+$projectPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'Backend/Timer.Backend/Timer.Backend.csproj'
 if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
     throw "Timer.Backend project not found at $projectPath"
 }

@@ -21,7 +21,7 @@ dotnet test Timer.Backend.slnx -c Release --no-build
 
 ## 从上一版测试包升级
 
-当前源码增加了可空的 `surf_players.JoinedAtUtc`；之前的 `surf_score_recalc_outbox.PendingSinceUtc` 迁移也仍适用。首次加入时间从已有 `UpdatedAt` 回填一次，之后不随改名或积分变化。迁移还会将无效游玩时长归零、保留游玩次数并记录修复数量。使用上一版测试库时，先停止写入端和 worker、备份数据库，再用本版代码执行 `migrate`，完成后启动服务。已转换过的 `surf_runs.Date` 不需要再次执行日期转换。启动检查会拒绝尚未升级的写入数据库，详细步骤见 [更新旧测试包](Timer.Backend/README.md#update-an-earlier-backend-test-bundle)。
+当前源码增加了可空的 `surf_players.JoinedAtUtc`；之前的 `surf_score_recalc_outbox.PendingSinceUtc` 迁移也仍适用。首次加入时间从已有 `UpdatedAt` 回填一次，之后不随改名或积分变化。迁移还会将无效游玩时长归零、保留游玩次数并记录修复数量。使用上一版测试库时，先停止写入端和 worker、备份数据库，再用本版代码执行 `migrate`，完成后启动服务。已转换过的 `surf_runs.Date` 不需要再次执行日期转换。启动检查会拒绝尚未升级的写入数据库，详细步骤见 [更新旧测试包](../Backend/Timer.Backend/README.md#update-an-earlier-backend-test-bundle)。
 
 本次修复了长耗时重算在租约接管后的完成记账、并发区域保存、持续失败任务的积压告警，以及管理操作的取消和释放时序。删除成绩后仍保留提交回执，防止旧请求重放复活已删除的成绩。
 
@@ -30,13 +30,13 @@ dotnet test Timer.Backend.slnx -c Release --no-build
 ## 启动 API 测试
 
 1. 创建专用测试数据库和测试用户；源码包不包含数据库密码或数据。
-2. 复制 `Timer.Backend/appsettings.example.json` 为 `Timer.Backend/appsettings.Production.json`，填写 `TimerBackend:Database:Type`（`postgresql` 或 `mysql`）及 `ConnectionString`。
-3. 对全新的空测试库，首次启动前在 `TimerBackend` 下设置 `InitializeSchema: true`。表创建成功后恢复为 `false`。已有 Timer 数据库应按 [后端迁移说明](Timer.Backend/README.md#upgrade-an-existing-master-sql-database) 升级，不要用新库初始化步骤替代迁移。
+2. 复制 `Backend/Timer.Backend/appsettings.example.json` 为 `Backend/Timer.Backend/appsettings.Production.json`，填写 `TimerBackend:Database:Type`（`postgresql` 或 `mysql`）及 `ConnectionString`。
+3. 对全新的空测试库，首次启动前在 `TimerBackend` 下设置 `InitializeSchema: true`。表创建成功后恢复为 `false`。已有 Timer 数据库应按 [后端迁移说明](../Backend/Timer.Backend/README.md#upgrade-an-existing-master-sql-database) 升级，不要用新库初始化步骤替代迁移。
 4. 测试写入时设置 `TimerBackend:WriteApi:Enabled: true`。这会同时启用积分 Outbox worker；默认只开放读取，写 API 关闭。
 5. 确保环境为 `Production` 后，从根目录运行：
 
 ```sh
-dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj
+dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj
 ```
 
 PowerShell 可用 `$env:DOTNET_ENVIRONMENT='Production'` 设置环境；Linux shell 使用 `export DOTNET_ENVIRONMENT=Production`。配置示例仅监听本机，读取端口为 5081，写入端口为 5082。

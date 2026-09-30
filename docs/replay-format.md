@@ -130,7 +130,7 @@ for measured allocations and loading times.
 
 ## Regression coverage
 
-`Timer.Tests/ReplayStorageFormatTests.cs` includes captured V1 files,
+`Plugin/Timer.Tests/ReplayStorageFormatTests.cs` includes captured V1 files,
 an independently specified 35-byte fixture, low-bit preservation and high-bit
 truncation for all 64 button positions in each mask, mixed high/low masks,
 int24/int16 limits on every component, sign extension, midpoint rounding, range
@@ -140,5 +140,5 @@ headers/payloads. It also checks allocation bounds, asynchronous writes across b
 boundaries, large headers, pooled buffer ownership, and corrupt-file backup on Windows.
 V2 fixtures load through both readers using only `Version = 2` in the header.
 
-Run `dotnet test Timer.Tests/Timer.Tests.csproj -c Release -p:CIBuild=true
+Run `dotnet test Plugin/Timer.Tests/Timer.Tests.csproj -c Release -p:CIBuild=true
 -p:CheckForOverflowUnderflow=true -p:TreatWarningsAsErrors=true`.

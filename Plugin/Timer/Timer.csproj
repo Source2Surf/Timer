@@ -50,7 +50,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Timer.Backend.Rpc.Contracts\Timer.Backend.Rpc.Contracts.csproj" />
+      <ProjectReference Include="..\..\Backend\Timer.Backend.Rpc.Contracts\Timer.Backend.Rpc.Contracts.csproj" />
       <ProjectReference Include="..\Timer.Shared\Timer.Shared.csproj" Private="false" ExcludeAssets="runtime" />
     </ItemGroup>
 

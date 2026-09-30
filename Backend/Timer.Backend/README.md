@@ -8,10 +8,10 @@ commands unless the default-off MagicOnion write role is explicitly enabled.
 ## First setup
 
 For RequestManager installation, fresh-database initialization, and game/backend
-configuration together, follow the [repository setup guide](../README.md#timer-setup).
+configuration together, follow the [repository setup guide](../../README.md#timer-setup).
 
-Build a Release once (`dotnet build Timer.Backend/Timer.Backend.csproj -c Release`),
-then make `Timer.Backend/appsettings.Production.json` from
+Build a Release once (`dotnet build Backend/Timer.Backend/Timer.Backend.csproj -c Release`),
+then make `Backend/Timer.Backend/appsettings.Production.json` from
 `appsettings.example.json` without overwriting an existing file. This local
 configuration is ignored by Git because it may contain the SQL password. Edit
 `TimerBackend:Database:Type` and `ConnectionString`; the template already
@@ -40,7 +40,7 @@ key or TLS proxy is required. Submission IDs are globally unique GUIDs, so
 several game servers can send the same map/style/track to one backend.
 For a separate game-server host, replace the loopback addresses on the gRPC
 listener and plugin endpoint with addresses on your private network. Start the
-backend with `dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj`.
+backend with `dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj`.
 
 ## Update an earlier backend test bundle
 
@@ -50,7 +50,7 @@ keep a restorable backup, configure the existing database,
 and run the new binary's additive `migrate` command before restarting them:
 
 ```sh
-dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj -- migrate
+dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj -- migrate
 ```
 
 For a database already migrated by an earlier backend bundle, do not repeat the
@@ -94,12 +94,12 @@ earlier backend test bundles use the additive update described below.
    Supply the connection string in an environment-specific configuration or
    environment variable, not a shell command line or committed file.
 3. Restore dependencies and build the exact release before the maintenance
-   window (`dotnet build Timer.Backend/Timer.Backend.csproj -c Release`). From
+   window (`dotnet build Backend/Timer.Backend/Timer.Backend.csproj -c Release`). From
    the repository root, first run the dedicated date conversion. It refuses to
    start unless the explicit backup acknowledgement is supplied:
 
    ```sh
-   dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj -- convert-run-dates --backup-confirmed
+   dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj -- convert-run-dates --backup-confirmed
    ```
 
    Equivalent wrappers are `pwsh -File scripts/convert-master-run-dates.ps1 -BackupConfirmed`
@@ -118,7 +118,7 @@ earlier backend test bundles use the additive update described below.
 4. Only after `convert-run-dates` succeeds, run the additive backend migration:
 
    ```sh
-   dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj -- migrate
+   dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj -- migrate
    ```
 
    Equivalent wrappers are `pwsh -File scripts/migrate-master-sql.ps1`
@@ -172,7 +172,7 @@ or provide the same keys through environment variables or command-line
 configuration. Do not commit database credentials.
 
 ```powershell
-dotnet run --project Timer.Backend/Timer.Backend.csproj
+dotnet run --project Backend/Timer.Backend/Timer.Backend.csproj
 ```
 
 The example listens on loopback. Set the gRPC listener address to a private
@@ -266,11 +266,11 @@ bootstrap missing tables.
 
 ```sh
 # Change the main-track tier for one existing map.
-dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj -- set-tier surf_example 3
+dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj -- set-tier surf_example 3
 
 # Apply the currently configured WriteApi:StyleFactors to one map or every map.
-dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj -- recalc-scores surf_example
-dotnet run --no-build --no-restore -c Release --project Timer.Backend/Timer.Backend.csproj -- recalc-scores all
+dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj -- recalc-scores surf_example
+dotnet run --no-build --no-restore -c Release --project Backend/Timer.Backend/Timer.Backend.csproj -- recalc-scores all
 ```
 
 `set-tier` accepts tiers 1 through 255, changes only the main-track tier, and

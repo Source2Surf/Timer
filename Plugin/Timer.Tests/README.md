@@ -1,4 +1,4 @@
-Run the regression tests with `dotnet test Timer.Tests/Timer.Tests.csproj -p:CIBuild=true`.
+Run the regression tests with `dotnet test Plugin/Timer.Tests/Timer.Tests.csproj -p:CIBuild=true`.
 `CIBuild=true` disables the game's local post-build copy. The tests run without a CS2 server;
 the remote-sender coverage uses an in-memory queue and fake transport, with no LiteDB database.
 
@@ -19,4 +19,4 @@ field, every spatial component's
 bounds and rounding, full-width fallback, compression modes, and malformed payloads.
 Allocation bounds, asynchronous block boundaries, large headers, buffer ownership,
 and corrupt-file backup also have regression coverage.
-See [the replay format](../docs/replay-format.md) for compatibility and byte-layout details.
+See [the replay format](../../docs/replay-format.md) for compatibility and byte-layout details.

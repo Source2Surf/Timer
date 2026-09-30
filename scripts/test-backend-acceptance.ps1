@@ -32,7 +32,7 @@ foreach ($variable in @('TIMER_TEST_MYSQL', 'TIMER_TEST_POSTGRES')) {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-if (!$BackendOnly -and !(Test-Path -LiteralPath (Join-Path $repoRoot 'Timer.Tests/Timer.Tests.csproj'))) {
+if (!$BackendOnly -and !(Test-Path -LiteralPath (Join-Path $repoRoot 'Plugin/Timer.Tests/Timer.Tests.csproj'))) {
     throw 'This source bundle omits the game plugin tests. Run acceptance with -BackendOnly.'
 }
 if ([string]::IsNullOrWhiteSpace($ResultsDirectory)) {
@@ -73,7 +73,7 @@ foreach ($flag in $flagNames) {
 }
 
 try {
-    $buildArguments = @('build', (Join-Path $repoRoot 'Timer.Backend/Timer.Backend.csproj'), '--configuration', 'Release',
+    $buildArguments = @('build', (Join-Path $repoRoot 'Backend/Timer.Backend/Timer.Backend.csproj'), '--configuration', 'Release',
         '-p:CIBuild=true', '-p:CheckForOverflowUnderflow=true', '-p:TreatWarningsAsErrors=true')
     if ($NoRestore) { $buildArguments += '--no-restore' }
     & dotnet @buildArguments
@@ -81,11 +81,11 @@ try {
 
     # Migration acceptance recreates the published master schema and upgrades it through
     # the real CLI. Running it first also provisions the schema needed by concurrency tests.
-    Invoke-AcceptancePhase 'migration' 'Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj' 'FullyQualifiedName~MasterSqlMigrationAcceptanceTests'
-    Invoke-AcceptancePhase 'storage' 'Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj' 'FullyQualifiedName!~MasterSqlMigrationAcceptanceTests'
-    Invoke-AcceptancePhase 'backend' 'Timer.Backend.Tests/Timer.Backend.Tests.csproj' ''
+    Invoke-AcceptancePhase 'migration' 'Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj' 'FullyQualifiedName~MasterSqlMigrationAcceptanceTests'
+    Invoke-AcceptancePhase 'storage' 'Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj' 'FullyQualifiedName!~MasterSqlMigrationAcceptanceTests'
+    Invoke-AcceptancePhase 'backend' 'Backend/Timer.Backend.Tests/Timer.Backend.Tests.csproj' ''
     if (!$BackendOnly) {
-        Invoke-AcceptancePhase 'plugin' 'Timer.Tests/Timer.Tests.csproj' ''
+        Invoke-AcceptancePhase 'plugin' 'Plugin/Timer.Tests/Timer.Tests.csproj' ''
     }
 
     $phaseResults | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $ResultsDirectory 'summary.json')

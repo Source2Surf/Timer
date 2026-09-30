@@ -22,7 +22,7 @@
     <ProjectReference Include="..\Timer.Backend\Timer.Backend.csproj" />
     <ProjectReference Include="..\Timer.Backend.Contracts\Timer.Backend.Contracts.csproj" />
     <ProjectReference Include="..\Timer.Backend.Rpc.Contracts\Timer.Backend.Rpc.Contracts.csproj" />
-    <ProjectReference Include="..\Timer.Shared\Timer.Shared.csproj" />
+    <ProjectReference Include="..\..\Plugin\Timer.Shared\Timer.Shared.csproj" />
   </ItemGroup>
 
 </Project>

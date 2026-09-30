@@ -4,16 +4,20 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="Timer.Backend.Contracts/Timer.Backend.Contracts.csproj" />
-  <Project Path="Timer.Backend.Rpc.Contracts/Timer.Backend.Rpc.Contracts.csproj" />
-  <Project Path="Timer.Backend.Tests/Timer.Backend.Tests.csproj" />
-  <Project Path="Timer.Backend/Timer.Backend.csproj" />
-  <Project Path="Timer.RequestManager/Timer.RequestManager.csproj" />
-  <Project Path="Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
-  <Project Path="Timer.Benchmarks/Timer.Benchmarks.csproj" />
-  <Project Path="Timer.Shared/Timer.Shared.csproj" />
-  <Project Path="Timer.Tests/Timer.Tests.csproj" />
-  <Project Path="Timer/Timer.csproj">
-    <Platform Solution="*|x64" Project="x64" />
-  </Project>
+  <Folder Name="/Backend/">
+    <Project Path="Backend/Timer.Backend.Contracts/Timer.Backend.Contracts.csproj" />
+    <Project Path="Backend/Timer.Backend.Rpc.Contracts/Timer.Backend.Rpc.Contracts.csproj" />
+    <Project Path="Backend/Timer.Backend.Tests/Timer.Backend.Tests.csproj" />
+    <Project Path="Backend/Timer.Backend/Timer.Backend.csproj" />
+  </Folder>
+  <Folder Name="/Plugin/">
+    <Project Path="Plugin/Timer.Benchmarks/Timer.Benchmarks.csproj" />
+    <Project Path="Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
+    <Project Path="Plugin/Timer.RequestManager/Timer.RequestManager.csproj" />
+    <Project Path="Plugin/Timer.Shared/Timer.Shared.csproj" />
+    <Project Path="Plugin/Timer.Tests/Timer.Tests.csproj" />
+    <Project Path="Plugin/Timer/Timer.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+  </Folder>
 </Solution>
