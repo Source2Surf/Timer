@@ -20,4 +20,16 @@ internal sealed class MapEntity
     /// 0 means use the global default (ScoreCalculator.DefaultBasePot).
     /// </summary>
     public int BasePot { get; set; }
+
+    // CodeFirst must be able to add these columns to a populated master database.
+    // The master schema has no historical values for them, so zero is the only
+    // truthful backfill value.
+    [SugarColumn(DefaultValue = "0")]
+    public int Bonuses { get; set; }
+
+    [SugarColumn(DefaultValue = "0")]
+    public int PlayCount { get; set; }
+
+    [SugarColumn(DefaultValue = "0")]
+    public float TotalPlayTime { get; set; }
 }

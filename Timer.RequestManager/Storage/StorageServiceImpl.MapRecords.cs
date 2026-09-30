@@ -65,13 +65,37 @@ internal sealed partial class StorageServiceImpl
                                           orderByStageThenTime: false);
     }
 
+    /// <summary>
+    /// Read-only API query shape. The plugin-facing IRequestManager predates optional
+    /// style/track/stage filters, whereas the HTTP API needs to represent those filters
+    /// independently without materializing an unbounded list in the web process.
+    /// </summary>
+    internal Task<IReadOnlyList<RunRecord>> GetMapRecordsForReadApiAsync(string mapName,
+                                                                        bool   stageRecords,
+                                                                        int?   style,
+                                                                        int?   track,
+                                                                        int?   stage,
+                                                                        int    limit,
+                                                                        bool   allowReadRepair)
+    {
+        return QueryBestRecordsByMapAsync(mapName,
+                                          limit,
+                                          stageRecords ? RunType.Stage : RunType.Main,
+                                          style,
+                                          track.HasValue ? ToUInt16(track.Value) : null,
+                                          stage.HasValue ? ToUInt16(stage.Value) : null,
+                                          orderByStageThenTime: stageRecords && !stage.HasValue,
+                                          ensureBestRunsSeeded: allowReadRepair);
+    }
+
     private async Task<IReadOnlyList<RunRecord>> QueryBestRecordsByMapAsync(string    mapName,
                                                                              int       limit,
                                                                              RunType   runType,
                                                                              int?      style,
                                                                              ushort?   track,
                                                                              ushort?   stage,
-                                                                             bool      orderByStageThenTime)
+                                                                             bool      orderByStageThenTime,
+                                                                             bool      ensureBestRunsSeeded = true)
     {
         var mapId = await ResolveMapIdByNameAsync(mapName);
 
@@ -80,11 +104,11 @@ internal sealed partial class StorageServiceImpl
             return [];
         }
 
-        if (style.HasValue && track.HasValue && stage.HasValue)
+        if (ensureBestRunsSeeded && style.HasValue && track.HasValue && stage.HasValue)
         {
             await EnsureBestRunsSeededAsync(mapId.Value, runType, style.Value, track.Value, stage.Value);
         }
-        else
+        else if (ensureBestRunsSeeded)
         {
             await EnsureBestRunsSeededForMapAsync(mapId.Value, runType);
         }
@@ -132,10 +156,69 @@ internal sealed partial class StorageServiceImpl
 
         var runs = await query.Select((best, run) => run)
                               .Take(normalizedLimit)
-                              .ToListAsync();
+                              .ToListAsync(OperationCancellation);
 
-        return runs.Select(ToRunRecord)
-                   .ToList();
+        var result = new List<RunRecord>(runs.Count);
+
+        foreach (var run in runs)
+        {
+            result.Add(ToRunRecord(run));
+        }
+
+        await PopulatePlayerNamesAsync(result);
+
+        return result;
+    }
+
+    /// <summary>
+    ///     Fills <see cref="RunRecord.PlayerName" /> from surf_players in one batched query.
+    ///     Run rows only store SteamId, but leaderboard output (!wr/!top) renders the name.
+    /// </summary>
+    private async Task PopulatePlayerNamesAsync(List<RunRecord> records)
+    {
+        if (records.Count == 0)
+        {
+            return;
+        }
+
+        var seen     = new HashSet<ulong>(records.Count);
+        var steamIds = new List<long>(records.Count);
+
+        foreach (var record in records)
+        {
+            if (seen.Add(record.SteamId))
+            {
+                steamIds.Add(unchecked((long)record.SteamId));
+            }
+        }
+
+        var rows = await _db.Queryable<PlayerEntity>()
+                            .Where(x => steamIds.Contains(x.SteamId))
+                            .Select(x => new PlayerNameRow { SteamId = x.SteamId, Name = x.Name })
+                            .ToListAsync(OperationCancellation);
+
+        var names = new Dictionary<ulong, string>(rows.Count);
+
+        foreach (var row in rows)
+        {
+            names[unchecked((ulong)row.SteamId)] = row.Name;
+        }
+
+        foreach (var record in records)
+        {
+            if (names.TryGetValue(record.SteamId, out var name))
+            {
+                record.PlayerName = name;
+            }
+        }
+    }
+
+    private sealed class PlayerNameRow
+    {
+        [SugarColumn(ColumnDataType = "bigint")]
+        public long SteamId { get; set; }
+
+        public string Name { get; set; } = string.Empty;
     }
 
     public async Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10)
@@ -148,19 +231,19 @@ internal sealed partial class StorageServiceImpl
         }
 
         var normalizedLimit = NormalizeLimit(limit);
-        var steamIdValue    = steamId.AsPrimitive();
+        var steamIdValue    = ToDbSteamId(steamId);
 
         var rows = await _db.Queryable<RunEntity>()
                             .Where(x => x.MapId == mapId.Value
                                         && x.SteamId == steamIdValue
                                         && x.RunType == RunType.Main
                                         && x.Stage == 0)
-                            .OrderByDescending(x => x.Date)
+                            .OrderByDescending(x => x.DateUnixTimeMilliseconds)
                             .OrderByDescending(x => x.Id)
                             .Select(x => new RecentRunRow
                             {
                                 Id = x.Id,
-                                Date = x.Date,
+                                DateUnixTimeMilliseconds = x.DateUnixTimeMilliseconds,
                                 SteamId = x.SteamId,
                                 MapId = x.MapId,
                                 Style = x.Style,
@@ -169,7 +252,7 @@ internal sealed partial class StorageServiceImpl
                                 Time = x.Time,
                             })
                             .Take(normalizedLimit)
-                            .ToListAsync();
+                            .ToListAsync(OperationCancellation);
 
         var result = new List<RunRecord>(rows.Count);
 
@@ -178,8 +261,8 @@ internal sealed partial class StorageServiceImpl
             result.Add(new RunRecord
             {
                 Id = (long)row.Id,
-                RunDate = row.Date,
-                SteamId = row.SteamId.AsPrimitive(),
+                RunDate = FromUnixTimeMilliseconds(row.DateUnixTimeMilliseconds),
+                SteamId = unchecked((ulong)row.SteamId),
                 MapId = row.MapId,
                 Style = row.Style,
                 Track = row.Track,
@@ -195,10 +278,11 @@ internal sealed partial class StorageServiceImpl
     {
         public ulong Id { get; set; }
 
-        public DateTime Date { get; set; }
+        [SugarColumn(ColumnName = "Date", ColumnDataType = "bigint")]
+        public long DateUnixTimeMilliseconds { get; set; }
 
-        [SugarColumn(ColumnDataType = "bigint", SqlParameterDbType = typeof(SteamIdDataConvert))]
-        public SteamID SteamId { get; set; }
+        [SugarColumn(ColumnDataType = "bigint")]
+        public long SteamId { get; set; }
 
         public ulong MapId { get; set; }
 

@@ -30,13 +30,9 @@ internal class PlayerFrameData
     public int   TimerStartFrame  { get; set; } = 0;
     public int   TimerFinishFrame { get; set; } = 0;
     public float FinishTime       { get; set; } = 0;
-    public int   Style            { get; set; }
-    public int   Track            { get; set; }
 
     public List<int> NewStageTicks        { get; } = [];
     public List<int> StageTimerStartTicks { get; } = [];
-
-    public bool GrabbingPostFrame { get; set; } = false;
 
     public List<ReplayFrameData> Frames { get; set; } = [];
 
@@ -47,4 +43,11 @@ internal class PlayerFrameData
 
     public Guid? PostFrameTimer      { get; set; } = null;
     public Guid? StagePostFrameTimer { get; set; } = null;
+
+    /// <summary>
+    /// A stage finish captured its start tick but has not yet read its finish tick or pushed
+    /// <see cref="StagePostFrameTimer"/> (that happens in the next frame action). Frame indices
+    /// must not move in between, so idle trimming waits for this to clear.
+    /// </summary>
+    public bool StageFinishPending { get; set; }
 }

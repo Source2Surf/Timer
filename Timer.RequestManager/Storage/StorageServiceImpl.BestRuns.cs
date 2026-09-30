@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Linq;
 using System.Threading.Tasks;
-using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Common.Enums;
 using SqlSugar;
@@ -17,55 +18,47 @@ internal sealed partial class StorageServiceImpl
     {
         var seedKey = (mapId, runType);
 
-        if (!_bestRunMapSeededCache.TryAdd(seedKey, 0))
+        if (_bestRunMapSeededCache.ContainsKey(seedKey))
         {
             return;
         }
 
+        // Map-wide and scoped seeds share a gate. Cache entries mean completed work,
+        // so concurrent readers cannot observe a partially populated best-run table.
+        var gate = _bestRunSeedLocks.GetOrAdd(seedKey, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(OperationCancellation);
+
         try
         {
-            var baseQuery = _db.Queryable<RunEntity>()
-                               .Where(x => x.MapId      == mapId
-                                           && x.RunType == runType);
-
-            if (runType == RunType.Main)
+            if (_bestRunMapSeededCache.ContainsKey(seedKey))
             {
-                baseQuery = baseQuery.Where(x => x.Stage == 0);
-            }
-            else
-            {
-                baseQuery = baseQuery.Where(x => x.Stage > 0);
+                return;
             }
 
-            var rows = await baseQuery.Select(x => new SeedBestRunRow
-                                      {
-                                          SteamId  = x.SteamId,
-                                          Style    = x.Style,
-                                          Track    = x.Track,
-                                          Stage    = x.Stage,
-                                          RunId    = x.Id,
-                                          BestTime = x.Time,
-                                          RowNum
-                                              = SqlFunc.RowNumber($"{nameof(RunEntity.Time)} ASC, {nameof(RunEntity.Id)} ASC",
-                                                                  $"{nameof(RunEntity.Style)}, {nameof(RunEntity.Track)}, {nameof(RunEntity.Stage)}, {nameof(RunEntity.SteamId)}"),
-                                      })
-                                      .MergeTable()
-                                      .Where(t => t.RowNum == 1)
-                                      .ToListAsync();
-
-            // Clear RowNum helper field before upsert
-            foreach (var row in rows)
+            await WithRecordTransactionAsync(async () =>
             {
-                row.RowNum = 0;
-            }
+                await LockMapAsync(mapId);
+                var baseQuery = _db.Queryable<RunEntity>()
+                                   .Where(x => x.MapId      == mapId
+                                               && x.RunType == runType);
 
-            await UpsertSeedBestRowsAsync(mapId, runType, rows);
+                if (runType == RunType.Main)
+                {
+                    baseQuery = baseQuery.Where(x => x.Stage == 0);
+                }
+                else
+                {
+                    baseQuery = baseQuery.Where(x => x.Stage > 0);
+                }
+
+                var rows = await QuerySeedBestRows(baseQuery).ToListAsync(OperationCancellation);
+                await UpsertSeedBestRowsAsync(mapId, runType, rows);
+            });
+            _bestRunMapSeededCache.TryAdd(seedKey, 0);
         }
-        catch
+        finally
         {
-            _bestRunMapSeededCache.TryRemove(seedKey, out _);
-
-            throw;
+            gate.Release();
         }
     }
 
@@ -78,134 +71,105 @@ internal sealed partial class StorageServiceImpl
 
         var seedKey = (mapId, runType, style, track, stage);
 
-        if (!_bestRunSeededCache.TryAdd(seedKey, 0))
+        if (_bestRunSeededCache.ContainsKey(seedKey))
         {
             return;
         }
 
+        var gate = _bestRunSeedLocks.GetOrAdd((mapId, runType), _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(OperationCancellation);
+
         try
         {
-            var hasBestRows = await QueryBestRuns().Where(x => x.MapId      == mapId
-                                                               && x.RunType == runType
-                                                               && x.Style   == style
-                                                               && x.Track   == track
-                                                               && x.Stage   == stage)
-                                                   .AnyAsync();
-
-            if (hasBestRows)
+            if (_bestRunMapSeededCache.ContainsKey((mapId, runType)) || _bestRunSeededCache.ContainsKey(seedKey))
             {
                 return;
             }
 
-            var rows = await _db.Queryable<RunEntity>()
-                                .Where(x => x.MapId      == mapId
-                                            && x.RunType == runType
-                                            && x.Style   == style
-                                            && x.Track   == track
-                                            && x.Stage   == stage)
-                                .Select(x => new SeedBestRunRow
-                                {
-                                    SteamId  = x.SteamId,
-                                    Style    = style,
-                                    Track    = track,
-                                    Stage    = stage,
-                                    RunId    = x.Id,
-                                    BestTime = x.Time,
-                                    RowNum = SqlFunc.RowNumber($"{nameof(RunEntity.Time)} ASC, {nameof(RunEntity.Id)} ASC",
-                                                               nameof(RunEntity.SteamId)),
-                                })
-                                .MergeTable()
-                                .Where(t => t.RowNum == 1)
-                                .ToListAsync();
-
-            // Clear RowNum helper field before upsert
-            foreach (var row in rows)
+            await WithRecordTransactionAsync(async () =>
             {
-                row.RowNum = 0;
-            }
-
-            await UpsertSeedBestRowsAsync(mapId, runType, rows);
+                await LockMapAsync(mapId);
+                // An existing row does not prove that every player has been seeded.
+                var baseQuery = _db.Queryable<RunEntity>()
+                                    .Where(x => x.MapId      == mapId
+                                                && x.RunType == runType
+                                                && x.Style   == style
+                                                && x.Track   == track
+                                                && x.Stage   == stage);
+                var rows = await QuerySeedBestRows(baseQuery).ToListAsync(OperationCancellation);
+                await UpsertSeedBestRowsAsync(mapId, runType, rows, style, track, stage);
+            });
+            _bestRunSeededCache.TryAdd(seedKey, 0);
         }
-        catch
+        finally
         {
-            _bestRunSeededCache.TryRemove(seedKey, out _);
-
-            throw;
-        }
-    }
-
-    private async Task UpsertPlayerBestRunAsync(RunEntity run)
-    {
-        var now = DateTime.UtcNow;
-
-        var updated = await _db.Updateable<PlayerBestRunEntity>()
-                               .SetColumns(x => x.RunId     == run.Id)
-                               .SetColumns(x => x.BestTime  == run.Time)
-                               .SetColumns(x => x.UpdatedAt == now)
-                               .Where(x => x.SteamId    == run.SteamId
-                                           && x.MapId   == run.MapId
-                                           && x.RunType == run.RunType
-                                           && x.Style   == run.Style
-                                           && x.Track   == run.Track
-                                           && x.Stage   == run.Stage
-                                           && (x.BestTime > run.Time
-                                               || (x.BestTime == run.Time && x.RunId > run.Id)))
-                               .ExecuteCommandAsync();
-
-        if (updated > 0)
-        {
-            return;
-        }
-
-        var entity = new PlayerBestRunEntity
-        {
-            SteamId   = run.SteamId,
-            MapId     = run.MapId,
-            RunType   = run.RunType,
-            Stage     = run.Stage,
-            Style     = run.Style,
-            Track     = run.Track,
-            RunId     = run.Id,
-            BestTime  = run.Time,
-            UpdatedAt = now,
-        };
-
-        try
-        {
-            await _db.Insertable(entity).ExecuteCommandAsync();
-        }
-        catch
-        {
-            await _db.Updateable<PlayerBestRunEntity>()
-                     .SetColumns(x => x.RunId     == run.Id)
-                     .SetColumns(x => x.BestTime  == run.Time)
-                     .SetColumns(x => x.UpdatedAt == now)
-                     .Where(x => x.SteamId    == run.SteamId
-                                 && x.MapId   == run.MapId
-                                 && x.RunType == run.RunType
-                                 && x.Style   == run.Style
-                                 && x.Track   == run.Track
-                                 && x.Stage   == run.Stage
-                                 && (x.BestTime > run.Time
-                                     || (x.BestTime == run.Time && x.RunId > run.Id)))
-                     .ExecuteCommandAsync();
+            gate.Release();
         }
     }
 
-    private async Task UpsertSeedBestRowsAsync(ulong mapId, RunType runType, List<SeedBestRunRow> rows)
+    private static ISugarQueryable<SeedBestRunRow> QuerySeedBestRows(ISugarQueryable<RunEntity> query)
+        => query.Select(x => new SeedBestRunRow
+                {
+                    SteamId = x.SteamId,
+                    Style = x.Style,
+                    Track = x.Track,
+                    Stage = x.Stage,
+                    RunId = x.Id,
+                    BestTime = x.Time,
+                    // Member expressions are required here: nameof strings become SQL
+                    // parameters, which partition/order by constants and pick arbitrary runs.
+                    RowNum = SqlFunc.RowNumber($"{x.Time} ASC, {x.Id} ASC", $"{x.Style}, {x.Track}, {x.Stage}, {x.SteamId}"),
+                })
+                .MergeTable()
+                .Where(x => x.RowNum == 1);
+
+    private async Task UpsertSeedBestRowsAsync(ulong mapId,
+                                               RunType runType,
+                                               List<SeedBestRunRow> rows,
+                                               int? style = null,
+                                               ushort? track = null,
+                                               ushort? stage = null)
     {
         if (rows.Count == 0)
         {
             return;
         }
 
+        // Skip unchanged rows in memory so a cold map read does not issue one
+        // update per player. The map lock protects this comparison until commit.
+        var existingQuery = QueryBestRuns().Where(x => x.MapId == mapId && x.RunType == runType);
+        if (style is not null && track is not null && stage is not null)
+        {
+            var scopedStyle = style.Value;
+            var scopedTrack = track.Value;
+            var scopedStage = stage.Value;
+            existingQuery = existingQuery.Where(x => x.Style == scopedStyle
+                                                     && x.Track == scopedTrack
+                                                     && x.Stage == scopedStage);
+        }
+
+        var existingRows = await existingQuery.ToListAsync(OperationCancellation);
+        var existing = new Dictionary<(long steamId, int style, ushort track, ushort stage), PlayerBestRunEntity>(existingRows.Count);
+        foreach (var best in existingRows)
+        {
+            existing[(best.SteamId, best.Style, best.Track, best.Stage)] = best;
+        }
+
         var now      = DateTime.UtcNow;
-        var entities = new List<PlayerBestRunEntity>(rows.Count);
+        var inserts = new List<PlayerBestRunEntity>();
+        var updates = new List<PlayerBestRunEntity>();
 
         foreach (var row in rows)
         {
-            entities.Add(new PlayerBestRunEntity
+            if (existing.TryGetValue((row.SteamId, row.Style, row.Track, row.Stage), out var best)
+                && (best.BestTime < row.BestTime || (best.BestTime == row.BestTime && best.RunId <= row.RunId)))
             {
+                continue;
+            }
+
+            (best is null ? inserts : updates).Add(new PlayerBestRunEntity
+            {
+                Id        = best?.Id ?? 0,
                 SteamId   = row.SteamId,
                 MapId     = mapId,
                 RunType   = runType,
@@ -218,54 +182,40 @@ internal sealed partial class StorageServiceImpl
             });
         }
 
-        var storage = _db.Storageable(entities)
-                         .WhereColumns(x => new
-                         {
-                             x.SteamId,
-                             x.MapId,
-                             x.RunType,
-                             x.Style,
-                             x.Track,
-                             x.Stage,
-                         })
-                         .ToStorage();
-
-        if (storage.InsertList.Count > 0)
-        {
-            await storage.AsInsertable.ExecuteCommandAsync();
-        }
-
-        if (storage.UpdateList.Count > 0)
-        {
-            await storage.AsUpdateable
-                         .UpdateColumns(x => new { x.RunId, x.BestTime, x.UpdatedAt })
-                         .ExecuteCommandAsync();
-        }
+        // The map lock makes the comparison above authoritative. Write only
+        // improvements, in bounded batches, without a second existence probe.
+        foreach (var batch in inserts.Chunk(500))
+            await _db.Insertable(batch).ExecuteCommandAsync(OperationCancellation);
+        foreach (var batch in updates.Chunk(500))
+            await _db.Updateable(batch).UpdateColumns(x => new { x.RunId, x.BestTime, x.UpdatedAt }).ExecuteCommandAsync(OperationCancellation);
     }
 
     private void RemoveBestRunSeedCacheForMap(ulong mapId)
     {
-        foreach (var key in _bestRunMapSeededCache.Keys)
+        // Iterate the ConcurrentDictionary struct enumerators directly; .Keys would snapshot each entire
+        // keyset into a fresh List + ReadOnlyCollection per call. The enumerator allocates nothing and is
+        // safe to remove from while enumerating.
+        foreach (var kvp in _bestRunMapSeededCache)
         {
-            if (key.mapId == mapId)
+            if (kvp.Key.mapId == mapId)
             {
-                _bestRunMapSeededCache.TryRemove(key, out _);
+                _bestRunMapSeededCache.TryRemove(kvp.Key, out _);
             }
         }
 
-        foreach (var key in _bestRunSeededCache.Keys)
+        foreach (var kvp in _bestRunSeededCache)
         {
-            if (key.mapId == mapId)
+            if (kvp.Key.mapId == mapId)
             {
-                _bestRunSeededCache.TryRemove(key, out _);
+                _bestRunSeededCache.TryRemove(kvp.Key, out _);
             }
         }
     }
 
     private sealed class SeedBestRunRow
     {
-        [SugarColumn(ColumnDataType = "bigint", SqlParameterDbType = typeof(SteamIdDataConvert))]
-        public SteamID SteamId { get; set; }
+        [SugarColumn(ColumnDataType = "bigint")]
+        public long SteamId { get; set; }
 
         public int Style { get; set; }
 

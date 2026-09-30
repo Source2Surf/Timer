@@ -23,6 +23,11 @@ using Source2Surf.Timer.Shared.Models.Zone;
 
 namespace Source2Surf.Timer.Shared.Interfaces;
 
+/// <summary>
+///     Outcome of a record-save attempt. The ordinal ORDER is part of the contract:
+///     consumers use relational comparisons (e.g. <c>result &gt;= NewPersonalRecord</c>
+///     for "is a new best"), so members must stay sorted from worst to best outcome.
+/// </summary>
 public enum EAttemptResult
 {
     NoNewRecord,
@@ -41,6 +46,12 @@ public interface IRequestManager
     Task<MapProfile> GetMapInfo(string map);
 
     Task UpdateMapInfo(MapProfile info);
+
+    /// <summary>
+    /// Atomically records one completed map session without writing an old map-profile snapshot
+    /// over sessions completed by other game servers.
+    /// </summary>
+    Task IncrementMapStatsAsync(string mapName, float deltaSeconds);
 
     /// <summary>
     /// Get all map names.
@@ -107,16 +118,6 @@ public interface IRequestManager
     /// Replaces all custom zones for the specified map (transactional: delete then insert).
     /// </summary>
     Task SaveZonesAsync(string mapName, IReadOnlyList<ZoneData> zones);
-
-    /// <summary>
-    /// Adds a single custom zone and returns the generated ID.
-    /// </summary>
-    Task<ulong> AddZoneAsync(string mapName, ZoneData zone);
-
-    /// <summary>
-    /// Deletes all custom zones for the specified map.
-    /// </summary>
-    Task DeleteZonesAsync(string mapName);
 
 #endregion
 

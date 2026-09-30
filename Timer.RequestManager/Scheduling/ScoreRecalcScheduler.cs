@@ -1,112 +1,200 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Timer.RequestManager.Scheduling;
 
 /// <summary>
-/// Score recalculation request.
-/// </summary>
-internal readonly record struct RecalcRequest(ulong MapId, int Style, ushort Track, int Tier, int BasePot, double StyleFactor);
-
-/// <summary>
-/// Debounced score recalculation scheduler.
-/// Uses a Channel with a single consumer for background processing, 5-second debounce delay, deduplicating by (MapId, Style, Track).
+/// Single-consumer wake loop for the durable score-recalculation outbox.
+///
+/// The channel carries only a wake signal: the database is the authoritative queue. A periodic
+/// scan makes a dropped/coalesced wake harmless, and one consumer processes each leased batch
+/// sequentially.
 /// </summary>
 internal sealed class ScoreRecalcScheduler : IDisposable
 {
-    private readonly Channel<RecalcRequest> _channel = Channel.CreateBounded<RecalcRequest>(256);
-    private readonly CancellationTokenSource _cts = new();
-    private readonly Task _consumer;
-    private readonly TimeSpan _debounceDelay = TimeSpan.FromSeconds(5);
-    private readonly ILogger? _logger;
+    // Enqueue persists the five-second coalescing deadline in AvailableAtUtc. Poll every second so
+    // an early wake consumed before that deadline cannot make an eligible row wait a long time.
+    private static readonly TimeSpan DefaultScanInterval = TimeSpan.FromSeconds(1);
 
-    public ScoreRecalcScheduler(Func<RecalcRequest, Task> recalcAction, ILogger? logger = null)
+    private readonly Channel<byte> _wakeChannel = Channel.CreateBounded<byte>(
+        new BoundedChannelOptions(1)
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.DropWrite,
+        });
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Func<CancellationToken, Task<int>> _processBatchAsync;
+    private readonly TimeSpan _scanInterval;
+    private readonly ILogger? _logger;
+    private readonly object _lifecycleGate = new();
+
+    private Task? _consumer;
+    private Task _cancellation = Task.CompletedTask;
+    private bool _disposed;
+    private bool _stopping;
+    private long _lastScanUtcTicks;
+
+    public Task Completion { get { lock (_lifecycleGate) return Task.WhenAll(_consumer ?? Task.CompletedTask, _cancellation); } }
+    public DateTime? LastSuccessfulScanUtc
+        => Interlocked.Read(ref _lastScanUtcTicks) is var ticks && ticks != 0
+            ? new DateTime(ticks, DateTimeKind.Utc) : null;
+
+    public ScoreRecalcScheduler(Func<Task<int>> processBatchAsync, ILogger? logger = null,
+                                TimeSpan? scanInterval = null)
+        : this(_ => processBatchAsync(), logger, scanInterval)
     {
+        ArgumentNullException.ThrowIfNull(processBatchAsync);
+    }
+
+    public ScoreRecalcScheduler(Func<CancellationToken, Task<int>> processBatchAsync, ILogger? logger = null,
+                                TimeSpan? scanInterval = null)
+    {
+        _processBatchAsync = processBatchAsync ?? throw new ArgumentNullException(nameof(processBatchAsync));
         _logger = logger;
-        _consumer = Task.Run(() => ConsumeLoop(recalcAction, _cts.Token));
+        _scanInterval = scanInterval ?? DefaultScanInterval;
+        if (_scanInterval <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(scanInterval), "Scan interval must be positive.");
+        }
     }
 
     /// <summary>
-    /// Enqueue a recalculation request (fire-and-forget).
+    /// Starts the initial scan and subsequent periodic polling. Construction is intentionally inert:
+    /// callers must create schema/migrations before starting a worker.
     /// </summary>
-    public void Enqueue(RecalcRequest request)
+    public void Start()
     {
-        _channel.Writer.TryWrite(request);
+        lock (_lifecycleGate)
+        {
+            if (_disposed || _stopping || _consumer is not null)
+            {
+                return;
+            }
+
+            _consumer = Task.Run(ConsumeLoopAsync);
+        }
     }
 
-    private async Task ConsumeLoop(Func<RecalcRequest, Task> recalcAction, CancellationToken ct)
+    /// <summary>
+    /// Signals that a committed outbox write may be available. It deliberately contains no work
+    /// payload; the consumer always reclaims work from durable storage.
+    /// </summary>
+    public void Wake()
     {
-        var pending = new Dictionary<(ulong, int, ushort), RecalcRequest>();
+        lock (_lifecycleGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _wakeChannel.Writer.TryWrite(0);
+        }
+    }
+
+    private async Task ConsumeLoopAsync()
+    {
+        var ct = _cts.Token;
 
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                // Block until the first message arrives
-                if (!await _channel.Reader.WaitToReadAsync(ct))
+                // Keep draining immediately while there is durable work. The callback is awaited,
+                // so one scheduler instance never processes two score recalculations concurrently.
+                var processed = await _processBatchAsync(ct);
+                Interlocked.Exchange(ref _lastScanUtcTicks, DateTime.UtcNow.Ticks);
+                if (processed > 0)
                 {
-                    break;
+                    continue;
                 }
-
-                // Drain all queued messages, deduplicating by key
-                while (_channel.Reader.TryRead(out var req))
-                {
-                    pending[(req.MapId, req.Style, req.Track)] = req;
-                }
-
-                // Wait to allow subsequent requests to coalesce
-                await Task.Delay(_debounceDelay, ct);
-
-                // Drain again (new arrivals within the debounce window)
-                while (_channel.Reader.TryRead(out var req))
-                {
-                    pending[(req.MapId, req.Style, req.Track)] = req;
-                }
-
-                // Execute each deduplicated recalculation
-                foreach (var req in pending.Values)
-                {
-                    try
-                    {
-                        await recalcAction(req);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log and continue; don't block other tracks
-                        _logger?.LogError(ex, "Error recalculating scores for MapId={MapId}, Style={Style}, Track={Track}",
-                            req.MapId, req.Style, req.Track);
-                    }
-                }
-
-                pending.Clear();
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break;
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Unexpected error in score recalc consumer loop");
+                _logger?.LogError(ex, "Unexpected error while scanning the score-recalc outbox.");
             }
+
+            try
+            {
+                await WaitForWakeOrScanAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task WaitForWakeOrScanAsync(CancellationToken ct)
+    {
+        // Do not use Task.WhenAny with an uncancelled WaitToReadAsync: when the timer wins, that
+        // pending reader remains registered and can consume a later wake. A linked per-scan token
+        // cancels the one outstanding channel wait on timeout.
+        using var scanCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        scanCts.CancelAfter(_scanInterval);
+        try
+        {
+            await _wakeChannel.Reader.WaitToReadAsync(scanCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Periodic scan timeout; fall through to the next durable database read.
+        }
+
+        DrainWakeSignals();
+    }
+
+    private void DrainWakeSignals()
+    {
+        while (_wakeChannel.Reader.TryRead(out _))
+        {
+        }
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        RequestStop();
+        await Completion.WaitAsync(cancellationToken);
+    }
+
+    public void RequestStop()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_stopping) return;
+            _stopping = true;
+            _wakeChannel.Writer.TryComplete();
+            // Provider cancellation callbacks may perform network work. Dispatch them
+            // asynchronously so StopAsync can still honor its own shutdown deadline.
+            _cancellation = _cts.CancelAsync();
         }
     }
 
     public void Dispose()
     {
-        _channel.Writer.TryComplete();
-        _cts.Cancel();
-        try
+        RequestStop();
+        lock (_lifecycleGate)
         {
-            _consumer.Wait(TimeSpan.FromSeconds(5));
+            if (_disposed) return;
+            _disposed = true;
         }
-        catch
-        {
-            // Ignore timeout or cancellation exceptions during shutdown
-        }
-        _cts.Dispose();
+        // StopAsync owns the caller's bounded wait. Resources stay alive for a callback
+        // that ignores cancellation; never dispose its token/source underneath it.
+        _ = DisposeAfterCompletionAsync();
+    }
+
+    private async Task DisposeAfterCompletionAsync()
+    {
+        try { await Completion; }
+        catch (Exception ex) { _logger?.LogError(ex, "Score-recalc worker stopped with an unexpected error."); }
+        finally { _cts.Dispose(); }
     }
 }

@@ -17,6 +17,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models;
@@ -30,6 +32,18 @@ internal sealed class MapRecordCache
     private readonly IReadOnlyList<RunCheckpoint>?[,] _wrCheckpoints
         = new IReadOnlyList<RunCheckpoint>?[TimerConstants.MAX_STYLE, TimerConstants.MAX_TRACK];
     private readonly ILogger _logger;
+    private long _generation;
+    private long _loadSequence;
+    private readonly long[,] _trackLoads = new long[TimerConstants.MAX_STYLE, TimerConstants.MAX_TRACK];
+    private readonly Dictionary<(int style, int track, int stage), long> _stageLoads = [];
+
+    internal readonly record struct LoadToken(long Generation, long Sequence);
+
+    // Capture before starting asynchronous work. Clearing the map invalidates every
+    // outstanding load, including loads for a previous visit to the same map name.
+    public LoadToken BeginLoad() => new(Volatile.Read(ref _generation), Interlocked.Increment(ref _loadSequence));
+    public LoadToken BeginLoad(LoadToken origin) => new(origin.Generation, Interlocked.Increment(ref _loadSequence));
+    public bool IsCurrent(LoadToken load) => load.Generation == Volatile.Read(ref _generation);
 
     public MapRecordCache(ILogger logger)
     {
@@ -44,63 +58,48 @@ internal sealed class MapRecordCache
         }
     }
 
-    public void Populate(IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords)
+    public void Populate(IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords, LoadToken load)
     {
-        foreach (var record in records)
+        if (!IsCurrent(load)) return;
+
+        foreach (var group in records.GroupBy(record => (record.Style, record.Track)))
         {
-            _mapRecords[record.Style, record.Track].Add(record);
+            RefreshTrack(group.Key.Style, group.Key.Track, group.ToList(), load);
         }
 
-        foreach (var record in stageRecords)
+        foreach (var group in stageRecords.GroupBy(record => (record.Style, record.Track, record.Stage)))
         {
-            var stage = record.Stage;
+            var (style, track, stage) = group.Key;
 
             if (!IsValidStageIndex(stage))
             {
                 _logger.LogWarning("Ignore invalid stage record during map cache warm-up. style={style}, track={track}, stage={stage}",
-                                   record.Style,
-                                   record.Track,
+                                   style,
+                                   track,
                                    stage);
 
                 continue;
             }
 
-            var key = (record.Style, record.Track, stage);
-
-            if (!_stageRecords.TryGetValue(key, out var list))
-            {
-                list = [];
-                _stageRecords[key] = list;
-            }
-
-            list.Add(record);
-        }
-
-        for (var s = 0; s < TimerConstants.MAX_STYLE; s++)
-        {
-            for (var t = 0; t < TimerConstants.MAX_TRACK; t++)
-            {
-                _mapRecords[s, t].Sort();
-            }
-        }
-
-        foreach (var list in _stageRecords.Values)
-        {
-            list.Sort();
+            RefreshStage(style, track, stage, group.ToList(), load);
         }
     }
 
-    public void RefreshTrack(int style, int track, IReadOnlyList<RunRecord> records)
+    public void RefreshTrack(int style, int track, IReadOnlyList<RunRecord> records, LoadToken load)
     {
+        if (!IsCurrent(load) || load.Sequence < _trackLoads[style, track]) return;
+        _trackLoads[style, track] = load.Sequence;
         var list = _mapRecords[style, track];
         list.Clear();
         list.AddRange(records);
         list.Sort();
     }
 
-    public void RefreshStage(int style, int track, int stage, IReadOnlyList<RunRecord> records)
+    public void RefreshStage(int style, int track, int stage, IReadOnlyList<RunRecord> records, LoadToken load)
     {
         var key = (style, track, stage);
+        if (!IsCurrent(load) || (_stageLoads.TryGetValue(key, out var sequence) && load.Sequence < sequence)) return;
+        _stageLoads[key] = load.Sequence;
 
         if (_stageRecords.TryGetValue(key, out var existing))
         {
@@ -185,20 +184,24 @@ internal sealed class MapRecordCache
 
     public void Clear()
     {
+        Interlocked.Increment(ref _generation);
         _stageRecords.Clear();
+        _stageLoads.Clear();
 
         for (var style = 0; style < TimerConstants.MAX_STYLE; style++)
         {
             for (var track = 0; track < TimerConstants.MAX_TRACK; track++)
             {
                 _mapRecords[style, track].Clear();
+                _trackLoads[style, track] = 0;
                 _wrCheckpoints[style, track] = null;
             }
         }
     }
 
-    public void SetWRCheckpoints(int style, int track, IReadOnlyList<RunCheckpoint> checkpoints)
+    public void SetWRCheckpoints(int style, int track, IReadOnlyList<RunCheckpoint> checkpoints, LoadToken load)
     {
+        if (!IsCurrent(load) || load.Sequence != _trackLoads[style, track]) return;
         _wrCheckpoints[style, track] = checkpoints;
     }
 

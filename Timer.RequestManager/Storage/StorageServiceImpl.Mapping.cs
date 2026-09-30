@@ -26,10 +26,10 @@ internal sealed partial class StorageServiceImpl
             MapId         = mapInfo.MapId,
             MapName       = mapInfo.File,
             Stages        = mapInfo.Stages,
-            Bonuses       = 0,
+            Bonuses       = mapInfo.Bonuses,
             Tier          = tiers,
-            PlayCount     = 0,
-            TotalPlayTime = 0,
+            PlayCount     = mapInfo.PlayCount,
+            TotalPlayTime = mapInfo.TotalPlayTime,
         };
     }
 
@@ -37,8 +37,8 @@ internal sealed partial class StorageServiceImpl
         => new ()
         {
             Id             = (long) run.Id,
-            RunDate        = run.Date,
-            SteamId        = run.SteamId.AsPrimitive(),
+            RunDate        = FromUnixTimeMilliseconds(run.DateUnixTimeMilliseconds),
+            SteamId        = unchecked((ulong)run.SteamId),
             MapId          = run.MapId,
             Style          = (int) run.Style,
             Track          = run.Track,

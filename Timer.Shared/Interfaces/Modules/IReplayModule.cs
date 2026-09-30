@@ -15,21 +15,35 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using Sharp.Shared.Types;
 using Sharp.Shared.Units;
-using Source2Surf.Timer.Shared.Interfaces.Listeners;
 using Source2Surf.Timer.Shared.Models.Replay;
 
 namespace Source2Surf.Timer.Shared.Interfaces.Modules;
 
 /// <summary>
-/// Public interface for the replay module, providing bot data access and listener management.
+/// Public interface for the replay module, providing bot data access.
 /// </summary>
 public interface IReplayModule
 {
     IReplayBotData? GetReplayBotData(PlayerSlot slot);
     IReplayBotData? GetReplayBotByIndex(int index);
-    int GetReplayBotCount();
 
-    void RegisterListener(IReplayModuleListener listener);
-    void UnregisterListener(IReplayModuleListener listener);
+    /// <summary>
+    ///     Returns the cached replay for <c>(style, track, stage)</c>, or <c>null</c> when not loaded.
+    /// </summary>
+    ReplayContent? GetCachedReplay(int style, int track, int stage);
+
+    /// <summary>
+    ///     Returns the index of the finite replay frame whose Origin is closest to
+    ///     <paramref name="position" />. Equal-distance candidates prefer the index nearest
+    ///     <paramref name="preferredFrameIndex" />. Returns <c>-1</c> when no searchable replay
+    ///     frame is cached or the query position is not finite.
+    /// </summary>
+    /// <param name="distanceSquared">
+    ///     Squared distance between <paramref name="position" /> and the closest frame's origin,
+    ///     or <see cref="float.PositiveInfinity" /> when no frame can be returned.
+    /// </param>
+    int FindClosestFrameIndex(int style, int track, int stage, in Vector position, int preferredFrameIndex,
+                              out float distanceSquared);
 }

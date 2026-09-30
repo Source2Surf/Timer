@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Common.Entities;
@@ -14,34 +15,71 @@ namespace Timer.RequestManager.Storage;
 
 internal sealed partial class StorageServiceImpl : IRequestManager
 {
-    private readonly SqlSugarScope               _db;
+    private readonly SqlSugarScope               _rootDb;
+    private ISqlSugarClient _db => _operationDb.Value ?? (ISqlSugarClient)_rootDb;
     private readonly ILogger<StorageServiceImpl> _logger;
     private readonly ConcurrentDictionary<string, ulong> _mapIdCache = new (StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<(ulong mapId, ushort track), (int tier, int basePot)> _trackScoreConfigCache = new();
     private readonly ConcurrentDictionary<(ulong mapId, RunType runType), byte> _bestRunMapSeededCache = new();
+    private readonly ConcurrentDictionary<(ulong mapId, RunType runType), SemaphoreSlim> _bestRunSeedLocks = new();
     private readonly ConcurrentDictionary<(ulong mapId, RunType runType, int style, ushort track, ushort stage), byte> _bestRunSeededCache = new();
-    private readonly ScoreRecalcScheduler        _scoreRecalcScheduler;
+    private readonly StorageServiceImpl?          _scoreRecalcWorkerStorage;
+    private readonly ScoreRecalcScheduler?        _scoreRecalcScheduler;
+    private int _workerStopRequested;
+    private int _shutdown;
+    private DateTime? _workerStartedAtUtc;
 
-    internal SqlSugarScope Db => _db;
+    internal bool HasScoreRecalcWorker => _scoreRecalcScheduler is not null;
 
-    public StorageServiceImpl(DbType dbType, string connectionString, ILogger<StorageServiceImpl> logger)
+    internal SqlSugarScope Db => _rootDb;
+
+    public StorageServiceImpl(DbType                      dbType,
+                              string                      connectionString,
+                              ILogger<StorageServiceImpl> logger,
+                              bool                        enableScoreRecalcWorker = true)
     {
-        _db     = CreateClient(dbType, connectionString);
+        _rootDb = CreateClient(dbType, connectionString);
         _logger = logger;
-        _scoreRecalcScheduler = new ScoreRecalcScheduler(HandleScoreRecalcAsync, logger);
+
+        if (enableScoreRecalcWorker)
+        {
+            // The outbox worker owns a distinct SqlSugar scope. It must never share a request
+            // transaction/connection with the foreground storage instance, and Shutdown waits for
+            // its consumer before disposing this scope.
+            _scoreRecalcWorkerStorage = new StorageServiceImpl(dbType, connectionString, logger,
+                                                                enableScoreRecalcWorker: false);
+            _scoreRecalcScheduler = new ScoreRecalcScheduler(
+                token => _scoreRecalcWorkerStorage.RunOperationAsync(
+                    _scoreRecalcWorkerStorage.ProcessScoreRecalcOutboxBatchAsync, token), logger);
+        }
     }
 
-    private async Task HandleScoreRecalcAsync(RecalcRequest request)
-    {
-        await RecalculateTrackScoresAsync(request.MapId, request.Style, request.Track, request.Tier, request.BasePot, request.StyleFactor);
-    }
-
-    public void Init()
+    /// <summary>
+    /// Initializes in-memory state and, when requested, applies this storage implementation's
+    /// schema bootstrap/migrations. A horizontally scaled HTTP host should set
+    /// <paramref name="initializeSchema"/> only on its designated migration instance;
+    /// application replicas merely need the already-provisioned schema to serve reads.
+    /// </summary>
+    public void Init(bool initializeSchema = true, bool startScoreRecalcWorker = true)
     {
         _mapIdCache.Clear();
-        _trackScoreConfigCache.Clear();
         _bestRunMapSeededCache.Clear();
         _bestRunSeededCache.Clear();
+
+        if (!initializeSchema)
+        {
+            // Even replicas that skip CodeFirst must not interpret a legacy temporal Date as
+            // the new BIGINT mapping or serve writes against an interrupted conversion.
+            EnsureRunDateColumnReadyForRuntime();
+            EnsurePointsColumnsReadyForRuntime();
+            _logger.LogInformation("SQL schema initialization disabled; expecting an already migrated database.");
+            if (startScoreRecalcWorker) StartScoreRecalcWorker();
+            return;
+        }
+
+        RejectUnsupportedNonMasterRunSchema();
+        EnsureRunDateColumnReadyForRuntime();
+        EnsurePointsColumnsReadyForRuntime(allowBootstrapRecovery: true);
+        MigrateReplaySteamIdColumn();
 
         try
         {
@@ -51,6 +89,8 @@ internal sealed partial class StorageServiceImpl : IRequestManager
                                      typeof(PlayerMapStatsEntity),
                                      typeof(PlayerBestRunEntity),
                                      typeof(PlayerTrackScoreEntity),
+                                     typeof(ScoreRecalcOutboxEntity),
+                                     typeof(RunSubmissionEntity),
                                      typeof(RunEntity),
                                      typeof(RunSegmentEntity),
                                      typeof(ReplayEntity),
@@ -58,16 +98,37 @@ internal sealed partial class StorageServiceImpl : IRequestManager
         }
         catch (Exception e)
         {
+            // Propagate: a failed InitTables means the DB is unreachable/broken. Swallowing
+            // it would report Init success, register this backend, and displace the working
+            // Schema initialization must not report success after a failure.
             _logger.LogError(e, "Error when initializing tables");
+
+            throw;
         }
 
-        MigrateReplaySteamIdColumn();
+        // Finish an interrupted first-time initialization, then hold the result to the same
+        // strict points contract every later startup checks.
+        EnsurePointsTableUniqueIndexes();
+        EnsurePointsColumnsReadyForRuntime();
+
+        MigratePlayerJoinDates();
+        RepairInvalidStoredPlayTimes();
+        EnsureTrackScoreCoveringIndex();
+        EnsureScoreRecalcOutboxIndexes();
+        EnsureRunSubmissionInboxIndex();
+        if (startScoreRecalcWorker) StartScoreRecalcWorker();
     }
 
-    private void MigrateReplaySteamIdColumn()
+    /// <summary>
+    /// Ensures the covering index that serves the score-recalc delta read
+    /// (WHERE MapId=? AND Style=? AND Track=?, no SteamId predicate) exists. SqlSugar's
+    /// <c>InitTables</c> creates declared indexes only when it first creates the table, so an existing
+    /// production table would otherwise keep full-scanning the scores table on every recalc.
+    /// </summary>
+    private void EnsureTrackScoreCoveringIndex()
     {
-        const string tableName  = "surf_runs_replay";
-        const string columnName = "SteamId";
+        const string tableName = "surf_player_track_scores";
+        const string indexName = "idx_player_track_scores_map_style_track";
 
         try
         {
@@ -76,53 +137,77 @@ internal sealed partial class StorageServiceImpl : IRequestManager
                 return;
             }
 
-            var columns = _db.DbMaintenance.GetColumnInfosByTableName(tableName, false);
-
-            var steamIdCol = columns?.Find(c => string.Equals(c.DbColumnName, columnName, StringComparison.OrdinalIgnoreCase));
-
-            if (steamIdCol is null)
+            if (_db.DbMaintenance.IsAnyIndex(indexName))
             {
                 return;
             }
 
-            var rawType = steamIdCol.DataType?.Trim().ToLowerInvariant() ?? string.Empty;
-
-            if (rawType is "bigint" or "int8" or "long")
-            {
-                return;
-            }
-
-            _logger.LogWarning("Migrating {Table}.{Column} from '{Type}' to BIGINT (steam64 stored as signed Int64)",
-                               tableName, columnName, rawType);
-
-            var dbType = _db.CurrentConnectionConfig.DbType;
-
-            var sql = dbType switch
-            {
-                DbType.MySql      => $"ALTER TABLE `{tableName}` MODIFY COLUMN `{columnName}` BIGINT NOT NULL",
-                DbType.PostgreSQL => $"ALTER TABLE \"{tableName}\" ALTER COLUMN \"{columnName}\" TYPE BIGINT USING \"{columnName}\"::bigint",
-                _                 => null,
-            };
-
-            if (sql is null)
-            {
-                _logger.LogError("Unsupported DbType {DbType} for {Table}.{Column} migration", dbType, tableName, columnName);
-                return;
-            }
-
-            _db.Ado.ExecuteCommand(sql);
-            _logger.LogInformation("Migrated {Table}.{Column} to BIGINT", tableName, columnName);
+            _db.DbMaintenance.CreateIndex(tableName,
+                [nameof(PlayerTrackScoreEntity.MapId), nameof(PlayerTrackScoreEntity.Style), nameof(PlayerTrackScoreEntity.Track),
+                 nameof(PlayerTrackScoreEntity.SteamId), nameof(PlayerTrackScoreEntity.Points)], indexName, false);
+            _logger.LogInformation("Created covering index {Index} on {Table}", indexName, tableName);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Failed to migrate {Table}.{Column} to BIGINT", tableName, columnName);
+            _logger.LogError(e, "Failed to ensure covering index {Index} on {Table}", indexName, tableName);
         }
     }
 
     public void Shutdown()
     {
-        _scoreRecalcScheduler.Dispose();
-        _db.Dispose();
+        if (Interlocked.Exchange(ref _shutdown, 1) != 0) return;
+        if (_scoreRecalcScheduler is not null && Volatile.Read(ref _workerStopRequested) == 0)
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            try { StopScoreRecalcWorkerAsync(deadline.Token).GetAwaiter().GetResult(); }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Score worker shutdown exceeded 15 seconds; retaining its SQL scope until the active operation finishes.");
+            }
+        }
+        _scoreRecalcScheduler?.Dispose();
+        if (_scoreRecalcWorkerStorage is not null) _ = DisposeWorkerStorageAfterCompletionAsync();
+        _rootDb.Dispose();
+    }
+
+    internal Task StopScoreRecalcWorkerAsync(CancellationToken cancellationToken)
+    {
+        Interlocked.Exchange(ref _workerStopRequested, 1);
+        return _scoreRecalcScheduler?.StopAsync(cancellationToken) ?? Task.CompletedTask;
+    }
+
+    internal void RequestScoreRecalcWorkerStop()
+    {
+        Interlocked.Exchange(ref _workerStopRequested, 1);
+        _scoreRecalcScheduler?.RequestStop();
+    }
+
+    private async Task DisposeWorkerStorageAfterCompletionAsync()
+    {
+        try { await _scoreRecalcScheduler!.Completion; }
+        catch (Exception exception) { _logger.LogError(exception, "Score worker stopped unexpectedly."); }
+        finally { _scoreRecalcWorkerStorage!.Shutdown(); }
+    }
+
+    private void WakeScoreRecalcWorker()
+        => _scoreRecalcScheduler?.Wake();
+
+    internal void StartScoreRecalcWorker()
+    {
+        // Tests and hosts sometimes customize SqlSugar type mapping after constructing this
+        // storage. The worker has an independent connection scope, so copy that configuration
+        // before its first database operation rather than letting it diverge from the foreground.
+        if (_scoreRecalcWorkerStorage is not null)
+        {
+            _scoreRecalcWorkerStorage.Db.CurrentConnectionConfig.ConfigureExternalServices =
+                _db.CurrentConnectionConfig.ConfigureExternalServices;
+        }
+
+        if (_scoreRecalcScheduler is not null)
+        {
+            _workerStartedAtUtc = DateTime.UtcNow;
+            _scoreRecalcScheduler.Start();
+        }
     }
 
     public async Task<MapProfile> GetMapInfo(string map)
@@ -132,56 +217,317 @@ internal sealed partial class StorageServiceImpl : IRequestManager
 
         var trackTiers = await _db.Queryable<MapTrackEntity>()
                                   .Where(x => x.MapId == mapInfo.MapId)
-                                  .ToListAsync();
+                                  .ToListAsync(OperationCancellation);
 
         return ToMapProfile(mapInfo, trackTiers);
+    }
+
+    /// <summary>
+    /// Reads an existing map profile without the legacy <see cref="GetMapInfo"/> side effect
+    /// of creating a map row. HTTP GET endpoints must use this method so that they remain
+    /// cacheable and cannot provision data merely by being probed.
+    /// </summary>
+    internal async Task<MapProfile?> GetExistingMapInfoAsync(string map)
+    {
+        var mapKey  = ToMapKey(map);
+        var mapInfo = await FindMapByNameAsync(mapKey);
+
+        if (mapInfo is null)
+        {
+            return null;
+        }
+
+        _mapIdCache[mapKey] = mapInfo.MapId;
+
+        var trackTiers = await _db.Queryable<MapTrackEntity>()
+                                  .Where(x => x.MapId == mapInfo.MapId)
+                                  .ToListAsync(OperationCancellation);
+
+        return ToMapProfile(mapInfo, trackTiers);
+    }
+
+    /// <summary>
+    /// Executes strongly-typed database checks for readiness probes. It intentionally does not
+    /// mutate maps, invoke lazy best-run seeding, or use raw ADO commands. A read-only backend
+    /// only checks the map table; a write-serving backend additionally verifies the durable
+    /// submission Inbox, score-recalculation Outbox, their correctness/performance indexes,
+    /// and every table touched by the write transaction before it can accept a write.
+    /// </summary>
+    internal async Task CheckReadyAsync(bool requireWriteSchema = false,
+                                        bool verifyReadRepairAccess = false,
+                                        bool forceSchemaVerification = true)
+    {
+        if (!requireWriteSchema)
+        {
+            await _db.Queryable<MapEntity>()
+                     .Select(x => x.MapId)
+                     .Take(1)
+                     .ToListAsync(OperationCancellation);
+            if (verifyReadRepairAccess) await VerifyReadRepairAccessAsync();
+            return;
+        }
+
+        await VerifyWriteSchemaMetadataIfDueAsync(forceSchemaVerification);
+
+        // Every probe: typed, cancellable one-row reads of each table the write path uses. They
+        // catch a missing table or read permission without the metadata queries above.
+        // Select full typed rows even when the tables are empty. This makes a partially-created
+        // table fail now instead of waiting for the first live submission to reference a missing
+        // column. The result sets remain bounded to one row.
+        await ProbeTableAsync<MapEntity>("surf_maps");
+        // Every score recalculation joins map-track tiers, including main-track work.
+        await ProbeTableAsync<MapTrackEntity>("surf_maps_tracks");
+        await ProbeTableAsync<PlayerEntity>("surf_players");
+        await ProbeTableAsync<PlayerBestRunEntity>("surf_player_best_runs");
+        await ProbeTableAsync<PlayerTrackScoreEntity>("surf_player_track_scores");
+        await ProbeTableAsync<RunEntity>("surf_runs");
+        await ProbeTableAsync<RunSegmentEntity>("surf_runs_segments");
+        await ProbeTableAsync<RunSubmissionEntity>("surf_run_submissions");
+        await ProbeTableAsync<ScoreRecalcOutboxEntity>("surf_score_recalc_outbox");
+
+        if (verifyReadRepairAccess) await VerifyReadRepairAccessAsync();
+    }
+
+    /// <summary>A trivial read used to tell a database outage apart from other failures.</summary>
+    internal async Task<bool> PingAsync()
+    {
+        await _db.Queryable<MapEntity>().Select(x => x.MapId).Take(1).ToListAsync(OperationCancellation);
+        return true;
+    }
+
+    private async Task ProbeTableAsync<T>(string tableName) where T : class, new()
+    {
+        try
+        {
+            await _db.Queryable<T>().Take(1).ToListAsync(OperationCancellation);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Keep the stable operator-facing error the metadata check used to give.
+            throw new InvalidOperationException(
+                $"Timer backend write schema is not ready; table {tableName} is missing or not readable.", exception);
+        }
+    }
+
+    private static readonly TimeSpan SchemaReverificationInterval = TimeSpan.FromMinutes(5);
+    private readonly SemaphoreSlim _schemaVerificationGate = new(1, 1);
+    private long _schemaVerifiedAtTicks;
+    private volatile bool _schemaVerificationFailed;
+
+    /// <summary>
+    /// SqlSugar's table/index metadata calls are synchronous and cannot be cancelled, so a stalled
+    /// database would pin one thread per readiness probe. Run them at startup (forced) and then at
+    /// most once per <see cref="SchemaReverificationInterval"/>, by one caller at a time; concurrent
+    /// probes rely on the most recent result.
+    /// </summary>
+    private async Task VerifyWriteSchemaMetadataIfDueAsync(bool force)
+    {
+        var verifiedAt = Interlocked.Read(ref _schemaVerifiedAtTicks);
+        if (!force && !_schemaVerificationFailed && verifiedAt != 0
+            && DateTime.UtcNow.Ticks - verifiedAt < SchemaReverificationInterval.Ticks)
+        {
+            return;
+        }
+
+        if (!await _schemaVerificationGate.WaitAsync(force ? Timeout.Infinite : 0, OperationCancellation))
+        {
+            if (verifiedAt != 0 && !_schemaVerificationFailed) return;
+            throw new InvalidOperationException("Timer backend write schema verification is in progress or failed.");
+        }
+
+        try
+        {
+            VerifyWriteSchemaMetadata();
+            await ValidateWriteIndexesAsync();
+            _schemaVerificationFailed = false;
+            Interlocked.Exchange(ref _schemaVerifiedAtTicks, DateTime.UtcNow.Ticks);
+        }
+        catch
+        {
+            _schemaVerificationFailed = true;
+            throw;
+        }
+        finally
+        {
+            _schemaVerificationGate.Release();
+        }
+    }
+
+    private long _readRepairInsertVerifiedAtTicks;
+
+    /// <summary>
+    /// Read repair inserts/updates surf_player_best_runs under a surf_maps row lock. UPDATE and
+    /// FOR UPDATE privileges are checked before any row is matched, so those statements change
+    /// nothing yet fail for a SELECT-only principal; they run on every probe. INSERT privilege can
+    /// only be proven by a real insert, which is always rolled back and runs at most once per
+    /// <see cref="SchemaReverificationInterval"/> (a rolled-back insert still consumes an identity).
+    /// </summary>
+    private async Task VerifyReadRepairAccessAsync()
+    {
+        await VerifyReadRepairUpdateAccessAsync();
+
+        var verifiedAt = Interlocked.Read(ref _readRepairInsertVerifiedAtTicks);
+        if (verifiedAt != 0 && DateTime.UtcNow.Ticks - verifiedAt < SchemaReverificationInterval.Ticks)
+        {
+            return;
+        }
+
+        try
+        {
+            await WithRecordTransactionAsync(async () =>
+            {
+                // SteamId -1 / MapId 0 / style -1 never identify a real board, so this cannot
+                // collide with (or briefly shadow) a player's best run before the rollback.
+                await _db.Insertable(new PlayerBestRunEntity
+                         {
+                             SteamId = -1, MapId = 0, RunType = RunType.Main, Style = -1, Track = 0, Stage = 0,
+                             RunId = 0, BestTime = 0, UpdatedAt = DateTime.UtcNow,
+                         })
+                         .ExecuteCommandAsync(OperationCancellation);
+                throw new ReadinessProbeRollbackException();
+            });
+        }
+        catch (ReadinessProbeRollbackException)
+        {
+            // Expected: the insert succeeded and was rolled back.
+        }
+
+        Interlocked.Exchange(ref _readRepairInsertVerifiedAtTicks, DateTime.UtcNow.Ticks);
+    }
+
+    private sealed class ReadinessProbeRollbackException : Exception;
+
+    private async Task VerifyReadRepairUpdateAccessAsync()
+    {
+        await WithRecordTransactionAsync(async () =>
+        {
+            await _db.Updateable<PlayerBestRunEntity>()
+                     .SetColumns(x => x.UpdatedAt == x.UpdatedAt)
+                     .Where(x => x.Id == 0)
+                     .ExecuteCommandAsync(OperationCancellation);
+            if (_db.CurrentConnectionConfig.DbType != DbType.Sqlite)
+            {
+                await _db.Queryable<MapEntity>()
+                         .Where(x => x.MapId == 0)
+                         .TranLock(DbLockType.Wait)
+                         .Select(x => x.MapId)
+                         .ToListAsync(OperationCancellation);
+            }
+        });
+    }
+
+    private void VerifyWriteSchemaMetadata()
+    {
+        const string mapTableName = "surf_maps";
+        const string submissionTableName = "surf_run_submissions";
+        const string outboxTableName = "surf_score_recalc_outbox";
+        const string submissionIndexName = "idx_surf_run_submissions_submission_unique";
+        const string outboxUniqueIndexName = "idx_score_recalc_outbox_unique";
+        const string outboxPendingIndexName = "idx_score_recalc_outbox_pending";
+        const string trackScoreCoveringIndexName = "idx_player_track_scores_map_style_track";
+
+        var missing = new List<string>();
+
+        foreach (var tableName in new[]
+                 {
+                     mapTableName,
+                     "surf_maps_tracks",
+                     "surf_players",
+                     "surf_player_best_runs",
+                     "surf_player_track_scores",
+                     "surf_runs",
+                     "surf_runs_segments",
+                     submissionTableName,
+                     outboxTableName,
+                 })
+        {
+            if (!_db.DbMaintenance.IsAnyTable(tableName, false))
+            {
+                missing.Add($"table {tableName}");
+            }
+        }
+
+        // The Inbox index is the correctness boundary for concurrent/retried submissions.
+        // Check it only after confirming its table exists so a missing table produces the
+        // more actionable table error rather than a provider-specific metadata failure.
+        if (_db.DbMaintenance.IsAnyTable(submissionTableName, false)
+            && !_db.DbMaintenance.IsAnyIndex(submissionIndexName))
+        {
+            missing.Add($"unique index {submissionIndexName} on {submissionTableName}");
+        }
+
+        if (_db.DbMaintenance.IsAnyTable(outboxTableName, false))
+        {
+            if (!_db.DbMaintenance.IsAnyIndex(outboxUniqueIndexName))
+            {
+                missing.Add($"unique index {outboxUniqueIndexName} on {outboxTableName}");
+            }
+
+            if (!_db.DbMaintenance.IsAnyIndex(outboxPendingIndexName))
+            {
+                missing.Add($"index {outboxPendingIndexName} on {outboxTableName}");
+            }
+        }
+
+        if (_db.DbMaintenance.IsAnyTable("surf_player_track_scores", false)
+            && !_db.DbMaintenance.IsAnyIndex(trackScoreCoveringIndexName))
+        {
+            missing.Add($"index {trackScoreCoveringIndexName} on surf_player_track_scores");
+        }
+
+        if (missing.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"Timer backend write schema is not ready; missing {string.Join(", ", missing)}.");
+        }
     }
 
     public async Task UpdateMapInfo(MapProfile info)
     {
         var mapKey = ToMapKey(info.MapName);
 
-        await _db.Ado.BeginTranAsync();
-
-        try
+        var mapId = await EnsureMapIdByNameAsync(info.MapName);
+        var tier = GetTier(info.Tier, 0);
+        var stages = ToUInt16(info.Stages);
+        await WithRecordTransactionAsync(async () =>
         {
-            var mapInfo = await FindMapByNameAsync(mapKey);
+            await LockMapAsync(mapId);
+            // Map metadata only. PlayCount/TotalPlayTime are session counters and must
+            // never be copied from an old per-server map-profile snapshot.
+            // Do not copy a stale BasePot over an administrator's concurrent change.
+            await _db.Updateable<MapEntity>()
+                .SetColumns(x => x.File == mapKey)
+                .SetColumns(x => x.Tier == tier)
+                .SetColumns(x => x.Stages == stages)
+                .SetColumns(x => x.Bonuses == info.Bonuses)
+                .Where(x => x.MapId == mapId).ExecuteCommandAsync(OperationCancellation);
+            await SyncMapTrackTiersAsync(mapId, info.Tier);
+        });
 
-            if (mapInfo is null)
-            {
-                mapInfo = new ()
-                {
-                    File    = mapKey,
-                    Tier    = GetTier(info.Tier, 0),
-                    Stages  = ToUInt16(info.Stages),
-                    BasePot = 0,
-                };
+        // Cache writes only after a successful commit, so a rollback can never leave
+        // the caches holding state from a transaction that never happened.
+        _mapIdCache[mapKey] = mapId;
+    }
 
-                await _db.Insertable(mapInfo).ExecuteReturnIdentityAsync();
-            }
-            else
-            {
-                mapInfo.File   = mapKey;
-                mapInfo.Tier   = GetTier(info.Tier, 0);
-                mapInfo.Stages = ToUInt16(info.Stages);
-
-                await _db.Updateable(mapInfo).ExecuteCommandAsync();
-            }
-
-            await SyncMapTrackTiersAsync(mapInfo.MapId, info.Tier);
-
-            _mapIdCache[mapKey] = mapInfo.MapId;
-            InvalidateTrackScoreConfigCache(mapInfo.MapId);
-
-            await _db.Ado.CommitTranAsync();
-        }
-        catch
+    public async Task IncrementMapStatsAsync(string mapName, float deltaSeconds)
+    {
+        ValidatePlayTimeDelta(deltaSeconds);
+        var maximumCurrentTime = (double)MaximumStoredPlayTimeSeconds - deltaSeconds;
+        var mapId = await EnsureMapIdByNameAsync(mapName);
+        await WithRecordTransactionAsync(async () =>
         {
-            await _db.Ado.RollbackTranAsync();
-
-            throw;
-        }
-
+            await LockMapAsync(mapId);
+            var updated = await _db.Updateable<MapEntity>()
+                                   .SetColumns(x => x.PlayCount == x.PlayCount + 1)
+                                   .SetColumns(x => x.TotalPlayTime == x.TotalPlayTime + deltaSeconds)
+                                   .Where(x => x.MapId == mapId && x.PlayCount >= 0 && x.PlayCount < int.MaxValue
+                                               && x.TotalPlayTime >= 0 && x.TotalPlayTime <= maximumCurrentTime)
+                                   .ExecuteCommandAsync(OperationCancellation);
+            if (updated != 1)
+            {
+                throw new InvalidOperationException("Map session counters could not be incremented.");
+            }
+        });
     }
 
 }

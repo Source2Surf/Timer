@@ -29,7 +29,9 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Modules.MapInfo;
+using Source2Surf.Timer.Utilities;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
 
@@ -38,8 +40,6 @@ namespace Source2Surf.Timer.Modules;
 internal interface IMapInfoModule
 {
     float GetEnterSpeedLimit(int track);
-
-    float GetExitSpeedLimit(int track);
 
     int GetMaxPrejumps(int track);
 
@@ -63,13 +63,14 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     private readonly InterfaceBridge _bridge;
     private readonly IRequestManager _requestManager;
     private readonly ICommandManager _commandManager;
+    private readonly ScoreWriteMode _scoreWriteMode;
 
     private readonly ILogger<MapInfoModule>          _logger;
     private readonly TaskTracker                     _taskTracker;
 
-    private MapProfile _currentMapProfileInfo = null!;
-
-    private string _currentMapName = string.Empty;
+    // Placeholder until the async GetMapInfo load completes (never null): consumers
+    // (!tier, !mi, replay StorePendingReplay) may run before/without a DB round-trip.
+    private MapProfile _currentMapProfileInfo = new () { MapName = string.Empty };
 
     private double     _currentMapStartTime;
     private MapConfig? _currentMapConfig = null;
@@ -121,9 +122,8 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     private GameModeConfig _currentGameModeConfig = DefaultConfig;
 
-    private float _currentAirAccelerate;
-    private bool  _mapStatsPersisted;
-    private bool  _mapProfileLoaded;
+    private bool _mapStatsPersisted;
+    private bool _mapProfileLoaded;
 
     // Late-resolved to avoid circular DI (RecordModule depends on IMapInfoModule)
     private IRecordModule _recordModule = null!;
@@ -132,11 +132,13 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     public MapInfoModule(InterfaceBridge        bridge,
                          IRequestManager        requestManager,
                          ICommandManager        commandManager,
+                         ScoreWriteModeOptions  scoreWriteMode,
                          ILogger<MapInfoModule> logger)
     {
         _bridge         = bridge;
         _requestManager = requestManager;
         _commandManager = commandManager;
+        _scoreWriteMode = scoreWriteMode.Mode;
         _logger         = logger;
         _taskTracker    = new TaskTracker(logger);
 
@@ -150,6 +152,10 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     public bool Init()
     {
+        // Prime the cache on load so it's valid after a mid-map hot-reload (OnGameInit won't re-fire).
+        _bridge.RefreshMapName();
+        _currentMapProfileInfo = new () { MapName = _bridge.CurrentMapName };
+
         _bridge.ModSharp.InstallGameListener(this);
 
         _commandManager.AddAdminChatCommand("set_tier", [], OnCommandSetTier);
@@ -180,17 +186,21 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     public void OnGameInit()
     {
-        _currentMapName      = _bridge.GlobalVars.MapName;
+        _bridge.RefreshMapName();
         _currentMapStartTime = _bridge.ModSharp.EngineTime();
         _mapStatsPersisted   = false;
         _mapProfileLoaded    = false;
+
+        // Reset immediately: keeping the previous map's profile visible during the async
+        // load would let consumers key data (e.g. replays) against the WRONG MapId.
+        _currentMapProfileInfo = new () { MapName = _bridge.CurrentMapName };
 
         var loadTask = Task.Run(async () =>
         {
             try
             {
                 var profile = await RetryHelper.RetryAsync(
-                    () => _requestManager.GetMapInfo(_currentMapName),
+                    () => _requestManager.GetMapInfo(_bridge.CurrentMapName),
                     RetryHelper.IsTransient, _logger, "GetMapInfo"
                 ).ConfigureAwait(false);
 
@@ -213,8 +223,6 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     {
         LoadGameModeConfig();
         LoadMapConfig();
-
-        _currentAirAccelerate = _currentGameModeConfig.AirAccelerate;
     }
 
     public void OnGamePreShutdown()
@@ -225,6 +233,12 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     private ECommandAction OnCommandSetTier(PlayerSlot slot, StringCommand command)
     {
+        if (_scoreWriteMode == ScoreWriteMode.RemoteWrite)
+        {
+            _logger.LogWarning("set_tier is unavailable in remote-write mode. Use the backend set-tier command so backend score policy is used and affected boards are recalculated.");
+            return ECommandAction.Handled;
+        }
+
         if (command.ArgCount < 1)
         {
             return ECommandAction.Handled;
@@ -232,6 +246,15 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
         if (command.TryGet<byte>(1) is { } tier and > 0)
         {
+            // Persisting the placeholder would overwrite the map's real Stages/PlayCount
+            // with zeros — refuse until the profile load has completed.
+            if (!_mapProfileLoaded)
+            {
+                _logger.LogWarning("set_tier ignored: map profile not loaded yet.");
+
+                return ECommandAction.Handled;
+            }
+
             _currentMapProfileInfo.Tier[0] = tier;
 
             var profile = _currentMapProfileInfo;
@@ -254,7 +277,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         var sb = ZString.CreateStringBuilder(true);
         try
         {
-            sb.Append(_currentMapName);
+            sb.Append(_bridge.CurrentMapName);
             sb.Append(" | Tier: ");
             sb.Append(ChatColor.LightGreen);
             sb.Append(_currentMapProfileInfo.Tier[0]);
@@ -272,71 +295,62 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     private ECommandAction OnCommandPlaytime(PlayerSlot slot, StringCommand command)
     {
-        if (_bridge.ClientManager.GetGameClient(slot) is not { } client
-            || client.GetPlayerController() is not { IsValidEntity: true } controller)
+        if (!_bridge.TryGetClientController(slot, out var client, out _))
         {
             return ECommandAction.Handled;
         }
 
         var steamId        = client.SteamId;
-        var mapName        = _currentMapName;
+        var mapName        = _bridge.CurrentMapName;
         var currentSession = _recordModule.GetSessionTime(slot);
 
-        Task.Run(async () =>
-        {
-            try
-            {
-                var (dbPlayTime, playCount) = await RetryHelper.RetryAsync(
-                    () => _requestManager.GetPlayerMapStatsAsync(steamId, mapName),
-                    RetryHelper.IsTransient, _logger, "GetPlayerMapStatsAsync"
-                ).ConfigureAwait(false);
+        AsyncChatCommand.Run(_bridge, _logger, slot, "GetPlayerMapStatsAsync",
+                             () => _requestManager.GetPlayerMapStatsAsync(steamId, mapName),
+                             (ctrl, stats) =>
+                             {
+                                 var (dbPlayTime, playCount) = stats;
+                                 var totalTime               = dbPlayTime + currentSession;
 
-                var totalTime = dbPlayTime + currentSession;
+                                 var sb = ZString.CreateStringBuilder(true);
+                                 try
+                                 {
+                                     sb.Append("Playtime on ");
+                                     sb.Append(ChatColor.LightGreen);
+                                     sb.Append(mapName);
+                                     sb.Append(ChatColor.White);
+                                     sb.Append(": ");
+                                     sb.Append(ChatColor.LightGreen);
+                                     AppendPlaytime(ref sb, totalTime);
+                                     sb.Append(ChatColor.White);
+                                     sb.Append(" | Plays: ");
+                                     sb.Append(ChatColor.LightGreen);
+                                     sb.Append(playCount + 1);
+                                     sb.Append(ChatColor.White);
 
-                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
-                {
-                    var sb = ZString.CreateStringBuilder(true);
-                    try
-                    {
-                        sb.Append("Playtime on ");
-                        sb.Append(ChatColor.LightGreen);
-                        sb.Append(mapName);
-                        sb.Append(ChatColor.White);
-                        sb.Append(": ");
-                        sb.Append(ChatColor.LightGreen);
-
-                        var hours   = (int)(totalTime / 3600f);
-                        var minutes = (int)((totalTime % 3600f) / 60f);
-
-                        if (hours > 0)
-                        {
-                            sb.Append(hours);
-                            sb.Append("h ");
-                        }
-
-                        sb.Append(minutes);
-                        sb.Append("m");
-                        sb.Append(ChatColor.White);
-                        sb.Append(" | Plays: ");
-                        sb.Append(ChatColor.LightGreen);
-                        sb.Append(playCount + 1);
-                        sb.Append(ChatColor.White);
-
-                        controller.PrintToChat(sb.ToString());
-                    }
-                    finally
-                    {
-                        sb.Dispose();
-                    }
-                });
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Error when fetching player playtime");
-            }
-        }, _bridge.CancellationToken);
+                                     ctrl.PrintToChat(sb.ToString());
+                                 }
+                                 finally
+                                 {
+                                     sb.Dispose();
+                                 }
+                             });
 
         return ECommandAction.Handled;
+    }
+
+    private static void AppendPlaytime(ref Utf16ValueStringBuilder sb, float totalSeconds)
+    {
+        var hours   = (int) (totalSeconds / 3600f);
+        var minutes = (int) ((totalSeconds % 3600f) / 60f);
+
+        if (hours > 0)
+        {
+            sb.Append(hours);
+            sb.Append("h ");
+        }
+
+        sb.Append(minutes);
+        sb.Append("m");
     }
 
     private ECommandAction OnCommandMapInfo(PlayerSlot slot, StringCommand command)
@@ -355,7 +369,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         try
         {
             sb.Append(ChatColor.LightGreen);
-            sb.Append(_currentMapName);
+            sb.Append(_bridge.CurrentMapName);
             sb.Append(ChatColor.White);
             sb.Append(" | Tier: ");
             sb.Append(ChatColor.LightGreen);
@@ -461,19 +475,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             sb.Append(ChatColor.White);
             sb.Append(" times | Total: ");
             sb.Append(ChatColor.LightGreen);
-
-            var totalSeconds = profile.TotalPlayTime;
-            var hours   = (int)(totalSeconds / 3600f);
-            var minutes = (int)((totalSeconds % 3600f) / 60f);
-
-            if (hours > 0)
-            {
-                sb.Append(hours);
-                sb.Append("h ");
-            }
-
-            sb.Append(minutes);
-            sb.Append("m");
+            AppendPlaytime(ref sb, profile.TotalPlayTime);
             sb.Append(ChatColor.White);
 
             controller.PrintToChat(sb.ToString());
@@ -493,7 +495,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
         foreach (var cfg in GameModeConfigs)
         {
-            if (!_currentMapName.StartsWith(cfg.Prefix, StringComparison.OrdinalIgnoreCase))
+            if (!_bridge.CurrentMapName.StartsWith(cfg.Prefix, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -575,7 +577,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     private void LoadMapConfig()
     {
-        var configPath = Path.Combine(_configPath, $"{_currentMapName}.json");
+        var configPath = Path.Combine(_configPath, $"{_bridge.CurrentMapName}.json");
 
         if (!File.Exists(configPath))
         {
@@ -649,17 +651,6 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         return _currentGameModeConfig.EnterSpeedLimit;
     }
 
-    public float GetExitSpeedLimit(int track)
-    {
-        if (_currentMapConfig != null
-            && _currentMapConfig.ZoneConfigs.TryGetValue(track, out var zone)
-            && zone.ExitSpeedLimit is { } exitLimit)
-        {
-            return exitLimit;
-        }
-        return _currentGameModeConfig.ExitSpeedLimit;
-    }
-
     public int GetMaxPrejumps(int track)
     {
         if (_currentMapConfig != null
@@ -722,7 +713,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             return;
         }
 
-        if (_currentMapStartTime <= 0 || string.IsNullOrEmpty(_currentMapName))
+        if (_currentMapStartTime <= 0 || string.IsNullOrEmpty(_bridge.CurrentMapName))
         {
             return;
         }
@@ -736,43 +727,18 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             delta = 0f;
         }
 
-        if (!_mapProfileLoaded)
-        {
-            var mapName = _currentMapName;
-
-            _taskTracker.Track(Task.Run(async () =>
-            {
-                try
-                {
-                    var profile = await _requestManager.GetMapInfo(mapName).ConfigureAwait(false);
-                    profile.PlayCount++;
-                    profile.TotalPlayTime += delta;
-
-                    await _requestManager.UpdateMapInfo(profile).ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "Error when updating map info on shutdown");
-                }
-            }, _bridge.CancellationToken));
-
-            return;
-        }
-
-        var profile = _currentMapProfileInfo;
-        profile.PlayCount++;
-        profile.TotalPlayTime += delta;
+        var map = _bridge.CurrentMapName;
 
         _taskTracker.Track(Task.Run(async () =>
         {
             try
             {
-                await _requestManager.UpdateMapInfo(profile).ConfigureAwait(false);
+                await _requestManager.IncrementMapStatsAsync(map, delta).ConfigureAwait(false);
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Error when updating map info on shutdown");
             }
-        }, _bridge.CancellationToken));
+        }));
     }
 }

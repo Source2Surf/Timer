@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Shared.Models.Zone;
@@ -20,60 +19,37 @@ internal sealed partial class StorageServiceImpl
 
         var entities = await _db.Queryable<ZoneEntity>()
                                 .Where(z => z.MapId == mapId.Value)
-                                .ToListAsync();
+                                .ToListAsync(OperationCancellation);
 
-        return entities.Select(ZoneEntityMapper.ToData).ToList();
+        var result = new List<ZoneData>(entities.Count);
+
+        foreach (var entity in entities)
+        {
+            result.Add(ZoneEntityMapper.ToData(entity));
+        }
+
+        return result;
     }
 
     public async Task SaveZonesAsync(string mapName, IReadOnlyList<ZoneData> zones)
     {
         var mapId = await EnsureMapIdByNameAsync(mapName);
-
-        await _db.Ado.BeginTranAsync();
-
-        try
+        await WithRecordTransactionAsync(async () =>
         {
+            // Serialize whole snapshots, including an initially empty zone range.
+            await LockMapAsync(mapId);
             await _db.Deleteable<ZoneEntity>()
                      .Where(z => z.MapId == mapId)
-                     .ExecuteCommandAsync();
+                     .ExecuteCommandAsync(OperationCancellation);
 
             if (zones.Count > 0)
             {
-                var entities = zones.Select(z => ZoneEntityMapper.ToEntity(z, mapId)).ToList();
-                await _db.Insertable(entities).ExecuteCommandAsync();
+                // Recreate entities on each retry so rolled-back identity values are not reused.
+                var entities = new List<ZoneEntity>(zones.Count);
+                foreach (var zone in zones)
+                    entities.Add(ZoneEntityMapper.ToEntity(zone, mapId));
+                await _db.Insertable(entities).ExecuteCommandAsync(OperationCancellation);
             }
-
-            await _db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await _db.Ado.RollbackTranAsync();
-
-            throw;
-        }
-    }
-
-    public async Task<ulong> AddZoneAsync(string mapName, ZoneData zone)
-    {
-        var mapId  = await EnsureMapIdByNameAsync(mapName);
-        var entity = ZoneEntityMapper.ToEntity(zone, mapId);
-
-        await _db.Insertable(entity).ExecuteCommandAsync();
-
-        return entity.Id;
-    }
-
-    public async Task DeleteZonesAsync(string mapName)
-    {
-        var mapId = await ResolveMapIdByNameAsync(mapName);
-
-        if (mapId is null)
-        {
-            return;
-        }
-
-        await _db.Deleteable<ZoneEntity>()
-                 .Where(z => z.MapId == mapId.Value)
-                 .ExecuteCommandAsync();
+        });
     }
 }

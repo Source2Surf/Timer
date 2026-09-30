@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Sharp.Shared.Units;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Source2Surf.Timer.Common;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
@@ -13,11 +12,22 @@ namespace Timer.RequestManager.Storage;
 
 internal sealed partial class StorageServiceImpl
 {
+    private static long ToDbSteamId(SteamID steamId) => unchecked((long)steamId.AsPrimitive());
+
+    private static bool IsUniqueKeyViolation(Exception exception)
+        => exception is MySqlConnector.MySqlException { Number: 1062 }
+            or Npgsql.PostgresException { SqlState: "23505" }
+           || (exception.InnerException is { } inner && IsUniqueKeyViolation(inner));
+
     private async Task<MapEntity?> FindMapByNameAsync(string mapName)
     {
-        return await _db.Queryable<MapEntity>()
-                        .Where(x => x.File == mapName)
-                        .FirstAsync();
+        var map = await _db.Queryable<MapEntity>()
+                           .Where(x => x.File == mapName)
+                           .FirstAsync(OperationCancellation);
+
+        // MySQL's default utf8mb4_0900_ai_ci collation compares case- and accent-insensitively, so
+        // the query can return a different map (surf_edge -> surf_édge). Map names are exact keys.
+        return map is not null && string.Equals(map.File, mapName, StringComparison.Ordinal) ? map : null;
     }
 
     internal async Task<ulong?> ResolveMapIdByNameAsync(string mapName)
@@ -68,15 +78,36 @@ internal sealed partial class StorageServiceImpl
 
             try
             {
-                var newId = await _db.Insertable(mapEntity).ExecuteReturnBigIdentityAsync();
+                var newId = await _db.Insertable(mapEntity).ExecuteReturnBigIdentityAsync(OperationCancellation);
                 mapEntity.MapId = unchecked((ulong) newId);
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Map insert raced for map {map}, retrying read.", mapName);
-            }
+                // Usually a duplicate-key race with another server inserting the same map —
+                // the re-read below picks up the winning row. If the re-read finds nothing,
+                // the insert genuinely failed: surface it instead of returning (and caching)
+                // an unsaved entity with MapId 0.
+                if (await FindMapByNameAsync(mapKey) is not { } raced)
+                {
+                    var collidingName = await _db.Queryable<MapEntity>()
+                                                 .Where(x => x.File == mapKey)
+                                                 .Select(x => x.File)
+                                                 .FirstAsync(OperationCancellation);
+                    if (collidingName is not null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Map '{mapKey}' cannot be created: the database collation treats it as equal to existing map '{collidingName}' (MySQL compares names case- and accent-insensitively). Rename one of them.",
+                            ex);
+                    }
 
-            mapEntity = await FindMapByNameAsync(mapKey) ?? mapEntity;
+                    _logger.LogError(ex, "Failed to insert map row for {map}", mapName);
+
+                    throw;
+                }
+
+                _logger.LogDebug(ex, "Map insert raced for map {map}; using the winning row.", mapName);
+                mapEntity = raced;
+            }
         }
 
         _mapIdCache[mapKey] = mapEntity.MapId;
@@ -88,7 +119,7 @@ internal sealed partial class StorageServiceImpl
     {
         await _db.Deleteable<MapTrackEntity>()
                  .Where(x => x.MapId == mapId)
-                 .ExecuteCommandAsync();
+                 .ExecuteCommandAsync(OperationCancellation);
 
         if (tiers is null || tiers.Length <= 1)
         {
@@ -116,7 +147,7 @@ internal sealed partial class StorageServiceImpl
 
         if (entities.Count > 0)
         {
-            await _db.Insertable(entities).ExecuteCommandAsync();
+            await _db.Insertable(entities).ExecuteCommandAsync(OperationCancellation);
         }
     }
 
@@ -127,26 +158,13 @@ internal sealed partial class StorageServiceImpl
             ConnectionString      = connectionString,
             IsAutoCloseConnection = true,
             InitKeyType           = InitKeyType.Attribute,
-            ConfigureExternalServices
-                = new ConfigureExternalServices { SerializeService = new SteamIdAwareSerializeService() },
+            // A mixed-version or incomplete entity must never delete a production
+            // column merely because CodeFirst does not know about it.
+            ConfigureExternalServices = new ConfigureExternalServices
+            {
+                EntityNameService = (_, entity) => entity.IsDisabledDelete = true,
+            },
         });
-
-    /// <summary>
-    ///     Custom SqlSugar serialize service that registers <see cref="SteamIdJsonConverter" />
-    ///     so that SteamID can be deserialized from Int64 in anonymous/POCO projections.
-    /// </summary>
-    private sealed class SteamIdAwareSerializeService : ISerializeService
-    {
-        private static readonly JsonSerializerSettings Settings = new () { Converters = { new SteamIdJsonConverter() } };
-        private static readonly SerializeService       Default  = new ();
-
-        public string SerializeObject(object value) => Default.SerializeObject(value);
-
-        public string SugarSerializeObject(object value) => Default.SugarSerializeObject(value);
-
-        public T DeserializeObject<T>(string value) =>
-            JsonConvert.DeserializeObject<T>(value, Settings)!;
-    }
 
     private static byte GetTier(byte[]? tiers, int track)
     {
@@ -211,31 +229,23 @@ internal sealed partial class StorageServiceImpl
     private static string ToMapKey(string mapName)
         => mapName.ToLowerInvariant();
 
-    private void InvalidateTrackScoreConfigCache(ulong mapId)
-    {
-        foreach (var key in _trackScoreConfigCache.Keys)
-        {
-            if (key.mapId == mapId)
-            {
-                _trackScoreConfigCache.TryRemove(key, out _);
-            }
-        }
-    }
-
     public async Task<IReadOnlyList<string>> GetAllMapNamesAsync()
-    {
-        var maps = await _db.Queryable<MapEntity>()
-            .Select(x => x.File)
-            .ToListAsync();
-
-        return maps;
-    }
+        => await _db.Queryable<MapEntity>()
+                    .OrderBy(x => x.File)
+                    .Select(x => x.File)
+                    .ToListAsync(OperationCancellation);
 
     private sealed class AttemptBestTimesRow
     {
+        public ulong? PlayerBestRowId { get; set; }
+        public ulong? PlayerBestRunId { get; set; }
+
         public float? ServerBestTime { get; set; }
 
-        public float? PlayerBestTime { get; set; }
+        // SqlSugar's MySQL-family materializer maps a nullable float CASE aggregate
+        // to zero when the projection targets a DTO. Keep this value double-typed
+        // so an existing personal best remains distinguishable from no value.
+        public double? PlayerBestTime { get; set; }
     }
 
 }

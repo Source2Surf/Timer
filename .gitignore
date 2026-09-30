@@ -342,3 +342,9 @@ healthchecksdb
 # secrets
 *.pfx
 *.pem
+
+analysis/
+
+# Local backend environment settings may contain database credentials.
+/Timer.Backend/appsettings.*.json
+!/Timer.Backend/appsettings.example.json

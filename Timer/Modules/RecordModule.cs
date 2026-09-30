@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
@@ -26,8 +27,11 @@ using Sharp.Shared.GameEntities;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Player;
+using Source2Surf.Timer.Managers.Submission;
+using Source2Surf.Timer.Modules.Practice;
 using Source2Surf.Timer.Modules.Record;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
@@ -74,6 +78,8 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     private readonly ICommandManager       _commandManager;
     private readonly IRequestManager       _request;
     private readonly IMapInfoModule        _mapInfo;
+    private readonly IPracticeModule       _practiceModule;
+    private readonly ScoreWriteMode         _scoreWriteMode;
     private readonly ILogger<RecordModule> _logger;
 
     // Sub-components
@@ -96,6 +102,10 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                         IRequestManager       request,
                         ICommandManager       commandManager,
                         IMapInfoModule        mapInfoModule,
+                        IPracticeModule       practiceModule,
+                        ScoreWriteModeOptions scoreWriteMode,
+                        IConfiguration        configuration,
+                        RunSubmissionSender   remoteSubmissionSender,
                         ILogger<RecordModule> logger)
     {
         _bridge         = bridge;
@@ -105,12 +115,23 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         _request        = request;
         _commandManager = commandManager;
         _mapInfo        = mapInfoModule;
+        _practiceModule = practiceModule;
+        _scoreWriteMode = scoreWriteMode.Mode;
         _logger         = logger;
 
         _listenerHub = new ListenerHub<IRecordModuleListener>(logger);
         _mapCache    = new MapRecordCache(logger);
         _playerCache = new PlayerRecordCache(logger);
-        _saver       = new RecordSaver(bridge, request, styleModule, _mapCache, _playerCache, _listenerHub, logger);
+        _saver       = new RecordSaver(bridge,
+                                       request,
+                                       styleModule,
+                                       _mapCache,
+                                       _playerCache,
+                                       _listenerHub,
+                                       scoreWriteMode,
+                                       RemoteRunSubmissionOptions.FromConfiguration(configuration, scoreWriteMode),
+                                       remoteSubmissionSender,
+                                       logger);
         _taskTracker = new TaskTracker(logger);
     }
 
@@ -151,6 +172,14 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     public void OnPostInit(ServiceProvider provider)
     {
         _replayRecorder = provider.GetRequiredService<IReplayRecorderModule>();
+        if (_replayRecorder is IRecordModuleListener replayListener)
+        {
+            _saver.SetLateReplayListener(replayListener);
+        }
+        else
+        {
+            _logger.LogError("Replay recorder does not implement IRecordModuleListener; old-map remote acknowledgements cannot attach replays.");
+        }
     }
 
     public void Shutdown()
@@ -174,12 +203,15 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     public void OnServerActivate()
     {
+        var currentMapName = _bridge.CurrentMapName;
+        _mapCache.Clear();
+        _playerCache.ClearAll();
+        var load = _mapCache.BeginLoad();
+
         Task.Run(async () =>
         {
             try
             {
-                var currentMapName = _bridge.GlobalVars.MapName;
-
                 var records = await RetryHelper.RetryAsync(
                     () => _request.GetMapRecords(currentMapName),
                     RetryHelper.IsTransient, _logger, "GetMapRecords"
@@ -212,25 +244,15 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    _mapCache.Clear();
-                    _mapCache.Populate(records, stageRecords);
+                    if (!_mapCache.IsCurrent(load)) return;
+                    _mapCache.Populate(records, stageRecords, load);
 
                     foreach (var ((style, track), checkpoints) in wrCheckpointMap)
                     {
-                        _mapCache.SetWRCheckpoints(style, track, checkpoints);
+                        _mapCache.SetWRCheckpoints(style, track, checkpoints, load);
                     }
 
-                    foreach (var listener in _listenerHub.Snapshot)
-                    {
-                        try
-                        {
-                            listener.OnMapRecordsLoaded();
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error when calling OnMapRecordsLoaded listener");
-                        }
-                    }
+                    _listenerHub.NotifyAll("OnMapRecordsLoaded", static l => l.OnMapRecordsLoaded());
                 });
             }
             catch (Exception e)
@@ -261,6 +283,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         }
 
         _mapCache.Clear();
+        _playerCache.ClearAll();
     }
 
     public void OnPlayerFinishMap(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
@@ -278,10 +301,19 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
             return;
         }
 
+        if (_practiceModule.IsInPractice(slot))
+        {
+            controller.PrintToChat("Practice run — not saved.");
+            return;
+        }
+
+        var mapName = _bridge.CurrentMapName;
+        var mapId = CaptureFinishMapId(mapName);
         _taskTracker.Track(_saver.SaveMapRecordAsync(slot,
                                                      client.SteamId,
                                                      client.Name,
-                                                     _bridge.GlobalVars.MapName,
+                                                     mapName,
+                                                     mapId,
                                                      timerInfo,
                                                      attemptId: _replayRecorder.GetAttemptId(slot),
                                                      _bridge.CancellationToken));
@@ -303,10 +335,19 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
             return;
         }
 
+        if (_practiceModule.IsInPractice(slot))
+        {
+            // Don't spam chat per-stage during practice; OnPlayerFinishMap already prints once.
+            return;
+        }
+
+        var mapName = _bridge.CurrentMapName;
+        var mapId = CaptureFinishMapId(mapName);
         _taskTracker.Track(_saver.SaveStageRecordAsync(slot,
                                                        client.SteamId,
                                                        client.Name,
-                                                       _bridge.GlobalVars.MapName,
+                                                       mapName,
+                                                       mapId,
                                                        timerInfo,
                                                        attemptId: _replayRecorder.GetAttemptId(slot),
                                                        _bridge.CancellationToken));
@@ -345,7 +386,8 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
             return;
         }
 
-        var mapName = _bridge.GlobalVars.MapName;
+        var mapName = _bridge.CurrentMapName;
+        var load = _mapCache.BeginLoad();
 
         _taskTracker.Track(Task.Run(async () =>
                                     {
@@ -364,6 +406,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
                                             await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                                             {
+                                                if (!_mapCache.IsCurrent(load)) return;
                                                 if (_bridge.ClientManager.GetGameClient(steamId)
                                                     is not { } currentClient)
                                                 {
@@ -424,7 +467,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         }
 
         var delta   = (float)(_bridge.ModSharp.EngineTime() - start);
-        var mapName = _bridge.GlobalVars.MapName;
+        var mapName = _bridge.CurrentMapName;
 
         _sessionStartTime[slot] = _bridge.ModSharp.EngineTime(); // reset for next session segment
 
@@ -452,6 +495,12 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     /// </summary>
     private ECommandAction OnCommandRecalcScores(StringCommand arg)
     {
+        if (_scoreWriteMode == ScoreWriteMode.RemoteWrite)
+        {
+            _logger.LogWarning("timer_recalc_scores is unavailable in remote-write mode because score policy and recalculation are backend-owned.");
+            return ECommandAction.Handled;
+        }
+
         // Build the style factor dictionary
         var styleCount   = _styleModule.GetStyleCount();
         var styleFactors = new Dictionary<int, double>(styleCount);
@@ -461,7 +510,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
             styleFactors[i] = _styleModule.GetStyleSetting(i).ScoreFactor;
         }
 
-        var target = arg.ArgCount > 1 ? arg.GetArg(1) : _bridge.GlobalVars.MapName;
+        var target = arg.ArgCount > 1 ? arg.GetArg(1) : _bridge.CurrentMapName;
         var isAll  = string.Equals(target, "all", StringComparison.OrdinalIgnoreCase);
 
         Task.Run(async () =>
@@ -510,5 +559,19 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                  _bridge.CancellationToken);
 
         return ECommandAction.Handled;
+    }
+
+    private ulong CaptureFinishMapId(string mapName)
+    {
+        var profile = _mapInfo.GetCurrentMapProfile();
+        if (profile.MapId != 0
+            && string.Equals(profile.MapName, mapName, StringComparison.OrdinalIgnoreCase))
+        {
+            return profile.MapId;
+        }
+
+        _logger.LogWarning("No stable map identity was available at finish for {mapName}; a remote acknowledgement will not publish a local record event.",
+                           mapName);
+        return 0;
     }
 }
