@@ -443,6 +443,23 @@ public sealed class RunSubmissionTests : IDisposable
         Assert.Equal(0, statements);
     }
 
+    [Theory]
+    [InlineData(float.MaxValue)]
+    [InlineData(-float.MaxValue)]
+    public async Task MotionBeyondStorableFloatRangeIsRejectedBeforeAnySql(float velocity)
+    {
+        // float.MaxValue is finite but exceeds MySQL's FLOAT range; it must be a validation
+        // failure (InvalidArgument, quarantined by the sender), not a database error it retries.
+        var command = CreateCommand("surf_float_bounds", 76561198000000001, Guid.NewGuid(),
+                                    motion: new TimerBackendMotion { VelocityStartX = velocity });
+        var statements = 0;
+        _storage.Db.Aop.OnLogExecuting = (_, _) => statements++;
+
+        await Assert.ThrowsAsync<TimerBackendSubmissionValidationException>(
+            () => _storage.SubmitBackendRunAsync(command));
+        Assert.Equal(0, statements);
+    }
+
     [Fact]
     public async Task WipingRecordsRetainsTheReceiptSoAnOldRetryCannotResurrectThem()
     {
@@ -471,7 +488,8 @@ public sealed class RunSubmissionTests : IDisposable
                                                                     int style = 2,
                                                                     int track = 0,
                                                                     long timeMicros = 80_000_000,
-                                                                    double styleFactor = 1.25, DateTime? finishedAtUtc = null)
+                                                                    double styleFactor = 1.25, DateTime? finishedAtUtc = null,
+                                                                    TimerBackendMotion? motion = null)
         => new ()
         {
             SubmissionId = submissionId,
@@ -485,7 +503,7 @@ public sealed class RunSubmissionTests : IDisposable
             Jumps = 7,
             Strafes = 13,
             Sync = 98.5f,
-            Motion = new TimerBackendMotion { VelocityStartX = 1, VelocityEndZ = 2, VelocityMaxY = 3, VelocityAvgX = 4 },
+            Motion = motion ?? new TimerBackendMotion { VelocityStartX = 1, VelocityEndZ = 2, VelocityMaxY = 3, VelocityAvgX = 4 },
             Checkpoints =
             [
                 new TimerBackendSubmissionCheckpoint

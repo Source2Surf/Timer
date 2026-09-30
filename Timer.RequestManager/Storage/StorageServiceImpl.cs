@@ -78,7 +78,7 @@ internal sealed partial class StorageServiceImpl : IRequestManager
 
         RejectUnsupportedNonMasterRunSchema();
         EnsureRunDateColumnReadyForRuntime();
-        EnsurePointsColumnsReadyForRuntime();
+        EnsurePointsColumnsReadyForRuntime(allowBootstrapRecovery: true);
         MigrateReplaySteamIdColumn();
 
         try
@@ -105,6 +105,11 @@ internal sealed partial class StorageServiceImpl : IRequestManager
 
             throw;
         }
+
+        // Finish an interrupted first-time initialization, then hold the result to the same
+        // strict points contract every later startup checks.
+        EnsurePointsTableUniqueIndexes();
+        EnsurePointsColumnsReadyForRuntime();
 
         MigratePlayerJoinDates();
         RepairInvalidStoredPlayTimes();
@@ -248,7 +253,170 @@ internal sealed partial class StorageServiceImpl : IRequestManager
     /// submission Inbox, score-recalculation Outbox, their correctness/performance indexes,
     /// and every table touched by the write transaction before it can accept a write.
     /// </summary>
-    internal async Task CheckReadyAsync(bool requireWriteSchema = false)
+    internal async Task CheckReadyAsync(bool requireWriteSchema = false,
+                                        bool verifyReadRepairAccess = false,
+                                        bool forceSchemaVerification = true)
+    {
+        if (!requireWriteSchema)
+        {
+            await _db.Queryable<MapEntity>()
+                     .Select(x => x.MapId)
+                     .Take(1)
+                     .ToListAsync(OperationCancellation);
+            if (verifyReadRepairAccess) await VerifyReadRepairAccessAsync();
+            return;
+        }
+
+        await VerifyWriteSchemaMetadataIfDueAsync(forceSchemaVerification);
+
+        // Every probe: typed, cancellable one-row reads of each table the write path uses. They
+        // catch a missing table or read permission without the metadata queries above.
+        // Select full typed rows even when the tables are empty. This makes a partially-created
+        // table fail now instead of waiting for the first live submission to reference a missing
+        // column. The result sets remain bounded to one row.
+        await ProbeTableAsync<MapEntity>("surf_maps");
+        // Every score recalculation joins map-track tiers, including main-track work.
+        await ProbeTableAsync<MapTrackEntity>("surf_maps_tracks");
+        await ProbeTableAsync<PlayerEntity>("surf_players");
+        await ProbeTableAsync<PlayerBestRunEntity>("surf_player_best_runs");
+        await ProbeTableAsync<PlayerTrackScoreEntity>("surf_player_track_scores");
+        await ProbeTableAsync<RunEntity>("surf_runs");
+        await ProbeTableAsync<RunSegmentEntity>("surf_runs_segments");
+        await ProbeTableAsync<RunSubmissionEntity>("surf_run_submissions");
+        await ProbeTableAsync<ScoreRecalcOutboxEntity>("surf_score_recalc_outbox");
+
+        if (verifyReadRepairAccess) await VerifyReadRepairAccessAsync();
+    }
+
+    /// <summary>A trivial read used to tell a database outage apart from other failures.</summary>
+    internal async Task<bool> PingAsync()
+    {
+        await _db.Queryable<MapEntity>().Select(x => x.MapId).Take(1).ToListAsync(OperationCancellation);
+        return true;
+    }
+
+    private async Task ProbeTableAsync<T>(string tableName) where T : class, new()
+    {
+        try
+        {
+            await _db.Queryable<T>().Take(1).ToListAsync(OperationCancellation);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Keep the stable operator-facing error the metadata check used to give.
+            throw new InvalidOperationException(
+                $"Timer backend write schema is not ready; table {tableName} is missing or not readable.", exception);
+        }
+    }
+
+    private static readonly TimeSpan SchemaReverificationInterval = TimeSpan.FromMinutes(5);
+    private readonly SemaphoreSlim _schemaVerificationGate = new(1, 1);
+    private long _schemaVerifiedAtTicks;
+    private volatile bool _schemaVerificationFailed;
+
+    /// <summary>
+    /// SqlSugar's table/index metadata calls are synchronous and cannot be cancelled, so a stalled
+    /// database would pin one thread per readiness probe. Run them at startup (forced) and then at
+    /// most once per <see cref="SchemaReverificationInterval"/>, by one caller at a time; concurrent
+    /// probes rely on the most recent result.
+    /// </summary>
+    private async Task VerifyWriteSchemaMetadataIfDueAsync(bool force)
+    {
+        var verifiedAt = Interlocked.Read(ref _schemaVerifiedAtTicks);
+        if (!force && !_schemaVerificationFailed && verifiedAt != 0
+            && DateTime.UtcNow.Ticks - verifiedAt < SchemaReverificationInterval.Ticks)
+        {
+            return;
+        }
+
+        if (!await _schemaVerificationGate.WaitAsync(force ? Timeout.Infinite : 0, OperationCancellation))
+        {
+            if (verifiedAt != 0 && !_schemaVerificationFailed) return;
+            throw new InvalidOperationException("Timer backend write schema verification is in progress or failed.");
+        }
+
+        try
+        {
+            VerifyWriteSchemaMetadata();
+            await ValidateWriteIndexesAsync();
+            _schemaVerificationFailed = false;
+            Interlocked.Exchange(ref _schemaVerifiedAtTicks, DateTime.UtcNow.Ticks);
+        }
+        catch
+        {
+            _schemaVerificationFailed = true;
+            throw;
+        }
+        finally
+        {
+            _schemaVerificationGate.Release();
+        }
+    }
+
+    private long _readRepairInsertVerifiedAtTicks;
+
+    /// <summary>
+    /// Read repair inserts/updates surf_player_best_runs under a surf_maps row lock. UPDATE and
+    /// FOR UPDATE privileges are checked before any row is matched, so those statements change
+    /// nothing yet fail for a SELECT-only principal; they run on every probe. INSERT privilege can
+    /// only be proven by a real insert, which is always rolled back and runs at most once per
+    /// <see cref="SchemaReverificationInterval"/> (a rolled-back insert still consumes an identity).
+    /// </summary>
+    private async Task VerifyReadRepairAccessAsync()
+    {
+        await VerifyReadRepairUpdateAccessAsync();
+
+        var verifiedAt = Interlocked.Read(ref _readRepairInsertVerifiedAtTicks);
+        if (verifiedAt != 0 && DateTime.UtcNow.Ticks - verifiedAt < SchemaReverificationInterval.Ticks)
+        {
+            return;
+        }
+
+        try
+        {
+            await WithRecordTransactionAsync(async () =>
+            {
+                // SteamId -1 / MapId 0 / style -1 never identify a real board, so this cannot
+                // collide with (or briefly shadow) a player's best run before the rollback.
+                await _db.Insertable(new PlayerBestRunEntity
+                         {
+                             SteamId = -1, MapId = 0, RunType = RunType.Main, Style = -1, Track = 0, Stage = 0,
+                             RunId = 0, BestTime = 0, UpdatedAt = DateTime.UtcNow,
+                         })
+                         .ExecuteCommandAsync(OperationCancellation);
+                throw new ReadinessProbeRollbackException();
+            });
+        }
+        catch (ReadinessProbeRollbackException)
+        {
+            // Expected: the insert succeeded and was rolled back.
+        }
+
+        Interlocked.Exchange(ref _readRepairInsertVerifiedAtTicks, DateTime.UtcNow.Ticks);
+    }
+
+    private sealed class ReadinessProbeRollbackException : Exception;
+
+    private async Task VerifyReadRepairUpdateAccessAsync()
+    {
+        await WithRecordTransactionAsync(async () =>
+        {
+            await _db.Updateable<PlayerBestRunEntity>()
+                     .SetColumns(x => x.UpdatedAt == x.UpdatedAt)
+                     .Where(x => x.Id == 0)
+                     .ExecuteCommandAsync(OperationCancellation);
+            if (_db.CurrentConnectionConfig.DbType != DbType.Sqlite)
+            {
+                await _db.Queryable<MapEntity>()
+                         .Where(x => x.MapId == 0)
+                         .TranLock(DbLockType.Wait)
+                         .Select(x => x.MapId)
+                         .ToListAsync(OperationCancellation);
+            }
+        });
+    }
+
+    private void VerifyWriteSchemaMetadata()
     {
         const string mapTableName = "surf_maps";
         const string submissionTableName = "surf_run_submissions";
@@ -257,15 +425,6 @@ internal sealed partial class StorageServiceImpl : IRequestManager
         const string outboxUniqueIndexName = "idx_score_recalc_outbox_unique";
         const string outboxPendingIndexName = "idx_score_recalc_outbox_pending";
         const string trackScoreCoveringIndexName = "idx_player_track_scores_map_style_track";
-
-        if (!requireWriteSchema)
-        {
-            await _db.Queryable<MapEntity>()
-                     .Select(x => x.MapId)
-                     .Take(1)
-                     .ToListAsync(OperationCancellation);
-            return;
-        }
 
         var missing = new List<string>();
 
@@ -318,30 +477,9 @@ internal sealed partial class StorageServiceImpl : IRequestManager
 
         if (missing.Count != 0)
         {
-            var role = requireWriteSchema ? "write" : "read-only";
             throw new InvalidOperationException(
-                $"Timer backend {role} schema is not ready; missing {string.Join(", ", missing)}.");
+                $"Timer backend write schema is not ready; missing {string.Join(", ", missing)}.");
         }
-
-        await ValidateWriteIndexesAsync();
-
-        // Metadata checks above give a stable operator-facing error for a missing table. These
-        // typed probes also verify that the configured database principal can read every table
-        // used by the selected role.
-        // Select full typed rows even when the tables are empty. This makes a partially-created
-        // table fail now instead of waiting for the first live submission to reference a missing
-        // column. The result sets remain bounded to one row and are startup-only.
-        await _db.Queryable<MapEntity>().Take(1).ToListAsync(OperationCancellation);
-        // Every score recalculation joins map-track tiers, including main-track work.
-        // Validate the worker's required table and columns before accepting submissions.
-        await _db.Queryable<MapTrackEntity>().Take(1).ToListAsync(OperationCancellation);
-        await _db.Queryable<PlayerEntity>().Take(1).ToListAsync(OperationCancellation);
-        await _db.Queryable<PlayerBestRunEntity>().Take(1).ToListAsync(OperationCancellation);
-        await _db.Queryable<PlayerTrackScoreEntity>().Take(1).ToListAsync(OperationCancellation);
-        await _db.Queryable<RunEntity>().Take(1).ToListAsync(OperationCancellation);
-        await _db.Queryable<RunSegmentEntity>().Take(1).ToListAsync(OperationCancellation);
-        await _db.Queryable<RunSubmissionEntity>().Take(1).ToListAsync(OperationCancellation);
-        await _db.Queryable<ScoreRecalcOutboxEntity>().Take(1).ToListAsync(OperationCancellation);
     }
 
     public async Task UpdateMapInfo(MapProfile info)

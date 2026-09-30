@@ -37,6 +37,12 @@ public sealed class TimerBackendScoreAdministrationResult
 
     /// <summary>The tier committed by a tier operation.</summary>
     public byte? CurrentTier { get; init; }
+
+    /// <summary>
+    /// For an all-maps requeue: maps that were skipped because their policy could not be applied
+    /// (each entry is "map: reason"). Every other map was still processed.
+    /// </summary>
+    public IReadOnlyList<string> FailedMaps { get; init; } = [];
 }
 
 /// <summary>

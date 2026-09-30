@@ -215,24 +215,43 @@ public sealed class ScoreAdministrationTests : IDisposable
     }
 
     [Fact]
-    public async Task SetTierRejectsTwoIndividuallyValidMainStylesWhenTheirPlayerTotalWouldOverflow()
+    public async Task RecalcScoresRejectsAPolicyThatCannotBeRepresentedBeforeQueueing()
+    {
+        var map = await _storage.GetMapInfo($"surf_score_admin_recalc_overflow_{Guid.NewGuid():N}");
+        await AddMainRunAsync(map.MapId, style: 0);
+        // A tier written outside set-tier (e.g. the plugin's local set_tier) skips that preflight.
+        await _storage.Db.Updateable<MapEntity>()
+                      .SetColumns(x => x.Tier == 27)
+                      .Where(x => x.MapId == map.MapId)
+                      .ExecuteCommandAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _storage.RequeueMapScorePolicyAsync(
+            map.MapName, new Dictionary<int, double> { [0] = 1 }));
+        Assert.Empty(await _storage.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                      .Where(x => x.MapId == map.MapId)
+                                      .ToListAsync());
+
+        // A zero factor removes the board's points and is always representable.
+        var result = await _storage.RequeueMapScorePolicyAsync(map.MapName, new Dictionary<int, double> { [0] = 0 });
+        Assert.Equal(1, result.BoardsQueued);
+    }
+
+    [Fact]
+    public async Task SetTierIsNotBlockedWhenOnlyAPlayersCrossBoardTotalWouldOverflow()
     {
         var map = await _storage.GetMapInfo($"surf_score_admin_total_overflow_{Guid.NewGuid():N}");
         await AddMainRunAsync(map.MapId, style: 0);
         await AddMainRunAsync(map.MapId, style: 1);
 
-        // Tier 26 keeps one main-style rank-one score below UInt32.MaxValue, but two
-        // configured style boards for the same player would exceed the persisted total.
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _storage.SetMapTierAndRequeueScoresAsync(
-            map.MapName, tier: 26, new Dictionary<int, double> { [0] = 1, [1] = 1 }));
+        // Tier 26 keeps each main-style rank-one score below UInt32.MaxValue, but the same
+        // player's two boards sum past it. The score worker caps that total, so the tier change
+        // must be accepted (rejecting it would also block set-tier on every other map this
+        // player has a score on).
+        var result = await _storage.SetMapTierAndRequeueScoresAsync(
+            map.MapName, tier: 26, new Dictionary<int, double> { [0] = 1, [1] = 1 });
 
-        var storedMap = await _storage.Db.Queryable<MapEntity>()
-                                      .Where(x => x.MapId == map.MapId)
-                                      .SingleAsync();
-        Assert.Equal(1, storedMap.Tier);
-        Assert.Empty(await _storage.Db.Queryable<ScoreRecalcOutboxEntity>()
-                                      .Where(x => x.MapId == map.MapId)
-                                      .ToListAsync());
+        Assert.Equal<byte?>(26, result.CurrentTier);
+        Assert.Equal(2, result.BoardsQueued);
     }
 
     [Fact]
@@ -279,6 +298,32 @@ public sealed class ScoreAdministrationTests : IDisposable
                                     .ToListAsync();
         Assert.Equal(2, rows.Count);
         Assert.All(rows, row => Assert.Equal(0, row.StyleFactor));
+    }
+
+    [Fact]
+    public async Task RequeueAllContinuesPastAMapWhosePolicyCannotBeRepresented()
+    {
+        var bad = await _storage.GetMapInfo($"surf_score_admin_all_0bad_{Guid.NewGuid():N}");
+        var good = await _storage.GetMapInfo($"surf_score_admin_all_zgood_{Guid.NewGuid():N}");
+        await AddMainRunAsync(bad.MapId, style: 0);
+        await AddMainRunAsync(good.MapId, style: 0);
+        await _storage.Db.Updateable<MapEntity>()
+                      .SetColumns(x => x.Tier == 27)
+                      .Where(x => x.MapId == bad.MapId)
+                      .ExecuteCommandAsync();
+
+        var result = await _storage.RequeueAllScorePoliciesAsync(new Dictionary<int, double> { [0] = 1 });
+
+        // The bad map (sorted first) is reported by name; the good map is still requeued.
+        var failure = Assert.Single(result.FailedMaps);
+        Assert.Contains(bad.MapName, failure);
+        Assert.Equal(1, result.MapsAffected);
+        Assert.Single(await _storage.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                       .Where(x => x.MapId == good.MapId)
+                                       .ToListAsync());
+        Assert.Empty(await _storage.Db.Queryable<ScoreRecalcOutboxEntity>()
+                                      .Where(x => x.MapId == bad.MapId)
+                                      .ToListAsync());
     }
 
     private Task AddMainRunAsync(ulong mapId,

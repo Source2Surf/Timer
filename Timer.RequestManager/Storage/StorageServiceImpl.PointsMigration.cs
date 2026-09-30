@@ -64,7 +64,12 @@ internal sealed partial class StorageServiceImpl
     /// column implicitly. The dedicated master migration deliberately calls
     /// <see cref="MigrateMasterPointsColumnsAsync"/> before this guard.
     /// </summary>
-    internal void EnsurePointsColumnsReadyForRuntime()
+    /// <param name="allowBootstrapRecovery">
+    /// True only immediately before CodeFirst runs. Lets startup complete a first-time schema
+    /// initialization that was interrupted part-way (a points table or its unique index not
+    /// yet created); without it such a database could never start or be migrated again.
+    /// </param>
+    internal void EnsurePointsColumnsReadyForRuntime(bool allowBootstrapRecovery = false)
     {
         // SQLite is only used by unit tests. The production schema migration is
         // deliberately constrained to MySQL/MariaDB and PostgreSQL.
@@ -82,6 +87,13 @@ internal sealed partial class StorageServiceImpl
             return;
         }
 
+        if (allowBootstrapRecovery && IsInterruptedPointsBootstrap(playersExists, trackScoresExists))
+        {
+            _logger.LogWarning(
+                "The points tables look like an interrupted first-time schema initialization: every existing points table already uses the current BIGINT column. Completing the initialization.");
+            return;
+        }
+
         if (!playersExists || !trackScoresExists)
         {
             throw new InvalidOperationException(
@@ -94,6 +106,69 @@ internal sealed partial class StorageServiceImpl
         EnsureMasterPointsColumnReadyForRuntime(MasterPlayerTrackScoresTableName,
                                                  MasterPlayerTrackScoresSchemaColumns,
                                                  MasterPlayerTrackScoresUniqueIndexName);
+    }
+
+    /// <summary>
+    /// A published master table has a signed INT Points column; tables this code creates use
+    /// BIGINT from the start. So a partial state (a missing table or unique index) in which every
+    /// existing points table is already BIGINT was left by an interrupted CodeFirst run, not by a
+    /// legacy master database that must go through the one-shot migrate command.
+    /// </summary>
+    private bool IsInterruptedPointsBootstrap(bool playersExists, bool trackScoresExists)
+    {
+        var complete = playersExists
+                       && trackScoresExists
+                       && ReadTableIndexes(MasterPlayersTableName).Contains(MasterPlayersSteamIdIndexName)
+                       && ReadTableIndexes(MasterPlayerTrackScoresTableName).Contains(MasterPlayerTrackScoresUniqueIndexName);
+        if (complete)
+        {
+            return false;
+        }
+
+        return (!playersExists || HasCurrentPointsColumn(MasterPlayersTableName))
+               && (!trackScoresExists || HasCurrentPointsColumn(MasterPlayerTrackScoresTableName));
+    }
+
+    private bool HasCurrentPointsColumn(string tableName)
+    {
+        var column = FindColumn(_db.DbMaintenance.GetColumnInfosByTableName(tableName, false), MasterPointsColumnName);
+        return column is not null && IsRequiredSignedBigIntColumn(column) && !column.IsNullable;
+    }
+
+    /// <summary>
+    /// CodeFirst creates declared indexes only together with their table, so an initialization
+    /// interrupted between the two leaves the unique index missing forever. Create it here.
+    /// A unique index cannot be created over duplicate rows, so lost uniqueness still fails loudly.
+    /// </summary>
+    private void EnsurePointsTableUniqueIndexes()
+    {
+        if (_db.CurrentConnectionConfig.DbType is not (DbType.MySql or DbType.PostgreSQL))
+        {
+            return;
+        }
+
+        if (_db.DbMaintenance.IsAnyTable(MasterPlayersTableName, false)
+            && !ReadTableIndexes(MasterPlayersTableName).Contains(MasterPlayersSteamIdIndexName))
+        {
+            _db.DbMaintenance.CreateIndex(MasterPlayersTableName,
+                                           [nameof(PlayerEntity.SteamId)],
+                                           MasterPlayersSteamIdIndexName,
+                                           true);
+        }
+
+        if (_db.DbMaintenance.IsAnyTable(MasterPlayerTrackScoresTableName, false)
+            && !ReadTableIndexes(MasterPlayerTrackScoresTableName).Contains(MasterPlayerTrackScoresUniqueIndexName))
+        {
+            _db.DbMaintenance.CreateIndex(MasterPlayerTrackScoresTableName,
+                                           [
+                                               nameof(PlayerTrackScoreEntity.SteamId),
+                                               nameof(PlayerTrackScoreEntity.MapId),
+                                               nameof(PlayerTrackScoreEntity.Style),
+                                               nameof(PlayerTrackScoreEntity.Track),
+                                           ],
+                                           MasterPlayerTrackScoresUniqueIndexName,
+                                           true);
+        }
     }
 
     private void EnsurePointsMigrationProvider()

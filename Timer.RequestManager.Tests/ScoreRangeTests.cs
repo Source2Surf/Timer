@@ -41,7 +41,7 @@ public sealed class ScoreRangeTests : IDisposable
     }
 
     [Fact]
-    public async Task SumOfIndividuallyValidBoardsCannotOverflowPlayerPoints()
+    public async Task SumOfIndividuallyValidBoardsCapsPlayerPointsWithoutBlockingTheBoard()
     {
         var map = await _storage.GetMapInfo($"surf_total_overflow_{Guid.NewGuid():N}");
         await SetTierAsync(map.MapId, 26);
@@ -53,13 +53,14 @@ public sealed class ScoreRangeTests : IDisposable
                                        .Where(x => x.Style == 0).SingleAsync();
         Assert.InRange(firstScore.Points, 1u, uint.MaxValue);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _storage.RecalculateTrackScoresAsync(map.MapId, 1, 0, 1));
+        // The second board's score fits on its own; only the player's cross-board total does not.
+        // The board must commit (so other players on it keep updating) and the total is capped.
+        await _storage.RecalculateTrackScoresAsync(map.MapId, 1, 0, 1);
 
         var persisted = await _storage.Db.Queryable<PlayerTrackScoreEntity>().ToListAsync();
-        Assert.Single(persisted);
-        Assert.Equal(firstScore.Id, persisted[0].Id);
-        Assert.Equal(firstScore.Points, (await _storage.Db.Queryable<PlayerEntity>().SingleAsync()).Points);
+        Assert.Equal(2, persisted.Count);
+        Assert.True((ulong)persisted[0].Points + persisted[1].Points > uint.MaxValue);
+        Assert.Equal(uint.MaxValue, (await _storage.Db.Queryable<PlayerEntity>().SingleAsync()).Points);
     }
 
     private async Task SetTierAsync(ulong mapId, byte tier)

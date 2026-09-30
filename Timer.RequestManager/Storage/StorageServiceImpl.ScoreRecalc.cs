@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Common.Enums;
 using Source2Surf.Timer.Shared.Models;
@@ -158,9 +159,33 @@ internal sealed partial class StorageServiceImpl
                                       TotalPoints = SqlFunc.AggregateSum(SqlFunc.ToInt64(s.Points)),
                                   })
                                   .ToListAsync(OperationCancellation);
-            if (totals.Any(x => x.TotalPoints < 0 || x.TotalPoints > uint.MaxValue))
+            if (totals.Any(x => x.TotalPoints < 0))
             {
-                throw new InvalidOperationException("Player total score exceeds the uint points range.");
+                throw new InvalidOperationException("Player total score is negative.");
+            }
+
+            // A total above uint is capped rather than failing the transaction: throwing here rolled
+            // back the whole board, so one player's cross-board sum stopped every other player's
+            // scores on it from updating and eventually dead-lettered the board.
+            var cappedSteamIds = totals.Where(x => x.TotalPoints > uint.MaxValue).Select(x => x.SteamId).ToList();
+            if (cappedSteamIds.Count > 0)
+            {
+                _logger.LogWarning(
+                    "Capping the total score of {Count} player(s) at {Max}; their per-board scores sum past the uint range. SteamIds: {SteamIds}",
+                    cappedSteamIds.Count, uint.MaxValue, string.Join(", ", cappedSteamIds.Take(20)));
+
+                await _db.Updateable<PlayerEntity>()
+                    .SetColumns(p => p.Points == uint.MaxValue)
+                    .SetColumns(p => p.JoinedAtUtc == SqlFunc.IsNull(p.JoinedAtUtc, p.UpdatedAt))
+                    .SetColumns(p => p.UpdatedAt == now)
+                    .Where(p => cappedSteamIds.Contains(p.SteamId) && p.Points != uint.MaxValue)
+                    .ExecuteCommandAsync(OperationCancellation);
+            }
+
+            var exactBatch = cappedSteamIds.Count == 0 ? batch : batch.Except(cappedSteamIds).ToArray();
+            if (exactBatch.Length == 0)
+            {
+                continue;
             }
 
             await _db.Updateable<PlayerEntity>()
@@ -170,7 +195,7 @@ internal sealed partial class StorageServiceImpl
                 // MySQL's left-to-right single-table assignment semantics).
                 .SetColumns(p => p.JoinedAtUtc == SqlFunc.IsNull(p.JoinedAtUtc, p.UpdatedAt))
                 .SetColumns(p => p.UpdatedAt == now)
-                .Where(p => batch.Contains(p.SteamId) && p.Points != SqlFunc.IsNull(SqlFunc.Subqueryable<PlayerTrackScoreEntity>()
+                .Where(p => exactBatch.Contains(p.SteamId) && p.Points != SqlFunc.IsNull(SqlFunc.Subqueryable<PlayerTrackScoreEntity>()
                     .Where(s => s.SteamId == p.SteamId).Sum(s => s.Points), 0u))
                 .ExecuteCommandAsync(OperationCancellation);
         }

@@ -538,11 +538,17 @@ internal sealed partial class StorageServiceImpl
         return (float)seconds;
     }
 
+    // MySQL's FLOAT column tops out just below float.MaxValue: MySqlConnector sends float.MaxValue
+    // as "3.4028235E+38", which the server rejects as out of range. That surfaced as an Internal
+    // error the sender retries forever instead of an InvalidArgument it quarantines. Any float at
+    // or below this magnitude is stored by both MySQL and PostgreSQL.
+    private const float MaxStoredFloatMagnitude = 3.4e38f;
+
     private static void ValidateFinite(float value, string fieldName)
     {
-        if (!float.IsFinite(value))
+        if (!float.IsFinite(value) || Math.Abs(value) > MaxStoredFloatMagnitude)
         {
-            throw new TimerBackendSubmissionValidationException($"{fieldName} must be finite.");
+            throw new TimerBackendSubmissionValidationException($"{fieldName} must be finite and at most {MaxStoredFloatMagnitude} in magnitude.");
         }
     }
 

@@ -29,12 +29,12 @@ public sealed class ScoreRangeProviderTests
         => SingleBoardUintOverflowRollsBackAsync(DbType.PostgreSQL, PostgreSqlConnectionEnvironment, "postgresql");
 
     [ScoreRangeProviderFact(MySqlConnectionEnvironment)]
-    public Task TotalUintOverflowRollsBackSecondBoardOnMySql()
-        => TotalUintOverflowRollsBackSecondBoardAsync(DbType.MySql, MySqlConnectionEnvironment, "mysql");
+    public Task TotalUintOverflowCapsThePlayerTotalOnMySql()
+        => TotalUintOverflowCapsThePlayerTotalAsync(DbType.MySql, MySqlConnectionEnvironment, "mysql");
 
     [ScoreRangeProviderFact(PostgreSqlConnectionEnvironment)]
-    public Task TotalUintOverflowRollsBackSecondBoardOnPostgreSql()
-        => TotalUintOverflowRollsBackSecondBoardAsync(DbType.PostgreSQL, PostgreSqlConnectionEnvironment, "postgresql");
+    public Task TotalUintOverflowCapsThePlayerTotalOnPostgreSql()
+        => TotalUintOverflowCapsThePlayerTotalAsync(DbType.PostgreSQL, PostgreSqlConnectionEnvironment, "postgresql");
 
     private static Task SingleBoardUintOverflowRollsBackAsync(
         DbType databaseType,
@@ -59,7 +59,7 @@ public sealed class ScoreRangeProviderTests
                                              .SingleAsync());
         });
 
-    private static Task TotalUintOverflowRollsBackSecondBoardAsync(
+    private static Task TotalUintOverflowCapsThePlayerTotalAsync(
         DbType databaseType,
         string connectionEnvironment,
         string providerToken)
@@ -79,18 +79,20 @@ public sealed class ScoreRangeProviderTests
             Assert.True(first.Points > int.MaxValue,
                         "The physical Points column must retain a board score above signed INT range.");
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                storage.RecalculateTrackScoresAsync(map.MapId, 1, 0, 1));
+            // The second board's own score fits, but the player's cross-board total does not.
+            // The board must still commit (so other players on it keep updating); only this
+            // player's total is capped instead of the whole recalculation rolling back.
+            await storage.RecalculateTrackScoresAsync(map.MapId, 1, 0, 1);
 
             var persisted = await storage.Db.Queryable<PlayerTrackScoreEntity>()
                                        .Where(score => score.MapId == map.MapId)
                                        .ToListAsync();
-            Assert.Single(persisted);
-            Assert.Equal(first.Id, persisted[0].Id);
-            Assert.Equal(first.Points, await storage.Db.Queryable<PlayerEntity>()
-                                                       .Where(row => row.SteamId == unchecked((long)player.AsPrimitive()))
-                                                       .Select(row => row.Points)
-                                                       .SingleAsync());
+            Assert.Equal(2, persisted.Count);
+            Assert.True((ulong)persisted[0].Points + persisted[1].Points > uint.MaxValue);
+            Assert.Equal(uint.MaxValue, await storage.Db.Queryable<PlayerEntity>()
+                                                        .Where(row => row.SteamId == unchecked((long)player.AsPrimitive()))
+                                                        .Select(row => row.Points)
+                                                        .SingleAsync());
         });
 
     private static async Task WithStoreAsync(

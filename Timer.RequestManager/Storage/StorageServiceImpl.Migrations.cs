@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Common.Entities;
@@ -97,7 +98,20 @@ internal sealed partial class StorageServiceImpl
                               .GroupBy(x => x.MapId)
                               .Select(x => x.MapId)
                               .ToListAsync();
-        foreach (var mapId in mapIds)
+
+        // Seeding locks each map row, which throws for runs whose map row was deleted by hand.
+        // Those runs can never be shown on a leaderboard anyway; failing here would make every
+        // rerun fail after all schema work is done, so skip them and say which maps they are.
+        var existingMapIds = (await _db.Queryable<MapEntity>().Select(x => x.MapId).ToListAsync()).ToHashSet();
+        var orphanMapIds = mapIds.Where(mapId => !existingMapIds.Contains(mapId)).ToList();
+        if (orphanMapIds.Count > 0)
+        {
+            _logger.LogWarning(
+                "{Count} map id(s) referenced by surf_runs have no surf_maps row; their runs were not seeded into best-run projections. Map ids: {MapIds}",
+                orphanMapIds.Count, string.Join(", ", orphanMapIds.Take(20)));
+        }
+
+        foreach (var mapId in mapIds.Where(existingMapIds.Contains))
         {
             await EnsureBestRunsSeededForMapAsync(mapId, RunType.Main);
             await EnsureBestRunsSeededForMapAsync(mapId, RunType.Stage);

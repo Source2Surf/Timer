@@ -276,17 +276,28 @@ internal sealed partial class StorageServiceImpl
 
     private async Task BackfillRunDateUnixMillisecondsAsync(long rowsBefore)
     {
+        // Keyset paging: the temporary column is unindexed, so filtering on NULL alone makes
+        // every batch re-walk all previously converted rows (quadratic on large tables).
+        // The NULL filter still lets a resumed conversion skip rows it already wrote.
+        ulong? lastId = null;
         while (true)
         {
-            var batch = await _db.Queryable<MasterRunDateLegacyRow>()
-                                 .Where(row => row.UnixMilliseconds == null)
-                                 .OrderBy(row => row.Id)
-                                 .Take(RunDateMigrationBatchSize)
-                                 .ToListAsync();
+            var query = _db.Queryable<MasterRunDateLegacyRow>()
+                           .Where(row => row.UnixMilliseconds == null);
+            if (lastId.HasValue)
+            {
+                query = query.Where(row => row.Id > lastId.Value);
+            }
+
+            var batch = await query.OrderBy(row => row.Id)
+                                   .Take(RunDateMigrationBatchSize)
+                                   .ToListAsync();
             if (batch.Count == 0)
             {
                 break;
             }
+
+            lastId = batch[^1].Id;
 
             foreach (var row in batch)
             {

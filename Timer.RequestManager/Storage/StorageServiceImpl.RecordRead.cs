@@ -243,18 +243,23 @@ internal sealed partial class StorageServiceImpl
             return (0, 0);
         }
 
-        // Single query: COUNT(*) for total, SUM(CASE) for rank
+        // Single query: COUNT(*) for total, SUM(CASE) for rank. The player's points were read in a
+        // separate statement, so a concurrent recalculation can commit in between. Count the
+        // player's own row in this same snapshot and never count them as ahead of themselves, so
+        // the result is always consistent (rank <= total) instead of e.g. "rank 6 of 5".
         var stats = await _db.Queryable<PlayerEntity>()
                              .Where(x => x.Points > 0)
                              .Select(_ => new
                              {
                                  Total = SqlFunc.AggregateCount(_.Id),
-                                 Ahead = SqlFunc.AggregateSum(SqlFunc.IIF(_.Points > playerPoints, 1, 0)),
+                                 Ahead = SqlFunc.AggregateSum(SqlFunc.IIF(_.Points > playerPoints && _.SteamId != steamIdValue, 1, 0)),
+                                 Self  = SqlFunc.AggregateSum(SqlFunc.IIF(_.SteamId == steamIdValue, 1, 0)),
                              })
                              .FirstAsync(OperationCancellation);
 
-        if (stats is null)
+        if (stats is null || stats.Self == 0)
         {
+            // Dropped to zero points after the first read: report it like any unranked player.
             return (0, 0);
         }
 

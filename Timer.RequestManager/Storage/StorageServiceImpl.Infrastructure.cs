@@ -21,9 +21,13 @@ internal sealed partial class StorageServiceImpl
 
     private async Task<MapEntity?> FindMapByNameAsync(string mapName)
     {
-        return await _db.Queryable<MapEntity>()
-                        .Where(x => x.File == mapName)
-                        .FirstAsync(OperationCancellation);
+        var map = await _db.Queryable<MapEntity>()
+                           .Where(x => x.File == mapName)
+                           .FirstAsync(OperationCancellation);
+
+        // MySQL's default utf8mb4_0900_ai_ci collation compares case- and accent-insensitively, so
+        // the query can return a different map (surf_edge -> surf_édge). Map names are exact keys.
+        return map is not null && string.Equals(map.File, mapName, StringComparison.Ordinal) ? map : null;
     }
 
     internal async Task<ulong?> ResolveMapIdByNameAsync(string mapName)
@@ -85,6 +89,17 @@ internal sealed partial class StorageServiceImpl
                 // an unsaved entity with MapId 0.
                 if (await FindMapByNameAsync(mapKey) is not { } raced)
                 {
+                    var collidingName = await _db.Queryable<MapEntity>()
+                                                 .Where(x => x.File == mapKey)
+                                                 .Select(x => x.File)
+                                                 .FirstAsync(OperationCancellation);
+                    if (collidingName is not null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Map '{mapKey}' cannot be created: the database collation treats it as equal to existing map '{collidingName}' (MySQL compares names case- and accent-insensitively). Rename one of them.",
+                            ex);
+                    }
+
                     _logger.LogError(ex, "Failed to insert map row for {map}", mapName);
 
                     throw;

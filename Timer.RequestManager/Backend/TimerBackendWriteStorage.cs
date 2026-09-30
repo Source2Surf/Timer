@@ -181,6 +181,16 @@ public sealed class TimerBackendSubmissionConflictException : TimerBackendSubmis
         : base($"Submission '{submissionId:N}' was already applied with a different payload.") { }
 }
 
+/// <summary>
+/// The database could not be reached or is temporarily refusing work (connection failures,
+/// transient provider errors). Transports report it as 503 / Unavailable rather than 500.
+/// </summary>
+public sealed class TimerBackendUnavailableException : Exception
+{
+    public TimerBackendUnavailableException(Exception innerException)
+        : base("The timer database is unavailable.", innerException) { }
+}
+
 public sealed class TimerBackendSubmissionPolicyException : TimerBackendSubmissionException
 {
     public TimerBackendSubmissionPolicyException()

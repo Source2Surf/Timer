@@ -162,7 +162,14 @@ public sealed partial class TimerBackendStorage : IDisposable
     public Task CheckReadyAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfNotStarted();
-        return ExecuteAsync(async () => { await _storage.CheckReadyAsync(_requireWriteSchema); return true; }, cancellationToken);
+        // The full metadata/index verification ran in Start; probes re-run it only periodically.
+        return ExecuteAsync(async () =>
+        {
+            await _storage.CheckReadyAsync(_requireWriteSchema,
+                                           verifyReadRepairAccess: _allowReadRepair,
+                                           forceSchemaVerification: false);
+            return true;
+        }, cancellationToken);
     }
 
     public Task<IReadOnlyList<string>> GetAllMapNamesAsync(CancellationToken cancellationToken = default)

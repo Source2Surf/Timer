@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Common.Enums;
 using Source2Surf.Timer.Shared;
@@ -44,8 +45,7 @@ internal sealed partial class StorageServiceImpl
 
         // Seed gates acquire their own map transaction. They must complete before this operation
         // takes a map lock, otherwise two local callers can invert the seed-gate/map-lock order.
-        // The low-frequency administrative path seeds the complete main-map projection so its
-        // player-total preflight uses exactly the same ranked rows as the score worker.
+        // Seeding the complete main-map projection here keeps the queued recalculations cheap.
         await EnsureBestRunsSeededForMapAsync(map.MapId, RunType.Main);
 
         byte? previousTier = null;
@@ -77,10 +77,10 @@ internal sealed partial class StorageServiceImpl
 
             var boards = await GetKnownScoreBoardsInCurrentRecordTransactionAsync(map.MapId);
             var affectedBoards = boards.Where(x => x.Track == 0).ToList();
-            var trackPools = ValidateMainTrackTierCanBeRepresented(
-                lockedMap, tier, affectedBoards, styleFactors);
-            await ValidateMainTrackPlayerTotalsCanBeRepresentedAsync(
-                map.MapId, tier, affectedBoards, trackPools, styleFactors);
+            // Only a board whose own score cannot be stored blocks the change. A player's total
+            // across boards is capped by the score worker, so it no longer needs a preflight here
+            // (checking the uncapped sum would block set-tier on every map a capped player plays).
+            _ = ValidateMainTrackTierCanBeRepresented(lockedMap, tier, affectedBoards, styleFactors);
 
             previousTier = lockedMap.Tier;
             if (lockedMap.Tier != tier)
@@ -150,6 +150,7 @@ internal sealed partial class StorageServiceImpl
             }
 
             var boards = await GetKnownScoreBoardsInCurrentRecordTransactionAsync(map.MapId);
+            await ValidateBoardScoresCanBeRepresentedAsync(map.MapId, mapKey, boards, styleFactors);
             var queued = await RequeueKnownScoreBoardsInCurrentRecordTransactionAsync(
                 map.MapId, boards, styleFactors, DateTime.UtcNow);
             boardsQueued = queued.BoardsQueued;
@@ -187,9 +188,24 @@ internal sealed partial class StorageServiceImpl
         var deadLettersRequeued = 0;
         var disabledStyleBoardsSkipped = 0;
 
+        var failedMaps = new List<string>();
+
         foreach (var mapName in mapNames)
         {
-            var result = await RequeueMapScorePolicyAsync(mapName, styleFactors);
+            TimerBackendScoreAdministrationResult result;
+            try
+            {
+                result = await RequeueMapScorePolicyAsync(mapName, styleFactors);
+            }
+            catch (InvalidOperationException exception)
+            {
+                // One map whose policy cannot be represented (e.g. a tier set outside set-tier)
+                // must not stop every later map from being requeued. Its transaction rolled back.
+                _logger.LogError(exception, "Score policy was not requeued for map {MapName}.", mapName);
+                failedMaps.Add($"{mapName}: {exception.Message}");
+                continue;
+            }
+
             if (!result.MapFound)
             {
                 // A concurrent map deletion is harmless. Its remaining dead-lettered row has no
@@ -210,6 +226,7 @@ internal sealed partial class StorageServiceImpl
             BoardsQueued = boardsQueued,
             DeadLettersRequeued = deadLettersRequeued,
             DisabledStyleBoardsSkipped = disabledStyleBoardsSkipped,
+            FailedMaps = failedMaps,
         };
     }
 
@@ -316,6 +333,37 @@ internal sealed partial class StorageServiceImpl
         return new AdministrativeQueueResult(boardsQueued, deadLettersRequeued, disabledStyleBoardsSkipped);
     }
 
+    /// <summary>
+    /// recalc-scores re-applies the configured factors to every known board, like set-tier does
+    /// for the main track. Reject a policy whose rank-1 score on any requeued board cannot be
+    /// stored, instead of queueing work the worker could only retry until it dead-letters.
+    /// </summary>
+    private async Task ValidateBoardScoresCanBeRepresentedAsync(
+        ulong mapId,
+        string mapName,
+        IReadOnlyList<AdministrativeScoreBoard> boards,
+        IReadOnlyDictionary<int, double> styleFactors)
+    {
+        foreach (var board in boards)
+        {
+            if (!styleFactors.TryGetValue(board.Style, out var styleFactor) || styleFactor == 0)
+            {
+                continue;
+            }
+
+            var (tier, basePot) = await GetTrackScoreConfigAsync(mapId, board.Track);
+            var trackPool = ScoreCalculator.CalculateTrackPool(tier,
+                                                                ScoreCalculator.IsBonus(board.Track),
+                                                                basePot,
+                                                                styleFactor);
+            _ = CalculateRepresentablePlayerTrackScore(
+                trackPool,
+                rank: 1,
+                total: 1,
+                $"Score factor {styleFactor} for style {board.Style} on track {board.Track} of map '{mapName}' (tier {tier}) would produce an unrepresentable score.");
+        }
+    }
+
     private static IReadOnlyDictionary<int, double> ValidateMainTrackTierCanBeRepresented(
         MapEntity map,
         byte tier,
@@ -358,134 +406,6 @@ internal sealed partial class StorageServiceImpl
         return trackPools;
     }
 
-    /// <summary>
-    /// A tier edit may change several style boards for the same player. Before committing the
-    /// edit, calculate the exact replacement score for every current rank and ensure the resulting
-    /// player total still fits the persisted unsigned integer. The main best-run projection is
-    /// seeded before the caller acquires its map lock, so this uses the same ranking source as the
-    /// score worker without adding work to the normal run-submission path.
-    /// </summary>
-    private async Task ValidateMainTrackPlayerTotalsCanBeRepresentedAsync(
-        ulong mapId,
-        byte tier,
-        IReadOnlyList<AdministrativeScoreBoard> affectedBoards,
-        IReadOnlyDictionary<int, double> trackPools,
-        IReadOnlyDictionary<int, double> styleFactors)
-    {
-        var affectedStyles = affectedBoards.Where(x => styleFactors.ContainsKey(x.Style))
-                                           .Select(x => x.Style)
-                                           .Distinct()
-                                           .ToList();
-        if (affectedStyles.Count == 0)
-        {
-            return;
-        }
-
-        var projectedScores = new List<AdministrativePlayerScoreRow>();
-        foreach (var style in affectedStyles)
-        {
-            if (!trackPools.TryGetValue(style, out var trackPool))
-            {
-                // A zero factor removes the board's existing scores and creates no new rows.
-                continue;
-            }
-
-            var rankedPlayers = await GetRankedPlayersAsync(mapId, style, track: 0);
-            for (var index = 0; index < rankedPlayers.Count; index++)
-            {
-                projectedScores.Add(new AdministrativePlayerScoreRow
-                {
-                    SteamId = rankedPlayers[index].SteamId,
-                    Points = CalculateRepresentablePlayerTrackScore(
-                        trackPool,
-                        index + 1,
-                        rankedPlayers.Count,
-                        $"Tier {tier} would produce an unrepresentable score for style {style}."),
-                });
-            }
-        }
-
-        var affectedExistingScores = await _db.Queryable<PlayerTrackScoreEntity>()
-                                               .Where(x => x.MapId == mapId
-                                                           && x.Track == 0
-                                                           && affectedStyles.Contains(x.Style))
-                                               .Select(x => new AdministrativeTargetPlayerScoreRow
-                                               {
-                                                   SteamId = x.SteamId,
-                                                   Points = x.Points,
-                                               })
-                                               .ToListAsync(OperationCancellation);
-
-        var affectedPlayers = affectedExistingScores.Select(x => x.SteamId)
-                                                    .Concat(projectedScores.Select(x => x.SteamId))
-                                                    .Distinct()
-                                                    .ToList();
-        if (affectedPlayers.Count == 0)
-        {
-            return;
-        }
-
-        // Hold every affected player in the standard ascending-id order before reading score
-        // totals. A concurrent recalculation for another map obeys the same order, so the
-        // preflight sees its committed state instead of racing a cross-map total update.
-        await LockPlayersForPointsAsync(affectedPlayers);
-
-        var currentScores = new List<AdministrativePlayerScoreRow>();
-        foreach (var batch in affectedPlayers.Chunk(500))
-        {
-            var rows = await _db.Queryable<PlayerTrackScoreEntity>()
-                                .Where(x => batch.Contains(x.SteamId))
-                                .Select(x => new AdministrativePlayerScoreRow
-                                {
-                                    SteamId = x.SteamId,
-                                    Points = x.Points,
-                                })
-                                .ToListAsync(OperationCancellation);
-            currentScores.AddRange(rows);
-        }
-
-        var projectedTotals = new Dictionary<long, ulong>(affectedPlayers.Count);
-        foreach (var score in currentScores)
-        {
-            var current = projectedTotals.GetValueOrDefault(score.SteamId);
-            projectedTotals[score.SteamId] = AddAdministrativePointsChecked(
-                current, score.Points, "Existing score rows exceed the administration preflight range.");
-        }
-
-        // Existing targeted rows are replaced by this recalculation (or removed for a zero
-        // factor). Remove them from the authoritative score-row total before adding the upper
-        // exact new score for each ranked player below.
-        foreach (var score in affectedExistingScores)
-        {
-            var current = projectedTotals.GetValueOrDefault(score.SteamId);
-            if (current < score.Points)
-            {
-                throw new InvalidOperationException(
-                    "Score administration preflight found an inconsistent player-track-score projection.");
-            }
-
-            projectedTotals[score.SteamId] = current - score.Points;
-        }
-
-        foreach (var score in projectedScores)
-        {
-            var current = projectedTotals.GetValueOrDefault(score.SteamId);
-            projectedTotals[score.SteamId] = AddAdministrativePointsChecked(
-                current,
-                score.Points,
-                "Score administration preflight exceeded its arithmetic range.");
-        }
-
-        foreach (var (steamId, projectedTotal) in projectedTotals)
-        {
-            if (projectedTotal > uint.MaxValue)
-            {
-                throw new InvalidOperationException(
-                    $"Tier {tier} could make player {steamId}'s total score exceed {uint.MaxValue}.");
-            }
-        }
-    }
-
     private static uint CalculateRepresentablePlayerTrackScore(double trackPool,
                                                                 int rank,
                                                                 int total,
@@ -502,17 +422,6 @@ internal sealed partial class StorageServiceImpl
         return (uint)roundedPoints;
     }
 
-    private static ulong AddAdministrativePointsChecked(ulong current, ulong points, string overflowMessage)
-    {
-        try
-        {
-            return checked(current + points);
-        }
-        catch (OverflowException exception)
-        {
-            throw new InvalidOperationException(overflowMessage, exception);
-        }
-    }
     private static void ValidateScorePolicy(IReadOnlyDictionary<int, double> styleFactors)
     {
         ArgumentNullException.ThrowIfNull(styleFactors);
@@ -559,18 +468,6 @@ internal sealed partial class StorageServiceImpl
         public int Style { get; set; }
         public ushort Track { get; set; }
         public bool IsDeadLettered { get; set; }
-    }
-
-    private sealed class AdministrativePlayerScoreRow
-    {
-        public long SteamId { get; set; }
-        public uint Points { get; set; }
-    }
-
-    private sealed class AdministrativeTargetPlayerScoreRow
-    {
-        public long SteamId { get; set; }
-        public uint Points { get; set; }
     }
 
     private sealed record AdministrativeScoreBoard(int Style,
