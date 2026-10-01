@@ -279,8 +279,9 @@ internal sealed partial class StorageServiceImpl
                                                 && x.Stage == stage)
                                     .Select(x => new AttemptBestTimesRow
                                     {
-                                        PlayerBestRowId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.Id, null)),
-                                        PlayerBestRunId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.RunId, null)),
+                                        // 0, not NULL, for other players' rows: see AttemptBestTimesRow.
+                                        PlayerBestRowId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.Id, 0UL)),
+                                        PlayerBestRunId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.RunId, 0UL)),
                                         ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
                                         PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
                                                                                            (double?) x.BestTime,
@@ -329,8 +330,9 @@ internal sealed partial class StorageServiceImpl
                                                 && x.Stage == stage)
                                     .Select(x => new AttemptBestTimesRow
                                     {
-                                        PlayerBestRowId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.Id, null)),
-                                        PlayerBestRunId = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue, (ulong?)x.RunId, null)),
+                                        // 0, not NULL, for other players' rows: see AttemptBestTimesRow.
+                                        PlayerBestRowId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.Id, 0UL)),
+                                        PlayerBestRunId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.RunId, 0UL)),
                                         ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
                                         PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
                                                                                            (double?) x.BestTime,

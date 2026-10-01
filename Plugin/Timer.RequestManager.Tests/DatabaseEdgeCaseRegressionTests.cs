@@ -2,6 +2,8 @@ using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
+using Source2Surf.Timer.Common.Enums;
+using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
 using SqlSugar;
 using Timer.RequestManager.Backend;
@@ -30,6 +32,7 @@ public sealed class DatabaseEdgeCaseRegressionTests
         await JoinDatesRemainStableAcrossRenamesAndScores(fixture);
         foreach (var time in new[] { 80f, 80.1f, MathF.BitIncrement(80f) })
             await EqualTimeRanksFollowTheScoreOrder(fixture, time);
+        await ImprovedBestUpdatesOwnRowBesideOtherPlayers(fixture);
         await LegacyJoinDateMigrationIsAdditiveAndIdempotent(fixture);
         await InvalidHistoricalTimesCanBeRepaired(fixture);
         if (type != DbType.Sqlite) await ConcurrentWritesPreserveJoinDatesAndCounters(fixture);
@@ -145,6 +148,43 @@ public sealed class DatabaseEdgeCaseRegressionTests
         Assert.Equal(1, stageFirst.rank);
         Assert.Equal(2, stageSecond.rank);
         Assert.Equal(1, differentStage.rank);
+    }
+
+    // PostgreSQL once read another player's row on the key as best-row id 0, so an improved
+    // personal best tried to insert a second row and failed the unique index (23505).
+    private static async Task ImprovedBestUpdatesOwnRowBesideOtherPlayers(Fixture f)
+    {
+        var map = await f.Store.GetMapInfo(Fixture.MapName());
+        var other = Fixture.Player();
+        var player = Fixture.Player();
+        var steamId = checked((long)player.AsPrimitive());
+        await Profile(f.Store, checked((long)other.AsPrimitive()), "Other");
+        await Profile(f.Store, steamId, "Improver");
+
+        await f.Store.AddPlayerRecord(other, map.MapName, new RecordRequest { Time = 30 });
+        await f.Store.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = 90 });
+        var improved = await f.Store.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = 85 });
+        var slower = await f.Store.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = 88 });
+        Assert.Equal(EAttemptResult.NewPersonalRecord, improved.Item1);
+        Assert.Equal(EAttemptResult.NoNewRecord, slower.Item1);
+
+        await f.Store.AddPlayerStageRecord(other, map.MapName, new RecordRequest { Stage = 1, Time = 10 });
+        await f.Store.AddPlayerStageRecord(player, map.MapName, new RecordRequest { Stage = 1, Time = 30 });
+        var stageImproved = await f.Store.AddPlayerStageRecord(player, map.MapName, new RecordRequest { Stage = 1, Time = 25 });
+        var stageSlower = await f.Store.AddPlayerStageRecord(player, map.MapName, new RecordRequest { Stage = 1, Time = 28 });
+        Assert.Equal(EAttemptResult.NewPersonalRecord, stageImproved.Item1);
+        Assert.Equal(EAttemptResult.NoNewRecord, stageSlower.Item1);
+
+        var rows = await f.Store.Db.Queryable<PlayerBestRunEntity>()
+                          .Where(x => x.MapId == map.MapId && x.SteamId == steamId)
+                          .ToListAsync();
+        Assert.Equal(2, rows.Count);
+        var main = Assert.Single(rows, x => x.RunType == RunType.Main);
+        var stage = Assert.Single(rows, x => x.RunType == RunType.Stage);
+        Assert.Equal(checked((ulong)improved.Item2.Id), main.RunId);
+        Assert.Equal(85f, main.BestTime);
+        Assert.Equal(checked((ulong)stageImproved.Item2.Id), stage.RunId);
+        Assert.Equal(25f, stage.BestTime);
     }
 
     private static async Task LegacyJoinDateMigrationIsAdditiveAndIdempotent(Fixture f)

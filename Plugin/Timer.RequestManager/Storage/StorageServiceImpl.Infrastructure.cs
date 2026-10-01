@@ -239,6 +239,11 @@ internal sealed partial class StorageServiceImpl
 
     private sealed class AttemptBestTimesRow
     {
+        // 0 when the player has no best row. The queries aggregate MAX over a CASE whose
+        // other-player branch is 0 rather than NULL: SqlSugar's PostgreSQL provider sends a
+        // null unsigned parameter as 0, so a NULL branch made every other player's row read
+        // as id 0 and hid this player's row. The unique key allows one row per player, and
+        // ids start at 1, so MAX is exactly that row.
         public ulong? PlayerBestRowId { get; set; }
         public ulong? PlayerBestRunId { get; set; }
 
