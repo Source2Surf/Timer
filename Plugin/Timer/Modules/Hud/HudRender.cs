@@ -22,6 +22,7 @@ using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Modules.Hud;
+using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models;
 using Source2Surf.Timer.Shared.Models.Replay;
@@ -49,7 +50,22 @@ internal partial class HudModule
             }
 
             p.SentText[key] = value;
-            layout.SetDialogVariableString(panel, variable, value);
+            layout.SetDialogVariableString(panel, variable, AsShown(variable, value));
+        }
+
+        // The client looks a whole value up in the game's own strings and shows what it finds instead: "Normal" became
+        // 普通, "Style" became SET STYLE (valve_english.txt). A zero-width space in front keeps every value as it is,
+        // except editkey, which names the command whose bound key {g:csgo_key:editkey} shows.
+        private static string AsShown(string variable, string value)
+            => value.Length == 0 || variable == "editkey" ? value : ZString.Concat('​', value);
+
+        // Fixed labels, in the player's language.
+        public void Labels((string Id, HudText Text)[] labels)
+        {
+            foreach (var (id, text) in labels)
+            {
+                Text(id, "text", p.Tr[text]);
+            }
         }
 
         public void Class(string panel, string className, bool on)
@@ -149,6 +165,16 @@ internal partial class HudModule
             UpdateMenu(w, p, now);
         }
 
+        if (p.Replays.Open)
+        {
+            UpdateReplayMenu(w, p, controller);
+        }
+
+        if (p.Profile.Open)
+        {
+            UpdateProfile(w, p);
+        }
+
         var source = ResolveSource(p, controller);
         w.Class("TimerRoot", "Hidden", source is null);
 
@@ -197,12 +223,20 @@ internal partial class HudModule
     private static void UpdateMenu(HudWriter w, HudPlayer p, float now)
     {
         w.Class("Menu", "Closed", !p.MenuOpen);
+        w.Class("RMenu", "Closed", !p.Replays.Open);
+        w.Class("PfMenu", "Closed", !p.Profile.Open);
         w.Class("Menu", "moving", p.Drag?.Target == HudTarget.Menu);
         w.Class("DragToast", "shown", p.Drag is not null);
 
+        if (p.MenuOpen)
+        {
+            w.Labels(HudLabels.Menu);
+        }
+
         if (p.Drag is { } drag)
         {
-            w.Text("DragToastWhat", "target", HudTargets.Def(drag.Target).Name);
+            w.Text("DragToastWhat", "target", p.Tr.Format(HudTexts.DragMoving, p.Tr[HudTargets.Def(drag.Target).Name]));
+            w.Labels(HudLabels.DragToast);
         }
 
         // {g:csgo_key:editkey} shows each player the key they bound to the command.
@@ -258,7 +292,7 @@ internal partial class HudModule
             var line   = p.Order[i];
             var option = HudLines.Option(line);
 
-            w.Text(HudLines.RowNames[i], "name", HudLines.Name(line));
+            w.Text(HudLines.RowNames[i], "name", p.Tr[HudLines.Name(line)]);
             w.Class(HudLines.RowNames[i], "blank", option is null);
             w.Class(HudLines.RowToggle[i], "blank", option is null);
 
@@ -269,7 +303,7 @@ internal partial class HudModule
 
             var choice = option.Choices[p.Settings[option.Index]];
 
-            w.Text(HudLines.RowValues[i], "value", choice.Label);
+            w.Text(HudLines.RowValues[i], "value", ChoiceText(p.Tr, choice));
             w.Class(HudLines.RowValues[i], "on", choice.Tone == HudTone.On);
             w.Class(HudLines.RowValues[i], "off", choice.Tone == HudTone.Off);
         }
@@ -281,7 +315,7 @@ internal partial class HudModule
 
             if (!HudLines.RowOptions.Contains(option))
             {
-                w.Text(option.ValueId, "value", shown.Choice.Label);
+                w.Text(option.ValueId, "value", ChoiceText(p.Tr, shown.Choice));
                 w.Class(option.ValueId, "on", shown.Choice.Tone == HudTone.On);
                 w.Class(option.ValueId, "off", shown.Choice.Tone == HudTone.Off);
 
@@ -361,7 +395,6 @@ internal partial class HudModule
 
         public readonly bool[]    Shown = new bool[HudLines.Count]; // by line
         public readonly string?[] Texts = new string?[HudLines.Count];
-        public          bool      InZone;
     }
 
     /// <summary>
@@ -379,7 +412,8 @@ internal partial class HudModule
         var practice = _practiceModule.IsInPractice(s.Slot);
 
         var compare = p.Settings[HudOptions.Compare.Index];
-        var tag     = compare == HudOptions.ComparePersonalBest ? "PR" : "WR";
+        var tr      = p.Tr;
+        var tag     = compare == HudOptions.ComparePersonalBest ? tr[HudTexts.TagPr] : tr[HudTexts.TagSr];
 
         float? Against(float? pb, float? wr)
             => compare switch
@@ -392,7 +426,7 @@ internal partial class HudModule
         var view = new TimerView();
 
         // The time's difference: live against the record's replay, else at the last split passed, or at the finish.
-        float? timeDiff = null;
+        long? timeDiff = null; // ms
 
         if (running && compare != HudOptions.CompareOff)
         {
@@ -400,40 +434,40 @@ internal partial class HudModule
 
             if (live && !paused)
             {
-                timeDiff = TryComputePositionDelta(s.Pawn, info);
+                timeDiff = TryComputePositionDelta(s, info, compare);
             }
 
             if (timeDiff is null && run is { Splits.Count: > 0 } && Against(run.Splits[0].CumPb, run.Splits[0].CumWr) is { } theirs)
             {
-                timeDiff = HudFormat.DiffTime(run.Splits[0].Cum, theirs);
+                timeDiff = HudFormat.DiffMillis(run.Splits[0].Cum, theirs);
             }
         }
         else if (finish is not null && Against(finish.Pb, finish.Wr) is { } theirs)
         {
-            timeDiff = HudFormat.DiffTime(finish.Time, theirs);
+            timeDiff = HudFormat.DiffMillis(finish.Time, theirs);
         }
 
         if (finish is not null)
         {
-            view.Title = ZString.Concat(finish.Track > 0 ? ZString.Concat("Bonus ", finish.Track, " Completed!") : "Map Completed!",
-                                        finish.Practice ? " (Practice)" : "");
+            var title = finish.Track > 0 ? tr.Format(HudTexts.BonusCompleted, finish.Track) : tr[HudTexts.MapCompleted];
+            view.Title = finish.Practice ? tr.Format(HudTexts.PracticeTitle, title) : title;
         }
         else if (stopped)
         {
-            (view.Title, view.TitleClass) = ("Run Stopped", "stopped");
+            (view.Title, view.TitleClass) = (tr[HudTexts.RunStopped], "stopped");
         }
         else if (paused)
         {
-            (view.Title, view.TitleClass) = ("Timer Paused", "paused");
+            (view.Title, view.TitleClass) = (tr[HudTexts.TimerPaused], "paused");
         }
         else if (practice)
         {
-            (view.Title, view.TitleClass) = ("Practice Mode", "practice");
+            (view.Title, view.TitleClass) = (tr[HudTexts.PracticeMode], "practice");
         }
 
         if (running || finish is not null)
         {
-            view.TimeLabel = finish is not null ? "Final Time" : "Time";
+            view.TimeLabel = finish is not null ? tr[HudTexts.FinalTime] : tr[HudTexts.Time];
             view.Time      = HudFormat.FormatTime(finish?.Time ?? info.Time);
             view.Finished  = finish is not null;
         }
@@ -451,7 +485,7 @@ internal partial class HudModule
 
             if (Against(stage.Pb, stage.Wr) is { } theirs)
             {
-                var stageDiff = HudFormat.DiffTime(stage.Time, theirs);
+                var stageDiff = HudFormat.DiffMillis(stage.Time, theirs);
                 view.StageCmp     = ZString.Concat(tag, ' ', HudFormat.FormatDiff(stageDiff));
                 view.StageCmpSign = Math.Sign(stageDiff);
             }
@@ -466,23 +500,17 @@ internal partial class HudModule
         view.Shown[(int) HudLine.Jumps]   = running && p.IsOn(HudOptions.Jumps);
         view.Shown[(int) HudLine.Strafes] = running && p.IsOn(HudOptions.Strafes);
 
-        if (now >= p.NextSyncAt || p.NextSyncAt - now > SyncInterval)
-        {
-            p.NextSyncAt = now + SyncInterval;
-            p.SyncText   = (info.Sync * 100f).ToString("F2", CultureInfo.InvariantCulture);
-        }
-
-        view.Texts[(int) HudLine.Zone]  = ZString.Concat("[Zone: ", ZoneName(run, info, running || stopped), ']');
-        view.Texts[(int) HudLine.Mode]  = ZString.Concat("Mode: ", _styleModule.GetStyleSetting(info.Style).Name);
-        view.Texts[(int) HudLine.Speed] = ZString.Concat("Speed: ", HudFormat.RoundSpeed(speed), " u/s");
-        view.Texts[(int) HudLine.Sync]  = ZString.Concat("Sync: ", p.SyncText);
-        view.Texts[(int) HudLine.Jumps]   = ZString.Concat("Jumps: ", info.Jumps);
-        view.Texts[(int) HudLine.Strafes] = ZString.Concat("Strafes: ", info.Strafes);
+        view.Texts[(int) HudLine.Zone]    = tr.Format(HudTexts.LineZone, ZoneName(tr, run, info, running || stopped));
+        view.Texts[(int) HudLine.Mode]    = tr.Format(HudTexts.LineMode, _styleModule.GetStyleSetting(info.Style).Name);
+        view.Texts[(int) HudLine.Speed]   = tr.Format(HudTexts.LineSpeed, HudFormat.RoundSpeed(speed));
+        view.Texts[(int) HudLine.Sync]    = tr.Format(HudTexts.LineSync, (info.Sync * 100f).ToString("F2", CultureInfo.InvariantCulture));
+        view.Texts[(int) HudLine.Jumps]   = tr.Format(HudTexts.LineJumps, info.Jumps);
+        view.Texts[(int) HudLine.Strafes] = tr.Format(HudTexts.LineStrafes, info.Strafes);
 
         if (finish is not null)
         {
             view.Texts[(int) HudLine.Start] =
-                ZString.Concat("End: ", finish.End, " u/s", SpeedCmp(tag, finish.End, Against(finish.EndPb, finish.EndWr)));
+                ZString.Concat(tr.Format(HudTexts.LineEnd, finish.End), SpeedCmp(tr, tag, finish.End, Against(finish.EndPb, finish.EndWr)));
         }
         else if (running)
         {
@@ -495,10 +523,9 @@ internal partial class HudModule
             };
 
             var theirs = target is null ? (int?) null : HudFormat.RoundSpeed(Length2D(target.VelocityStartX, target.VelocityStartY));
-            view.Texts[(int) HudLine.Start] = ZString.Concat("Start: ", start, " u/s", SpeedCmp(tag, start, theirs));
+            view.Texts[(int) HudLine.Start] = ZString.Concat(tr.Format(HudTexts.LineStart, start), SpeedCmp(tr, tag, start, theirs));
         }
 
-        view.InZone = run?.ZoneType is EZoneType.Start or EZoneType.Stage;
 
         WriteTimer(w, p, view);
     }
@@ -507,31 +534,35 @@ internal partial class HudModule
     ///     Spectating a replay bot, kept simple: whose record, how far into it, and its speed. The record's own
     ///     time is in the records panel's SR line.
     /// </summary>
-    private static void UpdateReplayTimer(HudWriter w, HudPlayer p, IReplayBotData bot, float speed)
+    private void UpdateReplayTimer(HudWriter w, HudPlayer p, IReplayBotData bot, float speed)
     {
         var view   = new TimerView();
         var header = bot.Header;
 
         if (bot.Status == EReplayBotStatus.Idle || header is null)
         {
-            view.Title = "Replay Bot (Idle)";
+            view.Title = p.Tr[HudTexts.ReplayIdle];
+
+            if (bot.Type == EReplayBotType.Central)
+            {
+                view.TimeCmp = p.Tr[HudTexts.ReplayPickHint];
+            }
         }
         else
         {
-            var record = bot.Stage > 0 ? ZString.Concat("Stage ", bot.Stage, " WR")
-                : bot.Track > 0        ? ZString.Concat("Bonus ", bot.Track, " WR")
-                                         : "WR";
-
-            view.Title      = ZString.Concat("Replay: ", header.PlayerName, " (", record, ')');
+            view.Title      = p.Tr.Format(HudTexts.ReplayTitle, header.PlayerName, ReplayTagOf(p.Tr, bot));
             view.TitleClass = "replay";
-            view.TimeLabel  = "Time";
+            view.TimeLabel  = p.Tr[HudTexts.Time];
 
-            var frame = Math.Clamp(bot.CurrentFrame, header.PreFrame, Math.Max(header.PreFrame, header.PostFrame));
-            view.Time = HudFormat.FormatTime((frame - header.PreFrame) * TimerConstants.TickInterval);
+            // A central bot's pause and speed, as its controller set them.
+            var elapsed = HudFormat.FormatTime(HudFormat.ReplayElapsed(bot.CurrentFrame, header.PreFrame, header.PostFrame));
+            view.Time = bot.Paused ? ZString.Concat(elapsed, " ", p.Tr[HudTexts.ReplayPaused])
+                : bot.Speed != 1f  ? ZString.Concat(elapsed, " [", HudFormat.SpeedTag(bot.Speed), ']')
+                                     : elapsed;
         }
 
         view.Shown[(int) HudLine.Speed] = p.IsOn(HudOptions.Speed);
-        view.Texts[(int) HudLine.Speed] = ZString.Concat("Speed: ", HudFormat.RoundSpeed(speed), " u/s");
+        view.Texts[(int) HudLine.Speed] = p.Tr.Format(HudTexts.LineSpeed, HudFormat.RoundSpeed(speed));
 
         WriteTimer(w, p, view);
     }
@@ -581,8 +612,7 @@ internal partial class HudModule
 
         if (view.Time is not null)
         {
-            w.Text("Time", "label", view.TimeLabel ?? "Time");
-            w.Text("Time", "time", view.Time);
+            w.Text("Time", "time", p.Tr.Format(HudTexts.TimeLine, view.TimeLabel ?? p.Tr[HudTexts.Time], view.Time));
             w.Class("Time", "finished", view.Finished);
         }
 
@@ -595,8 +625,7 @@ internal partial class HudModule
 
         if (view.Stage is { } stage)
         {
-            w.Text("StageFinish", "stage", stage.ToString(CultureInfo.InvariantCulture));
-            w.Text("StageFinish", "time", view.StageTime ?? "");
+            w.Text("StageFinish", "text", p.Tr.Format(HudTexts.StageFinished, stage, view.StageTime ?? ""));
         }
 
         if (view.StageCmp is not null)
@@ -621,69 +650,93 @@ internal partial class HudModule
             }
 
             w.Text(id, "text", view.Texts[(int) line] ?? "");
-            w.Class(id, "in-zone", line == HudLine.Zone && view.InZone);
         }
     }
 
     /// <summary>
-    ///     " (PR +12 u/s)", or nothing without a speed to compare against.
+    ///     " (PR: +12 u/s)", or nothing without a speed to compare against.
     /// </summary>
-    private static string SpeedCmp(string tag, int mine, float? theirs)
-        => theirs is { } t ? ZString.Concat(" (", tag, ' ', HudFormat.FormatSpeedDiff(mine - t), ')') : "";
+    private static string SpeedCmp(HudTr tr, string tag, int mine, float? theirs)
+        => theirs is { } t ? tr.Format(HudTexts.SpeedCmp, tag, HudFormat.FormatSpeedDiff(mine - t)) : "";
 
-    private string ZoneName(HudPlayer? run, ITimerInfo info, bool onTrack)
+    private string ZoneName(HudTr tr, HudPlayer? run, ITimerInfo info, bool onTrack)
     {
         if (run is not null)
         {
             switch (run.ZoneType)
             {
                 case EZoneType.Start:
-                    return run.ZoneTrack > 0 ? ZString.Concat("Bonus ", run.ZoneTrack, " Start Zone") : "Map Start Zone";
+                    return run.ZoneTrack > 0 ? tr.Format(HudTexts.ZoneBonusStart, run.ZoneTrack) : tr[HudTexts.ZoneMapStart];
                 case EZoneType.Stage:
-                    return ZString.Concat("Stage ", run.ZoneData, " Start Zone");
+                    return tr.Format(HudTexts.ZoneStageStart, run.ZoneData);
                 case EZoneType.End:
-                    return run.ZoneTrack > 0 ? ZString.Concat("Bonus ", run.ZoneTrack, " End Zone") : "Map End Zone";
+                    return run.ZoneTrack > 0 ? tr.Format(HudTexts.ZoneBonusEnd, run.ZoneTrack) : tr[HudTexts.ZoneMapEnd];
             }
         }
 
         if (!onTrack)
         {
-            return "None";
+            return tr[HudTexts.ZoneNone];
         }
 
         if (info.Track > 0)
         {
-            return ZString.Concat("Bonus ", info.Track);
+            return tr.Format(HudTexts.BonusN, info.Track);
         }
 
         if (_zoneModule.IsCurrentTrackLinear(info.Track))
         {
-            return "Linear";
+            return tr[HudTexts.ZoneLinear];
         }
 
         var stage = run is null ? null : _timerModule.GetStageTimerInfo(run.Slot) as IStageTimerInfo;
 
-        return ZString.Concat("Stage ", stage?.Stage ?? 1);
+        return tr.Format(HudTexts.StageN, stage?.Stage ?? 1);
     }
+
+    // The menu's values in the player's language; numbers and sizes read the same everywhere.
+    private static string ChoiceText(HudTr tr, HudChoice choice)
+        => choice.Label switch
+        {
+            "On"            => tr[HudTexts.ChoiceOn],
+            "Off"           => tr[HudTexts.ChoiceOff],
+            "Personal best" => tr[HudTexts.ChoicePersonalBest],
+            "Server record" => tr[HudTexts.ChoiceServerRecord],
+            "Horizontal"    => tr[HudTexts.ChoiceHorizontal],
+            _               => choice.Label,
+        };
 
     // Hide the live difference if the closest record frame is farther than this: beyond about one ramp's width the
     // projection is meaningless (the player is on a different path).
     private const float MaxPositionDiffDistSq = 256f * 256f;
 
-    // Suppress nonsense large differences (wrong replay, teleport mid-run, ...).
-    private const float MaxAbsPositionDelta = 600f;
+    // Suppress nonsense large differences (wrong replay, teleport mid-run, ...): ten minutes, in ms.
+    private const long MaxAbsPositionDelta = 600_000;
 
     /// <summary>
-    ///     The player's time against the server record's at the closest point of its replay.
+    ///     The run's time against the compared one's at the closest point of its replay: the runner's own PB, or the
+    ///     server record, on the style and track they're running.
     /// </summary>
-    private float? TryComputePositionDelta(IBasePlayerPawn pawn, ITimerInfo timerInfo)
+    private long? TryComputePositionDelta(HudSource s, ITimerInfo timerInfo, int compare)
     {
         if (timerInfo.Status != ETimerStatus.Running || !float.IsFinite(timerInfo.Time) || timerInfo.Time <= 0f)
         {
             return null;
         }
 
-        var replay = _replayModule.GetCachedReplay(timerInfo.Style, timerInfo.Track, 0);
+        ReplayContent?     replay;
+        ClosestFrameIndex? frames = null;
+
+        if (compare == HudOptions.ComparePersonalBest)
+        {
+            replay = _recordModule.GetPlayerRecord(s.Slot, timerInfo.Style, timerInfo.Track) is { } pb
+                ? _personalBests.GetPersonalBest(s.Slot, pb, out frames)
+                : null;
+        }
+        else
+        {
+            replay = _replayModule.GetCachedReplay(timerInfo.Style, timerInfo.Track, 0);
+        }
 
         if (replay is null || replay.Frames.Count == 0)
         {
@@ -695,12 +748,11 @@ internal partial class HudModule
         var projectedFrame = replay.Header.PreFrame + ((double) timerInfo.Time / TimerConstants.TickInterval);
         var preferredFrame = (int) Math.Clamp(Math.Round(projectedFrame), 0d, replay.Frames.Count - 1d);
 
-        var index = _replayModule.FindClosestFrameIndex(timerInfo.Style,
-                                                        timerInfo.Track,
-                                                        0,
-                                                        pawn.GetAbsOrigin(),
-                                                        preferredFrame,
-                                                        out var distSq);
+        var position = s.Pawn.GetAbsOrigin();
+        var distSq   = float.PositiveInfinity;
+        var index = compare == HudOptions.ComparePersonalBest
+            ? frames?.FindClosest(position, preferredFrame, out distSq) ?? -1
+            : _replayModule.FindClosestFrameIndex(timerInfo.Style, timerInfo.Track, 0, position, preferredFrame, out distSq);
 
         if (index < 0 || distSq > MaxPositionDiffDistSq)
         {
@@ -715,7 +767,7 @@ internal partial class HudModule
             return null;
         }
 
-        var delta = HudFormat.DiffTime(timerInfo.Time, recordFrames * TimerConstants.TickInterval);
+        var delta = HudFormat.DiffMillis(timerInfo.Time, recordFrames * TimerConstants.TickInterval);
 
         return delta is < -MaxAbsPositionDelta or > MaxAbsPositionDelta ? null : delta;
     }
@@ -733,21 +785,25 @@ internal partial class HudModule
 
         if (style < 0 || track < 0)
         {
-            w.Text("Sr", "sr", "N/A");
-            w.Text("Pb", "pb", "N/A");
+            w.Text("Sr", "sr", p.Tr.Format(HudTexts.InfoSr, p.Tr[HudTexts.NotAvailable]));
+            w.Text("Pb", "pb", p.Tr.Format(HudTexts.InfoPb, p.Tr[HudTexts.NotAvailable]));
 
             return;
         }
 
         var wr = _recordModule.GetWR(style, track);
-        w.Text("Sr", "sr", wr is null ? "N/A" : ZString.Concat(HudFormat.FormatTime(wr.Time), " (", wr.PlayerName, ')'));
+        w.Text("Sr",
+               "sr",
+               p.Tr.Format(HudTexts.InfoSr,
+                           wr is null ? p.Tr[HudTexts.NotAvailable] : ZString.Concat(HudFormat.FormatTime(wr.Time), " (", wr.PlayerName, ')')));
 
         var pb = _recordModule.GetPlayerRecord(pbSlot, style, track);
         w.Text("Pb",
                "pb",
-               pb is null
-                   ? "N/A"
-                   : ZString.Concat(HudFormat.FormatTime(pb.Time), " (#", _recordModule.GetRankForTime(style, track, pb.Time), ')'));
+               p.Tr.Format(HudTexts.InfoPb,
+                           pb is null
+                               ? p.Tr[HudTexts.NotAvailable]
+                               : ZString.Concat(HudFormat.FormatTime(pb.Time), " (#", _recordModule.GetRankForTime(style, track, pb.Time), ')')));
     }
 
     private static readonly string[] SplitRows  = Ids("Split{0}");
@@ -778,7 +834,7 @@ internal partial class HudModule
         var limit   = int.Parse(p.Setting(HudOptions.SplitRows), CultureInfo.InvariantCulture);
         var compare = p.Settings[HudOptions.Compare.Index];
         var fade    = p.IsOn(HudOptions.SplitFade);
-        var tag     = compare == HudOptions.ComparePersonalBest ? "PB" : "WR";
+        var tag     = compare == HudOptions.ComparePersonalBest ? p.Tr[HudTexts.TagPb] : p.Tr[HudTexts.TagSr];
 
         for (var i = 0; i < HudPlayer.MaxSplits; i++)
         {
@@ -802,15 +858,15 @@ internal partial class HudModule
                 _                              => null,
             };
 
-            w.Text(SplitNames[i], "name", split.Name);
+            w.Text(SplitNames[i], "name", p.Tr.Format(split.Stage ? HudTexts.StageN : HudTexts.CheckpointN, split.Number));
             w.Text(SplitTimes[i],
                    "time",
-                   theirs is null ? HudFormat.FormatTime(split.Time) : ZString.Concat(HudFormat.FormatTime(split.Time), " vs ", tag));
+                   theirs is null ? HudFormat.FormatTime(split.Time) : p.Tr.Format(HudTexts.Versus, HudFormat.FormatTime(split.Time), tag));
             w.Class(SplitDiffs[i], "Hidden", theirs is null);
 
             if (theirs is { } t)
             {
-                var diff = HudFormat.DiffTime(split.Time, t);
+                var diff = HudFormat.DiffMillis(split.Time, t);
                 w.Text(SplitDiffs[i], "diff", HudFormat.FormatDiff(diff));
                 w.Class(SplitDiffs[i], "faster", diff < 0);
                 w.Class(SplitDiffs[i], "slower", diff > 0);
@@ -819,6 +875,11 @@ internal partial class HudModule
 
         // With the menu open, an empty panel still says what it's for, so it can be found and dragged.
         w.Class("SplitsEmpty", "shown", p.MenuOpen && (run is null || run.Splits.Count == 0));
+
+        if (p.MenuOpen)
+        {
+            w.Text("SplitsEmpty", "text", p.Tr[HudTexts.SplitsEmpty]);
+        }
 
         if (run is not null && run.SplitSerial != run.SplitShown)
         {
@@ -863,6 +924,11 @@ internal partial class HudModule
         w.Class("KeyDuck", "Hidden", !jumpDuck);
         w.Class("KeyGap", "Hidden", !jumpDuck);
         w.Class("KeyJump", "Hidden", !jumpDuck);
+
+        if (jumpDuck)
+        {
+            w.Labels(HudLabels.Keys);
+        }
     }
 
     private const int ReplayTurnFrames = 6; // about the 0.1 s a player's turn arrow stays lit

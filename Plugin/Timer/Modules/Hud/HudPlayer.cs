@@ -55,16 +55,63 @@ internal sealed class HudDragState
     public          float?       SnapSince; // set while the pickup's pitch levelling is on its way to the client
     public          Vector       Aim;       // the client's own view angles, which keep turning behind the frozen camera
 
-    public ICustomPlayerCamera?       Camera;       // holds the player's view still while they drag
-    public CEntityHandle<IBaseEntity> PreviousView; // their view entity before the drag (a map camera), to hand back
+    public bool                           Frozen;       // the player's camera holds their view still
+    public CEntityHandle<IBasePlayerPawn> Pawn;         // whose view it holds
+    public CEntityHandle<IBaseEntity>     PreviousView; // a map camera that held their view before the drag, to hand back
+}
+
+/// <summary>
+///     The replay menu (!replay): what's picked, and a Watch on its way. Selected indexes the leaderboard.
+/// </summary>
+internal sealed class HudReplayMenu
+{
+    public bool    Open;
+    public int     Tab;   // 0 the leaderboard, 1 the player's own runs
+    public int     Track;
+    public int     Stage; // 0 is the full run
+    public int     Style;
+    public int     Page;
+    public int     Selected;
+    public bool    Loading;
+    public string? Note; // why the last Watch didn't start
+
+    // My runs, as last loaded, and for which pick.
+    public IReadOnlyList<RunRecord>?            Runs;
+    public (int Style, int Track, int Stage)    RunsFor;
+    public bool                                 RunsLoading;
+}
+
+/// <summary>
+///     The profile card (!profile): whose it is, its picks, and what's been fetched for it. Version tells a late
+///     answer for an earlier profile from one for this one.
+/// </summary>
+internal sealed class HudProfile
+{
+    public bool       Open;
+    public int        Version;
+    public PlayerSlot Target;
+    public ulong      SteamId;
+    public int        Style;
+    public int        Track;
+
+    public int RankOf; // 0 until fetched (or when the player isn't ranked)
+    public int Rank;
+
+    public PlayerSummary? Summary;
+    public bool           SummaryFetched; // a provider without the query answers null
+
+    public float MapPlayTime;
+    public int   MapPlays;
+    public bool  MapStatsFetched;
 }
 
 /// <summary>
 ///     One recent split. <see cref="Time" /> is what the row shows (a stage's own time, or the run's time at a
 ///     checkpoint) and <see cref="Pb" /> / <see cref="Wr" /> what it's compared against, as they were then.
-///     The Cum* fields are the run's time at the split, for comparing the whole run.
+///     The Cum* fields are the run's time at the split, for comparing the whole run. It's a stage's or a checkpoint's,
+///     named in each viewer's language when shown.
 /// </summary>
-internal sealed record HudSplit(string Name, float Time, float? Pb, float? Wr, float Cum, float? CumPb, float? CumWr);
+internal sealed record HudSplit(bool Stage, int Number, float Time, float? Pb, float? Wr, float Cum, float? CumPb, float? CumWr);
 
 internal sealed record HudStageResult(int Stage, float Time, float? Pb, float? Wr);
 
@@ -153,10 +200,21 @@ internal sealed class HudPlayer
     public readonly float[] SmoothUntil = new float[HudTargets.Count]; // keeps a just-placed panel's glide on briefly
     public readonly float[] UnplaceAt   = new float[HudTargets.Count]; // when a gliding panel goes back to its CSS layout
 
+    public readonly HudReplayMenu Replays = new ();
+    public readonly HudProfile    Profile = new ();
+
+    // Any menu takes the mouse.
+    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open;
+
+    // The texts this player reads, in their language where there's a translation.
+    public HudTr Tr;
+
+    // Holds the view still while they drag. It's switched off after a drag rather than removed, and reused: a
+    // camera removed while it holds the view never tells the client it let go, which leaves them looking through it.
+    public ICustomPlayerCamera? Camera;
+
     // ---- refresh pacing
     public float  NextHudAt;
-    public float  NextSyncAt;
-    public string SyncText = "100.00";
     public float  LastSpeed;
     public int    SpeedTrend; // -1 slowing, 0 steady, 1 gaining (drives the speed colour)
 

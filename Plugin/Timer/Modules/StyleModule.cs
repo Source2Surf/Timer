@@ -421,10 +421,6 @@ internal class StyleModule : IModule, IStyleModule, IGameListener, ITimerModuleL
                 timerInfo.ChangeStyle(styleIndex);
                 stageTimer.ChangeStyle(styleIndex);
 
-                // force respawning the player after the game has processed most of the logic to
-                // prevent crashes. because Respawn fundamentally calls SetPawn in the modsharp framework
-                // and doing that in the middle of processing can make WriteEnterPVS, which has parallel workers,
-                // fail to ge the pawn entity
                 _bridge.ModSharp.InvokeFrameAction(() =>
                 {
                     if (_bridge.ClientManager.GetGameClient(slot) is not { } deferredClient)
@@ -435,6 +431,11 @@ internal class StyleModule : IModule, IStyleModule, IGameListener, ITimerModuleL
                     if (deferredClient.GetPlayerController() is not { IsValidEntity: true } deferredController)
                     {
                         return;
+                    }
+
+                    if (deferredController.Team <= CStrikeTeam.Spectator)
+                    {
+                        deferredController.SwitchTeam((CStrikeTeam) Random.Shared.Next(2, 4));
                     }
 
                     deferredController.Respawn();

@@ -25,6 +25,8 @@ using Sharp.Shared;
 using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Command;
+using Source2Surf.Timer.Managers.Localization;
+using Source2Surf.Timer.Managers.Permission;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
 using Source2Surf.Timer.Managers.Request;
@@ -172,6 +174,8 @@ public class Timer : IModSharpModule
         RefreshRequestManager();
         RefreshCommandManager();
         RefreshReplayProvider();
+        RefreshPermissionProvider();
+        RefreshLocalizationProvider();
     }
 
     public void OnLibraryConnected(string moduleIdentity)
@@ -187,6 +191,14 @@ public class Timer : IModSharpModule
         else if (moduleIdentity.Equals(ICommandManager.Identity, StringComparison.Ordinal))
         {
             RefreshCommandManager();
+        }
+        else if (moduleIdentity.Equals(IPermissionProvider.Identity, StringComparison.Ordinal))
+        {
+            RefreshPermissionProvider();
+        }
+        else if (moduleIdentity.Equals(ILocalizationProvider.Identity, StringComparison.Ordinal))
+        {
+            RefreshLocalizationProvider();
         }
     }
 
@@ -206,6 +218,14 @@ public class Timer : IModSharpModule
         {
             SwitchCommandManagerToFallback();
         }
+        else if (moduleIdentity.Equals(IPermissionProvider.Identity, StringComparison.Ordinal))
+        {
+            _serviceProvider.GetService<PermissionProviderProxy>()?.UseFallback();
+        }
+        else if (moduleIdentity.Equals(ILocalizationProvider.Identity, StringComparison.Ordinal))
+        {
+            _serviceProvider.GetService<LocalizationProviderProxy>()?.UseFallback();
+        }
     }
 
     public void OnAllModulesLoaded()
@@ -219,6 +239,8 @@ public class Timer : IModSharpModule
 
         RefreshCommandManager();
         RefreshReplayProvider();
+        RefreshPermissionProvider();
+        RefreshLocalizationProvider();
     }
 
     public void Shutdown()
@@ -361,5 +383,15 @@ public class Timer : IModSharpModule
     private void RefreshReplayProvider()
     {
         _serviceProvider.GetService<ReplayProviderProxy>()?.RefreshProvider();
+    }
+
+    private void RefreshPermissionProvider()
+    {
+        _serviceProvider.GetService<PermissionProviderProxy>()?.RefreshManager();
+    }
+
+    private void RefreshLocalizationProvider()
+    {
+        _serviceProvider.GetService<LocalizationProviderProxy>()?.RefreshManager();
     }
 }

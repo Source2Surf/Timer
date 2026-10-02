@@ -42,4 +42,10 @@ public record ReplayBotConfig
 
     [JsonPropertyName("name")]
     public string Name { get; init; } = "{track}{stage} - {style} - {time}";
+
+    /// <summary>
+    ///     Central bots only: wait in spectator while idle, join a random team to play a replay, and go back after.
+    /// </summary>
+    [JsonPropertyName("spectate_when_idle")]
+    public bool SpectateWhenIdle { get; init; }
 }

@@ -35,6 +35,16 @@ internal sealed class DbReplayProvider : IReplayProvider
     public Task<byte[]?> GetStageReplayAsync(string mapName, int style, int track, int stage, ulong? steamId = null)
         => GetReplayCoreAsync(mapName, RunType.Stage, style, track, stage, steamId);
 
+    public async Task<byte[]?> GetRunReplayAsync(ulong runId)
+    {
+        var replayUrl = await _storage.Db.Queryable<ReplayEntity>()
+            .Where(r => r.RunId == runId)
+            .Select(r => r.Replay)
+            .FirstAsync();
+
+        return await DownloadAsync(replayUrl);
+    }
+
     public Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)
     {
         // Each attempt owns an immutable object key. A partial retry must not truncate an
@@ -74,6 +84,11 @@ internal sealed class DbReplayProvider : IReplayProvider
             .Select((r, run) => r.Replay)
             .FirstAsync();
 
+        return await DownloadAsync(replayUrl);
+    }
+
+    private async Task<byte[]?> DownloadAsync(string? replayUrl)
+    {
         if (string.IsNullOrEmpty(replayUrl))
             return null;
 

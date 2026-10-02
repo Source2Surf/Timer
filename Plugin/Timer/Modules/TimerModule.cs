@@ -558,16 +558,6 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             return;
         }
 
-        if (controller.GetPlayerPawn() is not { IsValidEntity: true } pawn)
-        {
-            return;
-        }
-
-        if (!pawn.IsAlive)
-        {
-            return;
-        }
-
         if (_timerInfo[slot] is { } timerInfo)
         {
             timerInfo.StopTimer();
@@ -578,6 +568,23 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         {
             stageTimer.StopTimer();
             stageTimer.ChangeTrack(track);
+        }
+
+        if (controller.GetPlayerPawn() is not { IsValidEntity: true } pawn)
+        {
+            return;
+        }
+
+        if (!pawn.IsAlive)
+        {
+            if (controller.Team <= CStrikeTeam.Spectator)
+            {
+                controller.SwitchTeam((CStrikeTeam) Random.Shared.Next(2, 4));
+            }
+
+            controller.Respawn();
+
+            return;
         }
 
         _zoneModule.TeleportToZone(pawn, track, EZoneType.Start);

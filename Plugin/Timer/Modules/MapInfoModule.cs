@@ -152,9 +152,9 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     public bool Init()
     {
-        // Prime the cache on load so it's valid after a mid-map hot-reload (OnGameInit won't re-fire).
-        _bridge.RefreshMapName();
-        _currentMapProfileInfo = new () { MapName = _bridge.CurrentMapName };
+        // No map is loaded yet: ModSharp loads modules at server boot and reloads them only
+        // during a map change, so OnGameInit always follows and fills in the map name.
+        _currentMapProfileInfo = new () { MapName = string.Empty };
 
         _bridge.ModSharp.InstallGameListener(this);
 

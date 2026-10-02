@@ -19,5 +19,13 @@ namespace Source2Surf.Timer.Shared.Models.Replay;
 
 public enum EReplayBotType : byte
 {
+    /// <summary>
+    ///     Plays the server records it's configured for, one after another.
+    /// </summary>
     Looping,
+
+    /// <summary>
+    ///     Idle until a player picks a replay for it with !replay; it plays that one until they stop.
+    /// </summary>
+    Central,
 }

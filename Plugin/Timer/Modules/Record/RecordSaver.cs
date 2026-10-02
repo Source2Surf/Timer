@@ -19,7 +19,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Cysharp.Text;
 using Microsoft.Extensions.Logging;
+using Sharp.Shared.Definition;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
 using Source2Surf.Timer.Configuration;
@@ -247,6 +249,7 @@ internal sealed class RecordSaver
                             catch (Exception e)
                             {
                                 _logger.LogError(e, "Error when saving record");
+                                await NotifySaveFailedAsync(steamId, recordRequest, ct).ConfigureAwait(false);
                             }
                         },
                         ct);
@@ -347,6 +350,7 @@ internal sealed class RecordSaver
                             catch (Exception e)
                             {
                                 _logger.LogError(e, "Error when saving stage record");
+                                await NotifySaveFailedAsync(steamId, recordRequest, ct).ConfigureAwait(false);
                             }
                         },
                         ct);
@@ -366,7 +370,7 @@ internal sealed class RecordSaver
             _logger.LogError(exception,
                 "Remote {RunKind} submission {SubmissionId} was not queued ({Disposition}).",
                 runKind, exception.SubmissionId, exception.Disposition);
-            await NotifyRemoteSubmissionFailureAsync(steamId,
+            await NotifyPlayerAsync(steamId,
                 exception.Disposition == SubmissionSpoolEnqueueDisposition.CapacityExceeded
                     ? "Remote submission queue is full; this run was not queued."
                     : "Remote submission could not be queued; this run was not queued.",
@@ -377,7 +381,7 @@ internal sealed class RecordSaver
             _logger.LogWarning(exception,
                 "Remote {RunKind} submission {SubmissionId} was permanently rejected by the backend.",
                 runKind, exception.SubmissionId);
-            await NotifyRemoteSubmissionFailureAsync(steamId,
+            await NotifyPlayerAsync(steamId,
                 "Remote backend rejected this run; no record result was published.", ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -389,7 +393,7 @@ internal sealed class RecordSaver
         catch (Exception exception)
         {
             _logger.LogError(exception, "Error when saving remote {RunKind} record for {SteamId}", runKind, steamId);
-            await NotifyRemoteSubmissionFailureAsync(steamId,
+            await NotifyPlayerAsync(steamId,
                 "Remote score result was not confirmed; no record result was published.", ct).ConfigureAwait(false);
         }
     }
@@ -598,9 +602,34 @@ internal sealed class RecordSaver
         }, ct).ConfigureAwait(false);
     }
 
-    private async Task NotifyRemoteSubmissionFailureAsync(SteamID           steamId,
-                                                           string            message,
-                                                           CancellationToken ct)
+    /// <summary>
+    /// A finished run that the database didn't take: tells its player, who would otherwise wait for a time or PB
+    /// message that never comes. The error itself is in the server log.
+    /// </summary>
+    private async Task NotifySaveFailedAsync(SteamID steamId, RecordRequest run, CancellationToken ct)
+    {
+        var what = run.Track > 0 ? ZString.Concat("bonus ", run.Track, " run")
+            : run.Stage > 0      ? ZString.Concat("stage ", run.Stage, " run")
+                                   : "run";
+
+        try
+        {
+            await NotifyPlayerAsync(steamId,
+                                    ZString.Concat(ChatColor.Red, "Your ", what, " wasn't saved", ChatColor.White,
+                                                   " (", Utils.FormatTime(run.Time, true),
+                                                   "): the server couldn't write it to the database. Please tell an admin."),
+                                    ct)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutting down: nobody left to tell.
+        }
+    }
+
+    private async Task NotifyPlayerAsync(SteamID           steamId,
+                                         string            message,
+                                         CancellationToken ct)
     {
         await _bridge.ModSharp.InvokeFrameActionAsync(() =>
         {

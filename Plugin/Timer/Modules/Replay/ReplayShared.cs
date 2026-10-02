@@ -18,6 +18,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -35,6 +36,63 @@ internal static class ReplayShared
 
     internal const ulong MaxDecompressedReplayBytes = 512UL * 1024 * 1024;
     public static readonly byte[] HeaderFrameSeparatorBytes = [(byte)HeaderFrameSeparator];
+
+    /// <summary>
+    ///     Where a slower run (not a new PB or WR) is kept: in a folder per player and leaderboard, named by run id,
+    ///     so the newest are the highest numbers and the oldest can be pruned.
+    /// </summary>
+    public static string BuildRecentRunPath(string replayDirectory, string mapName, int style, int track, int stage, ulong steamId, long runId)
+        => Path.Combine(RecentRunDirectory(replayDirectory, mapName, style, track, stage, steamId), $"{runId}.replay");
+
+    private static string RecentRunDirectory(string replayDirectory, string mapName, int style, int track, int stage, ulong steamId)
+    {
+        var directory = Path.Combine(replayDirectory, $"style_{style}", "recent", steamId.ToString(CultureInfo.InvariantCulture), mapName, track.ToString(CultureInfo.InvariantCulture));
+
+        return stage == 0 ? directory : Path.Combine(directory, $"stage_{stage}");
+    }
+
+    /// <summary>
+    ///     Keeps a slower run's replay so its player can watch it from !replay: moves it among their recent runs on
+    ///     that leaderboard and deletes all but the newest <paramref name="keep" />. With keep 0 it's just deleted.
+    /// </summary>
+    public static void KeepRecentRun(string filePath, string replayDirectory, string mapName, int style, int track, int stage,
+                                     ulong steamId, long runId, int keep, ILogger logger)
+    {
+        try
+        {
+            if (keep <= 0)
+            {
+                File.Delete(filePath);
+
+                return;
+            }
+
+            var target = BuildRecentRunPath(replayDirectory, mapName, style, track, stage, steamId, runId);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(filePath, target, true);
+
+            var runs = new List<(long RunId, string Path)>();
+
+            foreach (var path in Directory.EnumerateFiles(Path.GetDirectoryName(target)!, "*.replay"))
+            {
+                if (long.TryParse(Path.GetFileNameWithoutExtension(path), NumberStyles.None, CultureInfo.InvariantCulture, out var id))
+                {
+                    runs.Add((id, path));
+                }
+            }
+
+            runs.Sort(static (a, b) => b.RunId.CompareTo(a.RunId));
+
+            for (var i = keep; i < runs.Count; i++)
+            {
+                File.Delete(runs[i].Path);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Failed to keep the replay of run {RunId} ({Path})", runId, filePath);
+        }
+    }
 
     /// <summary>
     ///     Builds the on-disk replay path — main track (stage == 0) or stage replay. A null
@@ -398,7 +456,11 @@ internal static class ReplayShared
     /// </summary>
     public static ReplayBotConfig[] LoadReplayBotConfigs(string configPath, ILogger logger)
     {
-        var defaultConfigs = new ReplayBotConfig[] { new() };
+        var defaultConfigs = new ReplayBotConfig[]
+        {
+            new (),
+            new () { Type = EReplayBotType.Central, IdleName = "Replay Bot (!replay)", SpectateWhenIdle = true },
+        };
 
         if (!File.Exists(configPath))
         {

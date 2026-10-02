@@ -52,7 +52,6 @@ internal interface IHudModule
 internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZoneModuleListener, IPlayerManagerListener
 {
     private const float HudUpdateInterval   = 0.10f; // seconds between a player's HUD refreshes
-    private const float SyncInterval        = 0.5f;  // sync barely moves, so it refreshes less often
     private const float LayoutRetryInterval = 5f;    // after the layout entity failed to spawn
     private const float SaveDelay           = 1f;    // settings are written this long after the last change
 
@@ -63,6 +62,9 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     private readonly ITransmitManager   _transmit;
     private readonly ITimerModule       _timerModule;
     private readonly IReplayModule      _replayModule;
+    private readonly ICentralReplay     _central;
+    private readonly IPersonalBestReplays _personalBests;
+    private readonly ILocalizationProvider _localization;
     private readonly IRecordModule      _recordModule;
     private readonly IZoneModule        _zoneModule;
     private readonly IStyleModule       _styleModule;
@@ -89,6 +91,9 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
                      ISharedSystem      shared,
                      ITimerModule       timerModule,
                      IReplayModule      replayModule,
+                     ICentralReplay     central,
+                     IPersonalBestReplays personalBests,
+                     ILocalizationProvider localization,
                      IRecordModule      recordModule,
                      IZoneModule        zoneModule,
                      IStyleModule       styleModule,
@@ -103,6 +108,9 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _transmit       = shared.GetTransmitManager();
         _timerModule    = timerModule;
         _replayModule   = replayModule;
+        _central        = central;
+        _personalBests  = personalBests;
+        _localization   = localization;
         _recordModule   = recordModule;
         _zoneModule     = zoneModule;
         _styleModule    = styleModule;
@@ -122,6 +130,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     {
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerRunCommand.InstallHookPost(OnPlayerRunCommandPost);
+        _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnPlayerProcessMovePre);
         _bridge.ModSharp.InstallGameFrameHook(null, OnGameFramePost);
         _panorama.InstallClickListener(OnHudClicked);
 
@@ -131,6 +140,9 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
 
         _commandManager.AddClientChatCommand("hud", OnCommandHud);
         _commandManager.AddClientChatCommand("showkeys", OnCommandShowKeys);
+        _commandManager.AddClientChatCommand("replay", OnCommandReplay);
+        _commandManager.AddClientChatCommand("profile", OnCommandProfile);
+        _commandManager.AddClientChatCommand("stats", OnCommandProfile);
 
         return true;
     }
@@ -144,6 +156,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _panorama.RemoveClickListener(OnHudClicked);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPost(OnPlayerRunCommandPost);
+        _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnPlayerProcessMovePre);
         _bridge.ModSharp.RemoveGameFrameHook(null, OnGameFramePost);
 
         foreach (var p in _players)
@@ -177,6 +190,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         }
 
         var p = new HudPlayer(slot, _bridge.GlobalVars.CurTime);
+        p.Tr           = new HudTr(key => _localization.GetText(slot, key));
         _players[slot] = p;
 
         LoadSettings(p, client.SteamId);
@@ -287,7 +301,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         p.MenuDirty = true; // a new entity holds none of it yet
         p.ForgetSent();
 
-        if (p.MenuOpen && p.Drag is null)
+        if (p.AnyMenuOpen && p.Drag is null)
         {
             layout.SetInputCaptureEnabled(p.Slot, true);
         }
@@ -296,19 +310,30 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     }
 
     /// <summary>
-    ///     Removes the entities the HUD spawned for the player: their layout, and a drag's camera.
+    ///     Removes the entities the HUD spawned for the player: their layout, and the drag camera. A camera that held
+    ///     the view until now is only switched off, and goes with the map: removing it now would leave the client
+    ///     looking through it.
     /// </summary>
-    private static void RemoveEntities(HudPlayer? p)
+    private void RemoveEntities(HudPlayer? p)
     {
         if (p is null)
         {
             return;
         }
 
+        var frozen = p.Drag is { Frozen: true };
+
         if (p.Drag is { } drag)
         {
-            UnfreezeView(drag);
+            UnfreezeView(p, drag);
         }
+
+        if (p.Camera is { } camera && camera.IsValid() && !frozen)
+        {
+            camera.Kill();
+        }
+
+        p.Camera = null;
 
         if (GetLayout(p) is { } layout)
         {
@@ -411,31 +436,67 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         p.LastStatus = status;
     }
 
-    // While a drag holds the player's view still, their client still turns the view it sends: that moves the panel,
-    // and is then taken back out of the command, so the pawn keeps facing where it did and spectators don't see it spin.
+    // While the HUD settings are open the command carries no movement (the movement itself is blocked in
+    // OnPlayerProcessMovePre). While a drag holds the player's view still, their client still turns the view it sends:
+    // that moves the panel, and is then taken back out of the command, so the pawn keeps facing where it did and
+    // spectators don't see it spin.
     private unsafe HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      param,
                                                                          HookReturnValue<EmptyHookReturn> ret)
     {
-        if (_players[param.Client.Slot] is not { Drag: { } drag })
+        if (_players[param.Client.Slot] is not { MenuOpen: true } p)
         {
             return new ();
         }
 
         var cmd = param.BaseUserCmd;
 
-        if (cmd == null || cmd->ViewAngles == null)
+        if (cmd == null)
+        {
+            return new ();
+        }
+
+        cmd->ForwardMove = 0;
+        cmd->SideMove    = 0;
+        cmd->UpMove      = 0;
+
+        if (p.Drag is not { } drag || cmd->ViewAngles == null)
         {
             return new ();
         }
 
         drag.Aim = cmd->ViewAngles->Value;
 
-        if (drag.Camera is not null)
+        if (drag.Frozen)
         {
             cmd->ViewAngles->Value = drag.View;
         }
 
         return new ();
+    }
+
+    // The keys that move the player, which do nothing while they edit the HUD. Duck stays, so opening the menu doesn't
+    // stand them up.
+    private const UserCommandButtons MoveKeys = UserCommandButtons.Forward
+                                                | UserCommandButtons.Back
+                                                | UserCommandButtons.MoveLeft
+                                                | UserCommandButtons.MoveRight
+                                                | UserCommandButtons.Jump;
+
+    // With the HUD settings open (dragging included), the player's keys don't move them, the way StyleModule blocks a
+    // style's keys. Momentum and gravity still apply.
+    private unsafe void OnPlayerProcessMovePre(IPlayerProcessMoveForwardParams param)
+    {
+        if (param.Client.IsFakeClient || _players[param.Client.Slot] is not { MenuOpen: true })
+        {
+            return;
+        }
+
+        var mv = param.Info;
+        mv->ForwardMove = 0;
+        mv->SideMove    = 0;
+        mv->UpMove      = 0;
+
+        param.Service.KeyButtons &= ~MoveKeys;
     }
 
     private void OnPlayerRunCommandPost(IPlayerRunCommandHookParams param, HookReturnValue<EmptyHookReturn> ret)
@@ -446,12 +507,33 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
 
         TrackTurn(slot, pawn.GetEyeAngles().Y, now);
 
-        if (param.Client.IsFakeClient || _players[slot] is not { Drag: { } drag } p)
+        if (param.Client.IsFakeClient || _players[slot] is not { } p)
         {
             return;
         }
 
-        if (!pawn.IsAlive || pawn.AsObserver() is not null)
+        if (pawn.AsObserver() is { } observer)
+        {
+            // Spectating the central replay bot, E opens the replay menu.
+            if ((param.KeyButtons & param.ChangedButtons & UserCommandButtons.Use) != 0
+                && _central.CentralBot is { } central
+                && ObservedSlot(observer) == central.Slot)
+            {
+                SetReplayMenuOpen(p, !p.Replays.Open);
+                RefreshNow(p);
+            }
+
+            EndDrag(p, DragEnd.Cancel);
+
+            return;
+        }
+
+        if (p.Drag is not { } drag)
+        {
+            return;
+        }
+
+        if (!pawn.IsAlive)
         {
             EndDrag(p, DragEnd.Cancel);
 
@@ -514,12 +596,17 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         p.MenuOpen  = open;
         p.MenuDirty = true;
 
-        if (!open)
+        if (open)
+        {
+            p.Replays.Open = false;
+            p.Profile.Open = false;
+        }
+        else
         {
             EndDrag(p, DragEnd.Cancel);
         }
 
-        GetLayout(p)?.SetInputCaptureEnabled(p.Slot, open);
+        GetLayout(p)?.SetInputCaptureEnabled(p.Slot, p.AnyMenuOpen);
     }
 
     private void OnHudClicked(IPlayerController player, ICustomHudLayout layout, string buttonId)
@@ -529,7 +616,15 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
             return;
         }
 
-        if (Array.IndexOf(HudTabs.Tabs, buttonId) is var tab and >= 0)
+        if (buttonId.StartsWith("Rm", StringComparison.Ordinal))
+        {
+            ClickReplayMenu(p, buttonId);
+        }
+        else if (buttonId.StartsWith("Pf", StringComparison.Ordinal))
+        {
+            ClickProfile(p, buttonId);
+        }
+        else if (Array.IndexOf(HudTabs.Tabs, buttonId) is var tab and >= 0)
         {
             p.Tab = tab;
         }
@@ -560,7 +655,8 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         {
             SetMenuOpen(p, false);
         }
-        else if (HudTargets.Buttons.TryGetValue(buttonId, out var target)
+        else if (p.MenuOpen
+                 && HudTargets.Buttons.TryGetValue(buttonId, out var target)
                  && player.GetPlayerPawn() is { IsAlive: true } pawn)
         {
             StartDrag(p, pawn, target);
@@ -743,7 +839,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         var cumWr = RecordStageSplit(style, track, stage);
 
         p.LastStage = new HudStageResult(stage, stageTimerInfo.Time, pb, wr);
-        p.AddSplit(new HudSplit($"Stage {stage}", stageTimerInfo.Time, pb, wr, cum, null, cumWr));
+        p.AddSplit(new HudSplit(true, stage, stageTimerInfo.Time, pb, wr, cum, null, cumWr));
     }
 
     public void OnReachCheckpoint(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo, int checkpoint)
@@ -764,7 +860,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
             ? list[checkpoint - 1].Time
             : (float?) null;
 
-        p.AddSplit(new HudSplit($"CP {checkpoint}", time, pb, wr, time, pb, wr));
+        p.AddSplit(new HudSplit(false, checkpoint, time, pb, wr, time, pb, wr));
     }
 
     public void OnPlayerFinishMap(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)

@@ -87,6 +87,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
     private readonly IConVar timer_replay_file_compression_workers;
     private readonly IConVar timer_replay_pending_timeout;
     private readonly IConVar timer_replay_fallback_ttl;
+    private readonly IConVar timer_replay_keep_runs;
 
     // ReSharper restore InconsistentNaming
 
@@ -144,6 +145,13 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                                 1440.0f,
                                                 "Minutes a fallback replay record waits for OnRecordSaved before being discarded")
             !;
+
+        timer_replay_keep_runs
+            = bridge.ConVarManager.CreateConVar("timer_replay_keep_runs",
+                                                10,
+                                                0,
+                                                100,
+                                                "Replays kept of each player's slower runs per map, style, track and stage, to watch in !replay (My runs); 0 deletes them")!;
 
         _replayDirectory = Path.Combine(bridge.TimerDataPath, "replays");
     }
@@ -806,6 +814,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         var compressionLevel   = timer_replay_file_compression_level.GetInt32();
         var compressionWorkers = timer_replay_file_compression_workers.GetInt32();
+        var keepRuns           = timer_replay_keep_runs.GetInt32();
 
         Task.Run(async () =>
         {
@@ -902,7 +911,15 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
                 if (context.AttemptResult == EAttemptResult.NoNewRecord)
                 {
-                    DeleteUnreferencedReplayFile(filePath, _logger);
+                    // Not a new best: kept among the player's recent runs (to watch in !replay), or deleted.
+                    if (runId is { } keptRunId)
+                    {
+                        ReplayShared.KeepRecentRun(filePath, _replayDirectory, mapName, style, track, stage, header.SteamId, keptRunId, keepRuns, _logger);
+                    }
+                    else
+                    {
+                        DeleteUnreferencedReplayFile(filePath, _logger);
+                    }
                 }
             }
             catch (Exception e)
@@ -1065,6 +1082,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         var attemptResult       = recordEvent.RecordType;
         var recordSteamId       = recordEvent.SteamId.AsPrimitive();
         var inMemoryContent     = fallback.Content;
+        var replayDirectory     = _replayDirectory;
+        var keepRuns            = timer_replay_keep_runs.GetInt32();
 
         // The run is confirmed; if its temp file cannot be used, a PB/WR must still reach playback
         // from the copy held in memory (the playback cache is not fed until confirmation).
@@ -1274,7 +1293,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
             if (attemptResult == EAttemptResult.NoNewRecord)
             {
-                DeleteUnreferencedReplayFile(finalPath, logger);
+                // Not a new best: kept among the player's recent runs (to watch in !replay), or deleted.
+                ReplayShared.KeepRecentRun(finalPath, replayDirectory, mapName, style, track, stage, recordSteamId, runId, keepRuns, logger);
             }
 #if DEBUG
             logger.LogInformation("Successfully processed fallback record for {SteamId} style={Style} track={Track} stage={Stage} attemptId={AttemptId}: renamed {TempPath} → {FinalPath}",

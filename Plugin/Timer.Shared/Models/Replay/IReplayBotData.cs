@@ -33,4 +33,25 @@ public interface IReplayBotData
     int                            CurrentFrame { get; }
     EReplayBotStatus               Status       { get; }
     EReplayBotType                 Type         { get; }
+
+    /// <summary>
+    ///     The replay's place on its leaderboard: 1 is the server record, 0 a player's own run that isn't their best.
+    /// </summary>
+    int Rank { get; }
+
+    /// <summary>
+    ///     The run a central bot plays, when known.
+    /// </summary>
+    long RunId { get; }
+
+    /// <summary>
+    ///     A central bot's playback, set by the player who started it: held on its frame, and frames played per tick.
+    /// </summary>
+    bool  Paused { get; }
+    float Speed  { get; }
+
+    /// <summary>
+    ///     The player who started a central bot's replay, and so has its controls.
+    /// </summary>
+    PlayerSlot? Owner { get; }
 }

@@ -47,6 +47,13 @@ public interface IReplayProvider
     Task<byte[]?> GetStageReplayAsync(string mapName, int style, int track, int stage, ulong? steamId = null);
 
     /// <summary>
+    /// Gets the replay of one run by its id, slower runs included when they were uploaded (see
+    /// <see cref="UploadNonPersonalBest" />). The replay menu uses it for a player's own past runs.
+    /// </summary>
+    /// <returns>Replay binary data, or null if not found; a provider that doesn't implement it finds none</returns>
+    Task<byte[]?> GetRunReplayAsync(ulong runId) => Task.FromResult<byte[]?>(null);
+
+    /// <summary>
     /// Uploads replay binary data to remote storage.
     /// steamId and runId are provided by the caller to avoid redundant header deserialization.
     /// </summary>

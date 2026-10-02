@@ -41,8 +41,112 @@ Commands:
 
 - `!hud` opens the settings menu. In it, a player can click a panel to drag it.
 - `!showkeys` toggles the keys panel.
+- `!profile` (or `!stats`) opens your profile card; `!profile <name>` opens the card of a
+  player on the server. For a picked style it shows maps and bonuses completed and
+  the records held across every map, then this map's PB, stage PBs and time
+  played, for a picked track.
+- `!replay` opens the replay menu. A player picks a track, stage, style and a
+  time on its leaderboard, and watches it on the central replay bot. Pressing E
+  while spectating that bot opens the menu too.
 
 Settings are saved per player in `sharp/data/surftimer/hud/<steamid64>.json`.
+
+### Central replay bot
+
+The replay menu plays runs on a central replay bot: a `timer-replay.jsonc` entry
+with `"type": 1`. A new config gets one next to the looping bot. Add it to an
+existing config:
+
+```json
+{ "type": 1, "idle_name": "Replay Bot (!replay)", "spectate_when_idle": true }
+```
+
+With `spectate_when_idle`, the bot waits in spectator while it has nothing to
+play. It joins a random team to play a replay, and goes back to spectator when
+the replay ends or is stopped. Without it, the bot stands idle in the map.
+
+Pressing Watch moves the player to spectate the bot. The player who started a
+replay controls it while they watch: back or forward 5 seconds, pause,
+0.5x / 1x / 2x, and stop. So does anyone with the `timer:replay` permission
+(see below). Anyone else can watch along. A replay plays once, then the bot goes
+idle on Main and the default style until someone picks another.
+
+The server record plays straight from memory. Any other run loads from its
+replay file on disk, then from the replay store by run id. A leaderboard row can
+also use that player's best from the store.
+
+### My runs
+
+The replay menu's second tab lists a player's own recent finishes on the picked
+track, stage and style, slower ones included. Every finish is recorded, but its
+replay is only kept as follows:
+
+- **On the server:** a run that isn't a new PB or WR keeps its replay among the
+  player's newest `timer_replay_keep_runs` (default 10) for that map, style, track
+  and stage, in `replays/style_<n>/recent/<steamid64>/<map>/<track>/`. Older ones are
+  deleted. `0` deletes them all, as before.
+- **In the replay store:** with `upload_non_personal_best` on, every run is
+  uploaded. The menu fetches one through `IReplayProvider.GetRunReplayAsync(runId)`.
+
+The list itself comes from `IRequestManager.GetPlayerRuns`. Both methods have
+default implementations that find nothing, so custom providers keep working
+without them.
+
+### Profile card
+
+Its overall stats (completions, records and total time played) come from
+`IRequestManager.GetPlayerSummary`. The default body answers null, so a provider
+without it shows the card without that section.
+
+### Localization
+
+All of the HUD's text can be translated per player: the timer, records and splits,
+the settings menu, the drag hint, the replay menu and the profile card. The Timer asks `ILocalizationProvider` from
+`Timer.Shared` for each text by key. Without a provider, everyone reads English.
+
+The `Timer.Localization` module is the default provider. It uses ModSharp's
+LocalizerManager, so each player reads their game language:
+
+```sh
+dotnet publish Plugin/Timer.Localization/Timer.Localization.csproj -c Release -p:CIBuild=true -o sharp/modules/Timer.Localization
+```
+
+It ships `locales/surftimer.json` (English and Simplified Chinese) and keeps
+`sharp/locales/surftimer.json` the same as it, so an update's new texts arrive on
+their own. Don't edit that file. Put your changes in `sharp/locales/surftimer.custom.json`,
+in the same format, which is read after it and wins:
+
+```json
+{
+  "hud.line.strafes": { "zh-cn": "平移：{0}", "de-de": "Strafes: {0}" }
+}
+```
+
+A language needs only the keys you translate: the rest falls back to English.
+Keep the `{0}`, `{1}` placeholders. After editing, `ms_locales_reload` reloads the
+files without a restart.
+
+Chat messages are still English.
+
+### Permissions
+
+The Timer has no admin system of its own. To connect yours, write a ModSharp
+module that implements `IPermissionProvider` from `Timer.Shared`, and register
+it under its identity:
+
+```csharp
+_shared.GetSharpModuleManager()
+       .RegisterSharpModuleInterface<IPermissionProvider>(this, IPermissionProvider.Identity, provider);
+```
+
+`HasPermission(steamId, permission)` runs on the game thread as often as the
+HUD refreshes, so keep it to a cached lookup. The permissions are constants on
+the interface:
+
+- `timer:replay` (`IPermissionProvider.ReplayControl`): control a central
+  replay that another player started.
+
+Without a provider, nobody has any of these permissions.
 
 ## RequestManager
 

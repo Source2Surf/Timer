@@ -72,6 +72,14 @@ internal sealed class ReplayProviderProxy
         return await provider.GetStageReplayAsync(mapName, style, track, stage, steamId);
     }
 
+    public async Task<byte[]?> GetRunReplayAsync(ulong runId)
+    {
+        var provider = Volatile.Read(ref _provider);
+        if (provider is null) return null;
+
+        return await provider.GetRunReplayAsync(runId);
+    }
+
     public async Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)
     {
         var provider = Volatile.Read(ref _provider);

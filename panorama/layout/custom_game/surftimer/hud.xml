@@ -11,6 +11,8 @@
 		Every class the plugin switches sits on the element it styles: the engine doesn't restyle children when a
 		class changes on their parent. The classes written here only show until the plugin's first update: it sets
 		every class it uses once on a new entity.
+		Fixed labels have an id and {s:text}, which the plugin sets to the player's text (HudLabels in HudText.cs),
+		so they read in the player's language.
 		Draggable panels (Menu, RunPanel, CSpeedPanel, InfoPanel, SplitsPanel, KeysPanel) get placed / editing /
 		dragging / smooth, and once placed are centre-aligned and offset with mx-N / my-N on the panel plus
 		fx-N / fy-N on their full-screen *Pos wrapper (timer_positions.css).
@@ -28,10 +30,10 @@
 					<Panel id="RunBody" class="PanelBody">
 						<Label id="Title" class="Title Hidden" text="{s:title}" />
 						<Panel id="GapTitle" class="Spacer Hidden" />
-						<Label id="Time" class="Time Hidden" text="{s:label}: {s:time}" />
+						<Label id="Time" class="Time Hidden" text="{s:time}" />
 						<Label id="TimeCmp" class="Cmp Hidden" text="({s:cmp})" />
 						<Panel id="GapTime" class="Spacer Hidden" />
-						<Label id="StageFinish" class="Hidden" text="Finished [Stage {s:stage}]: {s:time}" />
+						<Label id="StageFinish" class="Hidden" text="{s:text}" />
 						<Label id="StageCmp" class="Cmp Hidden" text="({s:cmp})" />
 						<Panel id="GapStage" class="Spacer Hidden" />
 						<Label id="Line0" class="Line" text="{s:text}" />
@@ -59,8 +61,8 @@
 			<Panel id="InfoPos" class="DragPos" hittest="false">
 				<Button id="InfoPanel" class="InfoPanel">
 					<Panel id="InfoBody" class="PanelBody">
-						<Label id="Sr" text="SR: {s:sr}" />
-						<Label id="Pb" text="PB: {s:pb}" />
+						<Label id="Sr" text="{s:sr}" />
+						<Label id="Pb" text="{s:pb}" />
 					</Panel>
 				</Button>
 			</Panel>
@@ -70,7 +72,7 @@
 			<Panel id="SplitsPos" class="DragPos" hittest="false">
 				<Button id="SplitsPanel" class="SplitsPanel">
 					<Panel id="SplitsBody" class="PanelBody SplitsBody">
-						<Label id="SplitsEmpty" class="SplitsEmpty" text="Splits show here" />
+						<Label id="SplitsEmpty" class="SplitsEmpty" text="{s:text}" />
 						<Panel id="Split0" class="SplitRow Hidden">
 							<Label id="Split0Name" class="SplitName" text="{s:name}" />
 							<Label id="Split0Time" class="SplitTime" text="{s:time}" />
@@ -130,9 +132,9 @@
 							<Label id="KeyRight" class="Cap Arrow" text="▶" />
 						</Panel>
 						<Panel class="KeyRow">
-							<Label id="KeyDuck" class="Cap Wide" text="DUCK" />
+							<Label id="KeyDuck" class="Cap Wide" text="{s:text}" />
 							<Panel id="KeyGap" class="KeyGap" />
-							<Label id="KeyJump" class="Cap Wide" text="JUMP" />
+							<Label id="KeyJump" class="Cap Wide" text="{s:text}" />
 						</Panel>
 					</Panel>
 				</Button>
@@ -147,22 +149,22 @@
 		     visibility, so its children never depend on a per-player class on their parent.
 		     editkey holds a command like %attack%; csgo_key shows the key the player bound to it. -->
 		<Panel id="DragToast" class="DragToast" hittest="false">
-			<Label id="DragToastWhat" class="ToastWhat" text="Moving {s:target}" />
+			<Label id="DragToastWhat" class="ToastWhat" text="{s:target}" />
 			<Panel class="ToastPair">
 				<Label id="MoveKeyPlace" class="Kbd" text="{g:csgo_key:editkey}" />
-				<Label class="ToastAction" text="Place" />
+				<Label id="LToastPlace" class="ToastAction" text="{s:text}" />
 			</Panel>
 			<Panel class="ToastPair">
 				<Label id="MoveKeyCancel" class="Kbd" text="{g:csgo_key:editkey}" />
-				<Label class="ToastAction" text="Cancel" />
+				<Label id="LToastCancel" class="ToastAction" text="{s:text}" />
 			</Panel>
 			<Panel class="ToastPair">
 				<Label id="MoveKeyReset" class="Kbd" text="{g:csgo_key:editkey}" />
-				<Label class="ToastAction" text="Default spot" />
+				<Label id="LToastReset" class="ToastAction" text="{s:text}" />
 			</Panel>
 			<Panel class="ToastPair">
 				<Label id="MoveKeyFree" class="Kbd" text="{g:csgo_key:editkey}" />
-				<Label class="ToastAction" text="Hold for free move" />
+				<Label id="LToastFree" class="ToastAction" text="{s:text}" />
 			</Panel>
 		</Panel>
 
@@ -171,24 +173,24 @@
 		<Panel id="MenuPos" class="DragPos" hittest="false">
 			<Panel id="Menu" class="Menu Closed">
 				<Button id="MenuMove" class="MenuHeader">
-					<Label class="MenuTitle" text="HUD settings" />
-					<Label class="MenuGrip" text="Move" />
+					<Label id="LMenuTitle" class="MenuTitle" text="{s:text}" />
+					<Label id="LMenuGrip" class="MenuGrip" text="{s:text}" />
 				</Button>
 
 				<Panel class="MenuTabs">
-					<Button id="TabHud" class="MenuTab active"><Label id="TabHudLabel" class="MenuTabLabel active" text="HUD" /></Button>
-					<Button id="TabTimer" class="MenuTab"><Label id="TabTimerLabel" class="MenuTabLabel" text="Timer" /></Button>
-					<Button id="TabSpeed" class="MenuTab"><Label id="TabSpeedLabel" class="MenuTabLabel" text="Speed" /></Button>
-					<Button id="TabSplits" class="MenuTab"><Label id="TabSplitsLabel" class="MenuTabLabel" text="Splits" /></Button>
-					<Button id="TabKeys" class="MenuTab"><Label id="TabKeysLabel" class="MenuTabLabel" text="Keys" /></Button>
+					<Button id="TabHud" class="MenuTab active"><Label id="TabHudLabel" class="MenuTabLabel active" text="{s:text}" /></Button>
+					<Button id="TabTimer" class="MenuTab"><Label id="TabTimerLabel" class="MenuTabLabel" text="{s:text}" /></Button>
+					<Button id="TabSpeed" class="MenuTab"><Label id="TabSpeedLabel" class="MenuTabLabel" text="{s:text}" /></Button>
+					<Button id="TabSplits" class="MenuTab"><Label id="TabSplitsLabel" class="MenuTabLabel" text="{s:text}" /></Button>
+					<Button id="TabKeys" class="MenuTab"><Label id="TabKeysLabel" class="MenuTabLabel" text="{s:text}" /></Button>
 				</Panel>
 
 				<Panel class="MenuPages">
 					<!-- HUD: every panel with its size and on/off -->
 					<Panel id="PageHud" class="MenuPage">
-						<Panel class="MenuSection"><Label class="MenuSectionLabel" text="Panels" /><Panel class="MenuRule" /></Panel>
+						<Panel class="MenuSection"><Label id="LPanels" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
 						<Panel class="MenuRow static">
-							<Label class="MenuName" text="Timer" />
+							<Label id="LPanelRun" class="MenuName" text="{s:text}" />
 							<Panel class="Stepper">
 								<Button id="SizeRunDown" class="Step"><Label text="−" /></Button>
 								<Label id="SizeRunValue" class="MenuValue" text="{s:value}" />
@@ -197,7 +199,7 @@
 							<Button id="OptRun" class="PillButton"><Label id="OptRunValue" class="MenuValue on" text="{s:value}" /></Button>
 						</Panel>
 						<Panel class="MenuRow static">
-							<Label class="MenuName" text="Center speed" />
+							<Label id="LPanelCSpeed" class="MenuName" text="{s:text}" />
 							<Panel class="Stepper">
 								<Button id="SizeCSpeedDown" class="Step"><Label text="−" /></Button>
 								<Label id="SizeCSpeedValue" class="MenuValue" text="{s:value}" />
@@ -206,7 +208,7 @@
 							<Button id="OptCSpeed" class="PillButton"><Label id="OptCSpeedValue" class="MenuValue on" text="{s:value}" /></Button>
 						</Panel>
 						<Panel class="MenuRow static tall">
-							<Panel class="MenuText"><Label class="MenuName" text="Records" /><Label class="MenuDesc" text="Server record and your PB" /></Panel>
+							<Panel class="MenuText"><Label id="LPanelInfo" class="MenuName" text="{s:text}" /><Label id="LPanelInfoDesc" class="MenuDesc" text="{s:text}" /></Panel>
 							<Panel class="Stepper">
 								<Button id="SizeInfoDown" class="Step"><Label text="−" /></Button>
 								<Label id="SizeInfoValue" class="MenuValue" text="{s:value}" />
@@ -215,7 +217,7 @@
 							<Button id="OptInfo" class="PillButton"><Label id="OptInfoValue" class="MenuValue on" text="{s:value}" /></Button>
 						</Panel>
 						<Panel class="MenuRow static">
-							<Label class="MenuName" text="Splits" />
+							<Label id="LPanelSplits" class="MenuName" text="{s:text}" />
 							<Panel class="Stepper">
 								<Button id="SizeSplitsDown" class="Step"><Label text="−" /></Button>
 								<Label id="SizeSplitsValue" class="MenuValue" text="{s:value}" />
@@ -224,7 +226,7 @@
 							<Button id="OptSplits" class="PillButton"><Label id="OptSplitsValue" class="MenuValue on" text="{s:value}" /></Button>
 						</Panel>
 						<Panel class="MenuRow static tall">
-							<Panel class="MenuText"><Label class="MenuName" text="Keys" /><Label class="MenuDesc" text="Also !showkeys" /></Panel>
+							<Panel class="MenuText"><Label id="LPanelKeys" class="MenuName" text="{s:text}" /><Label id="LPanelKeysDesc" class="MenuDesc" text="{s:text}" /></Panel>
 							<Panel class="Stepper">
 								<Button id="SizeKeysDown" class="Step"><Label text="−" /></Button>
 								<Label id="SizeKeysValue" class="MenuValue" text="{s:value}" />
@@ -237,7 +239,7 @@
 					<!-- Timer: lines and comparison -->
 					<Panel id="PageTimer" class="MenuPage Hidden">
 						<!-- Lines top to bottom: row i edits the item in slot i. Row0Up and Row7Down never apply. -->
-						<Panel class="MenuSection"><Label class="MenuSectionLabel" text="Lines, top to bottom" /><Panel class="MenuRule" /></Panel>
+						<Panel class="MenuSection"><Label id="LLines" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
 						<Panel class="MenuRow static">
 							<Label id="Row0Name" class="MenuName" text="{s:name}" />
 							<Panel class="RowSteps">
@@ -302,54 +304,316 @@
 							</Panel>
 							<Button id="Row7Toggle" class="PillButton"><Label id="Row7Value" class="MenuValue off" text="{s:value}" /></Button>
 						</Panel>
-						<Panel class="MenuSection"><Label class="MenuSectionLabel" text="Comparison" /><Panel class="MenuRule" /></Panel>
-						<Button id="OptCompare" class="MenuRow"><Label class="MenuName" text="Compare against" /><Label id="OptCompareValue" class="MenuValue" text="{s:value}" /></Button>
+						<Panel class="MenuSection"><Label id="LComparison" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+						<Button id="OptCompare" class="MenuRow"><Label id="LCompare" class="MenuName" text="{s:text}" /><Label id="OptCompareValue" class="MenuValue" text="{s:value}" /></Button>
 						<Button id="OptLive" class="MenuRow tall disabled">
-							<Panel class="MenuText"><Label class="MenuName" text="Live difference" /><Label class="MenuDesc" text="Against the WR replay, with Server record" /></Panel>
+							<Panel class="MenuText"><Label id="LLive" class="MenuName" text="{s:text}" /><Label id="LLiveDesc" class="MenuDesc" text="{s:text}" /></Panel>
 							<Label id="OptLiveValue" class="MenuValue off" text="{s:value}" />
 						</Button>
 					</Panel>
 
 					<!-- Speed: shared by the timer's speed line and center speed -->
 					<Panel id="PageSpeed" class="MenuPage Hidden">
-						<Panel class="MenuSection"><Label class="MenuSectionLabel" text="Timer and center speed" /><Panel class="MenuRule" /></Panel>
+						<Panel class="MenuSection"><Label id="LSpeedSection" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
 						<Button id="OptSpeedColor" class="MenuRow tall">
-							<Panel class="MenuText"><Label class="MenuName" text="Gain / loss colours" /><Label class="MenuDesc" text="On center speed" /></Panel>
+							<Panel class="MenuText"><Label id="LSpeedColor" class="MenuName" text="{s:text}" /><Label id="LSpeedColorDesc" class="MenuDesc" text="{s:text}" /></Panel>
 							<Label id="OptSpeedColorValue" class="MenuValue on" text="{s:value}" />
 						</Button>
 						<Button id="OptSpeedAxes" class="MenuRow tall">
-							<Panel class="MenuText"><Label class="MenuName" text="Measure" /><Label class="MenuDesc" text="3D includes vertical speed" /></Panel>
+							<Panel class="MenuText"><Label id="LSpeedAxes" class="MenuName" text="{s:text}" /><Label id="LSpeedAxesDesc" class="MenuDesc" text="{s:text}" /></Panel>
 							<Label id="OptSpeedAxesValue" class="MenuValue" text="{s:value}" />
 						</Button>
 					</Panel>
 
 					<!-- Splits -->
 					<Panel id="PageSplits" class="MenuPage Hidden">
-						<Panel class="MenuSection"><Label class="MenuSectionLabel" text="Show" /><Panel class="MenuRule" /></Panel>
-						<Button id="OptSplitRows" class="MenuRow"><Label class="MenuName" text="Recent splits" /><Label id="OptSplitRowsValue" class="MenuValue" text="{s:value}" /></Button>
-						<Button id="OptSplitFade" class="MenuRow"><Label class="MenuName" text="Fade older splits" /><Label id="OptSplitFadeValue" class="MenuValue on" text="{s:value}" /></Button>
-						<Label class="MenuTip" text="Differences follow Compare against on the Timer tab. Stages on staged maps, checkpoints on linear ones." />
+						<Panel class="MenuSection"><Label id="LSplitsShow" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+						<Button id="OptSplitRows" class="MenuRow"><Label id="LSplitRows" class="MenuName" text="{s:text}" /><Label id="OptSplitRowsValue" class="MenuValue" text="{s:value}" /></Button>
+						<Button id="OptSplitFade" class="MenuRow"><Label id="LSplitFade" class="MenuName" text="{s:text}" /><Label id="OptSplitFadeValue" class="MenuValue on" text="{s:value}" /></Button>
+						<Label id="LSplitTip" class="MenuTip" text="{s:text}" />
 					</Panel>
 
 					<!-- Keys -->
 					<Panel id="PageKeys" class="MenuPage Hidden">
-						<Panel class="MenuSection"><Label class="MenuSectionLabel" text="Show" /><Panel class="MenuRule" /></Panel>
+						<Panel class="MenuSection"><Label id="LKeysShow" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
 						<Button id="OptKeyMouse" class="MenuRow tall">
-							<Panel class="MenuText"><Label class="MenuName" text="Turn direction" /><Label class="MenuDesc" text="Arrows light up as you turn" /></Panel>
+							<Panel class="MenuText"><Label id="LKeyMouse" class="MenuName" text="{s:text}" /><Label id="LKeyMouseDesc" class="MenuDesc" text="{s:text}" /></Panel>
 							<Label id="OptKeyMouseValue" class="MenuValue on" text="{s:value}" />
 						</Button>
-						<Button id="OptKeyJumpDuck" class="MenuRow"><Label class="MenuName" text="Jump and duck" /><Label id="OptKeyJumpDuckValue" class="MenuValue on" text="{s:value}" /></Button>
+						<Button id="OptKeyJumpDuck" class="MenuRow"><Label id="LKeyJumpDuck" class="MenuName" text="{s:text}" /><Label id="OptKeyJumpDuckValue" class="MenuValue on" text="{s:value}" /></Button>
 					</Panel>
 				</Panel>
 
 				<Panel class="MenuFooter">
 					<Button id="MenuReset" class="MenuButton">
-						<Label text="Reset" />
+						<Label id="LMenuReset" text="{s:text}" />
 					</Button>
 					<Button id="MenuClose" class="MenuButton MenuButton--primary">
-						<Label text="Close" />
+						<Label id="LMenuClose" text="{s:text}" />
 					</Button>
 				</Panel>
+			</Panel>
+		</Panel>
+
+		<!-- Replay menu, opened with !replay or E while spectating the central replay bot (HudReplayMenu.cs). Not
+		     inside TimerRoot, so it shows while spectating. The list has 8 fixed rows; a row past the end of the
+		     leaderboard is "blank" (kept, so the list doesn't change height). -->
+		<Panel id="RMenu" class="Menu RMenu Closed">
+			<Panel class="MenuHeader RMenuHeader">
+				<Label id="LRmTitle" class="MenuTitle" text="{s:text}" />
+			</Panel>
+
+			<Panel class="MenuRow static">
+				<Label id="LRmTrack" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="RmTrackPrev" class="Step"><Label text="‹" /></Button>
+					<Label id="RmTrackValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="RmTrackNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+			<Panel class="MenuRow static">
+				<Label id="LRmStage" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="RmStagePrev" class="Step"><Label text="‹" /></Button>
+					<Label id="RmStageValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="RmStageNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+			<Panel class="MenuRow static">
+				<Label id="LRmStyle" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="RmStylePrev" class="Step"><Label text="‹" /></Button>
+					<Label id="RmStyleValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="RmStyleNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+
+			<!-- The leaderboard, or the player's own recent runs (slower ones included). -->
+			<Panel class="MenuTabs RmTabs">
+				<Button id="RmTabBoard" class="MenuTab active"><Label id="RmTabBoardLabel" class="MenuTabLabel active" text="{s:text}" /></Button>
+				<Button id="RmTabRuns" class="MenuTab"><Label id="RmTabRunsLabel" class="MenuTabLabel" text="{s:text}" /></Button>
+			</Panel>
+
+			<!-- The count, then (on the leaderboard) shortcuts that pick the WR or the player's own time and turn to its page. -->
+			<Panel class="MenuSection">
+				<Label id="RmCount" class="MenuSectionLabel" text="{s:text}" />
+				<Panel class="MenuRule" />
+				<Button id="RmJumpWr" class="RmJump"><Label id="LRmJumpWr" text="{s:text}" /></Button>
+				<Button id="RmJumpPb" class="RmJump"><Label id="LRmJumpPb" text="{s:text}" /></Button>
+			</Panel>
+
+			<!-- Rows and the empty-list message share the space: children of a panel without a flow overlap. -->
+			<Panel class="RmList">
+				<Panel class="RmRows">
+					<Button id="RmRow0" class="RmRow blank">
+						<Label id="RmRow0Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow0Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow0Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow0Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="RmRow1" class="RmRow blank">
+						<Label id="RmRow1Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow1Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow1Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow1Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="RmRow2" class="RmRow blank">
+						<Label id="RmRow2Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow2Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow2Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow2Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="RmRow3" class="RmRow blank">
+						<Label id="RmRow3Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow3Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow3Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow3Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="RmRow4" class="RmRow blank">
+						<Label id="RmRow4Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow4Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow4Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow4Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="RmRow5" class="RmRow blank">
+						<Label id="RmRow5Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow5Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow5Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow5Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="RmRow6" class="RmRow blank">
+						<Label id="RmRow6Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow6Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow6Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow6Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="RmRow7" class="RmRow blank">
+						<Label id="RmRow7Rank" class="RmRank" text="{s:text}" />
+						<Label id="RmRow7Name" class="RmName" text="{s:text}" />
+						<Label id="RmRow7Time" class="RmTime" text="{s:text}" />
+						<Label id="RmRow7Gap" class="RmGap" text="{s:text}" />
+					</Button>
+				</Panel>
+				<Label id="RmEmpty" class="RmEmpty Hidden" text="{s:text}" />
+			</Panel>
+
+			<Panel class="RmPager">
+				<Button id="RmPagePrev" class="Step"><Label text="‹" /></Button>
+				<Label id="RmPage" class="RmPage" text="{s:text}" />
+				<Button id="RmPageNext" class="Step"><Label text="›" /></Button>
+			</Panel>
+
+			<!-- A hint or why a Watch didn't start; or, watching the central bot, what's playing and its controls. -->
+			<Panel class="RmArea">
+				<Label id="RmStatus" class="RmStatus" text="{s:text}" />
+				<Panel id="RmNow" class="RmNow Hidden">
+					<Panel class="RmNowTop">
+						<Label id="RmNowName" class="RmNowName" text="{s:text}" />
+						<Label id="RmNowTag" class="RmNowTag" text="{s:text}" />
+						<Label id="RmNowTime" class="RmNowTime" text="{s:text}" />
+					</Panel>
+					<Panel class="RmBar"><Panel id="RmBarFill" class="RmBarFill" /></Panel>
+					<Panel id="RmCtl" class="RmCtl">
+						<Button id="RmBack" class="RmButton"><Label text="−5s" /></Button>
+						<Button id="RmPause" class="RmButton RmButtonWide"><Label id="RmPauseLabel" class="RmButtonLabel" text="{s:text}" /></Button>
+						<Button id="RmFwd" class="RmButton"><Label text="+5s" /></Button>
+						<Button id="RmSpeed" class="RmButton"><Label id="RmSpeedLabel" class="RmButtonLabel" text="{s:text}" /></Button>
+						<Button id="RmStop" class="RmButton RmStop"><Label id="LRmStop" class="RmStopLabel" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="RmAlong" class="RmAlong Hidden">
+						<Label id="RmAlongText" class="RmAlongText" text="{s:text}" />
+						<Button id="RmLeave" class="RmButton RmLeave"><Label id="LRmLeave" text="{s:text}" /></Button>
+					</Panel>
+				</Panel>
+			</Panel>
+
+			<Panel class="MenuFooter">
+				<Button id="RmClose" class="MenuButton RmClose">
+					<Label id="LRmClose" text="{s:text}" />
+				</Button>
+				<Button id="RmWatch" class="MenuButton MenuButton--primary RmWatch">
+					<Label id="RmWatchLabel" class="RmWatchLabel" text="{s:text}" />
+				</Button>
+			</Panel>
+		</Panel>
+
+		<!-- Profile card, opened with !profile (yours) or !profile name (HudProfileCard.cs): overall results for one
+		     style, then this map's for that style and a track. Stage tiles past the map's stages are Hidden. -->
+		<Panel id="PfMenu" class="Menu PfMenu Closed">
+			<Panel class="MenuHeader RMenuHeader">
+				<Label id="LPfTitle" class="MenuTitle" text="{s:text}" />
+			</Panel>
+
+			<Label id="PfName" class="PfName" text="{s:text}" />
+			<Label id="PfRank" class="PfSub" text="{s:text}" />
+			<Label id="PfJoined" class="PfSub" text="{s:text}" />
+
+			<Panel class="MenuRow static">
+				<Label id="LPfStyle" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="PfStylePrev" class="Step"><Label text="‹" /></Button>
+					<Label id="PfStyleValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="PfStyleNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+
+			<!-- Hidden when the request provider can't tell (GetPlayerSummary answers null). -->
+			<Panel id="PfOverall" class="PfSection">
+				<Panel class="MenuSection"><Label id="PfOverallTitle" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+				<Panel class="PfRow">
+					<Label id="LPfMaps" class="PfLabel" text="{s:text}" />
+					<Label id="PfMaps" class="PfValue" text="{s:text}" />
+					<Label id="PfMapsOf" class="PfSmall" text="{s:text}" />
+				</Panel>
+				<Panel class="PfRow">
+					<Label id="LPfBonuses" class="PfLabel" text="{s:text}" />
+					<Label id="PfBonuses" class="PfValue" text="{s:text}" />
+					<Label id="PfBonusesOf" class="PfSmall" text="{s:text}" />
+				</Panel>
+				<Panel class="PfRow">
+					<Label id="LPfRecords" class="PfLabel" text="{s:text}" />
+					<Label id="PfRecords" class="PfValue" text="{s:text}" />
+				</Panel>
+			</Panel>
+
+			<Panel class="MenuSection"><Label id="LPfThisMap" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+			<Panel class="PfSection">
+				<Panel class="PfRow">
+					<Label id="LPfHere" class="PfLabel" text="{s:text}" />
+					<Label id="PfHere" class="PfValue" text="{s:text}" />
+					<Label id="PfPlays" class="PfSmall" text="{s:text}" />
+				</Panel>
+			</Panel>
+			<Panel class="MenuRow static">
+				<Label id="LPfTrack" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="PfTrackPrev" class="Step"><Label text="‹" /></Button>
+					<Label id="PfTrackValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="PfTrackNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+			<Panel class="PfSection">
+				<Panel class="PfRow">
+					<Label id="LPfPb" class="PfLabel" text="{s:text}" />
+					<Label id="PfPb" class="PfValue" text="{s:text}" />
+					<Label id="PfPbRank" class="PfSmall" text="{s:text}" />
+				</Panel>
+			</Panel>
+			<Panel id="PfStages" class="PfStages">
+				<Panel id="PfStage0" class="PfStage Hidden">
+					<Label id="PfStage0Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage0Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage1" class="PfStage Hidden">
+					<Label id="PfStage1Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage1Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage2" class="PfStage Hidden">
+					<Label id="PfStage2Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage2Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage3" class="PfStage Hidden">
+					<Label id="PfStage3Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage3Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage4" class="PfStage Hidden">
+					<Label id="PfStage4Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage4Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage5" class="PfStage Hidden">
+					<Label id="PfStage5Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage5Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage6" class="PfStage Hidden">
+					<Label id="PfStage6Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage6Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage7" class="PfStage Hidden">
+					<Label id="PfStage7Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage7Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage8" class="PfStage Hidden">
+					<Label id="PfStage8Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage8Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage9" class="PfStage Hidden">
+					<Label id="PfStage9Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage9Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage10" class="PfStage Hidden">
+					<Label id="PfStage10Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage10Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+				<Panel id="PfStage11" class="PfStage Hidden">
+					<Label id="PfStage11Name" class="PfStageName" text="{s:text}" />
+					<Label id="PfStage11Time" class="PfStageTime" text="{s:text}" />
+				</Panel>
+			</Panel>
+
+			<Panel class="MenuFooter">
+				<Button id="PfClose" class="MenuButton MenuButton--primary PfClose">
+					<Label id="LPfClose" text="{s:text}" />
+				</Button>
 			</Panel>
 		</Panel>
 	</Panel>

@@ -9,7 +9,6 @@
 
 @define gainColor: #7ce27c;
 @define lossColor: #ff6b5e;
-@define zoneColor: #7ce27c;
 @define finishColor: #ffd257;
 @define accentColor: #5ab4ff;
 @define goodColor: #6fdc8c;
@@ -102,10 +101,6 @@
 .Line.gap {
     height: lineGap;
     opacity: 0;
-}
-
-.Line.in-zone {
-    color: zoneColor;
 }
 
 .Title.stopped {
@@ -638,12 +633,16 @@
     border-bottom: 2px solid accentColor;
 }
 
+/* Panorama sizes a label a little wider than its text and left-aligns it, so the text is centred inside it too;
+   capitals leave the bottom of the line empty, and the tab keeps 2px below for its accent, so it sits a bit lower. */
 .Menu .MenuTabLabel {
     horizontal-align: center;
     vertical-align: center;
+    padding-top: 3px;
     font-size: 11px;
     letter-spacing: 1px;
     text-transform: uppercase;
+    text-align: center;
     color: mutedColor;
 }
 
@@ -808,6 +807,7 @@
 .Step Label {
     horizontal-align: center;
     vertical-align: center;
+    text-align: center;
 }
 
 .Stepper .MenuValue {
@@ -885,4 +885,454 @@
 .MenuButton Label {
     horizontal-align: center;
     vertical-align: center;
+}
+
+/* ---- Profile card (!profile) ---- */
+
+/* Same spot as the other menus: collapsed when closed so it can't take their clicks. */
+.PfMenu.Closed {
+    visibility: collapse;
+}
+
+.Menu .PfName {
+    margin: 0px 8px;
+    font-size: 26px;
+}
+
+.Menu .PfSub {
+    margin: 2px 8px 0px 8px;
+    font-size: 14px;
+    color: mutedColor;
+}
+
+.PfSection {
+    width: 100%;
+    height: fit-children;
+    flow-children: down;
+}
+
+.PfRow {
+    width: 100%;
+    height: 28px;
+    padding: 0px 8px;
+    flow-children: right;
+}
+
+.Menu .PfLabel {
+    width: fill-parent-flow( 1 );
+    vertical-align: center;
+    font-size: 14px;
+    color: mutedColor;
+}
+
+.Menu .PfValue {
+    vertical-align: center;
+}
+
+.Menu .PfValue.wr {
+    color: finishColor;
+}
+
+.Menu .PfSmall {
+    vertical-align: center;
+    margin-left: 6px;
+    font-size: 12px;
+    color: mutedColor;
+}
+
+/* Panorama can't align baselines, and a custom HUD can't use html Labels to put a value and its note in one line.
+   Chinese, Japanese and Korean come from a fallback font with taller lines, which centres a CJK note low; it's lifted
+   by the pixels HudFormat.NoteLift picks (2 after a plain number, 1 after CJK text). */
+.Menu .PfSmall.lift-1 {
+    margin-bottom: 1px;
+}
+
+.Menu .PfSmall.lift-2 {
+    margin-bottom: 2px;
+}
+
+/* Four tiles a row */
+.PfStages {
+    width: 100%;
+    height: fit-children;
+    padding: 2px 6px 0px 6px;
+    flow-children: right-wrap;
+}
+
+.PfStage {
+    width: 82px;
+    height: 40px;
+    margin: 2px;
+    flow-children: down;
+    background-color: #ffffff0d;
+    border-radius: 4px;
+}
+
+.Menu .PfStageName {
+    horizontal-align: center;
+    margin-top: 4px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: mutedColor;
+}
+
+.Menu .PfStageTime {
+    horizontal-align: center;
+    font-size: 13px;
+}
+
+.Menu .PfStageTime.none {
+    color: mutedColor;
+}
+
+.MenuButton.PfClose {
+    margin-left: 0px;
+}
+
+/* ---- Replay menu (!replay) ---- */
+
+/* Same spot as HUD settings, so a closed one is collapsed rather than faded: its buttons would sit on top of
+   the settings menu and take its clicks. */
+.RMenu.Closed {
+    visibility: collapse;
+}
+
+.RMenuHeader:hover {
+    background-color: #00000000;
+}
+
+.RmStepper {
+    margin-right: 0px;
+}
+
+.Stepper .RmValue {
+    min-width: 132px;
+}
+
+.RmTabs {
+    margin-top: 8px;
+}
+
+/* WR / Your PB shortcuts, after the count's rule */
+.RmJump {
+    vertical-align: center;
+    height: 20px;
+    margin-left: 6px;
+    padding: 0px 8px;
+    border: 1px solid #ffffff24;
+    border-radius: 10px;
+
+    transition-property: background-color, opacity;
+    transition-duration: .1s;
+}
+
+.RmJump:hover {
+    background-color: menuHover;
+}
+
+.RmJump.disabled {
+    opacity: .35;
+}
+
+.Menu .RmJump Label {
+    horizontal-align: center;
+    vertical-align: center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: center;
+    color: mutedColor;
+}
+
+.RmList {
+    width: 100%;
+    height: 256px;
+}
+
+.RmRows {
+    width: 100%;
+    height: fit-children;
+    flow-children: down;
+}
+
+.RmRow {
+    width: 100%;
+    height: 30px;
+    margin-bottom: 2px;
+    padding: 0px 8px;
+    flow-children: right;
+    border-radius: 4px;
+    border-left: 2px solid #00000000;
+
+    transition-property: background-color;
+    transition-duration: .1s;
+}
+
+.RmRow:hover {
+    background-color: menuHover;
+}
+
+.RmRow.sel {
+    background-color: #5ab4ff24;
+    border-left: 2px solid accentColor;
+}
+
+/* Past the end of the leaderboard: kept, so the list doesn't change height. */
+.RmRow.blank {
+    opacity: 0;
+}
+
+.Menu .RmRank {
+    width: 26px;
+    vertical-align: center;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.Menu .RmName {
+    width: fill-parent-flow( 1 );
+    vertical-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.Menu .RmName.you {
+    color: accentColor;
+}
+
+.Menu .RmTime {
+    vertical-align: center;
+    margin: 0px 10px;
+}
+
+.Menu .RmGap {
+    width: 84px;
+    vertical-align: center;
+    text-align: right;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.Menu .RmGap.wr {
+    color: finishColor;
+    letter-spacing: 1px;
+}
+
+.Menu .RmGap.now {
+    color: goodColor;
+    letter-spacing: 1px;
+}
+
+.Menu .RmEmpty {
+    horizontal-align: center;
+    vertical-align: center;
+    font-size: 14px;
+    color: mutedColor;
+}
+
+.RmPager {
+    horizontal-align: center;
+    width: fit-children;
+    height: fit-children;
+    margin-top: 6px;
+    flow-children: right;
+}
+
+.Menu .RmPage {
+    vertical-align: center;
+    margin: 0px 12px;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.RmArea {
+    width: 100%;
+    height: 104px;
+    margin-top: 10px;
+    padding: 0px 8px;
+}
+
+.Menu .RmStatus {
+    width: 100%;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.Menu .RmStatus.warn {
+    color: #ffa94d;
+}
+
+.RmNow {
+    width: 100%;
+    height: fit-children;
+    padding: 10px 12px;
+    flow-children: down;
+    background-color: #ffffff0d;
+    border-radius: 6px;
+}
+
+.RmNowTop {
+    width: 100%;
+    height: fit-children;
+    flow-children: right;
+}
+
+.Menu .RmNowName {
+    font-size: 14px;
+}
+
+.Menu .RmNowTag {
+    margin: 2px 0px 0px 6px;
+    font-size: 12px;
+    color: mutedColor;
+}
+
+.Menu .RmNowTime {
+    width: fill-parent-flow( 1 );
+    text-align: right;
+    font-size: 14px;
+}
+
+.RmBar {
+    width: 100%;
+    height: 4px;
+    margin: 8px 0px 10px 0px;
+    background-color: #ffffff2e;
+    border-radius: 2px;
+}
+
+/* Width in 2% steps, so it's sent at most once a step. */
+.RmBarFill {
+    width: 0%;
+    height: 100%;
+    background-color: accentColor;
+    border-radius: 2px;
+
+    transition-property: width;
+    transition-duration: .1s;
+}
+
+.RmBarFill.w-0 { width: 0%; }
+.RmBarFill.w-1 { width: 2%; }
+.RmBarFill.w-2 { width: 4%; }
+.RmBarFill.w-3 { width: 6%; }
+.RmBarFill.w-4 { width: 8%; }
+.RmBarFill.w-5 { width: 10%; }
+.RmBarFill.w-6 { width: 12%; }
+.RmBarFill.w-7 { width: 14%; }
+.RmBarFill.w-8 { width: 16%; }
+.RmBarFill.w-9 { width: 18%; }
+.RmBarFill.w-10 { width: 20%; }
+.RmBarFill.w-11 { width: 22%; }
+.RmBarFill.w-12 { width: 24%; }
+.RmBarFill.w-13 { width: 26%; }
+.RmBarFill.w-14 { width: 28%; }
+.RmBarFill.w-15 { width: 30%; }
+.RmBarFill.w-16 { width: 32%; }
+.RmBarFill.w-17 { width: 34%; }
+.RmBarFill.w-18 { width: 36%; }
+.RmBarFill.w-19 { width: 38%; }
+.RmBarFill.w-20 { width: 40%; }
+.RmBarFill.w-21 { width: 42%; }
+.RmBarFill.w-22 { width: 44%; }
+.RmBarFill.w-23 { width: 46%; }
+.RmBarFill.w-24 { width: 48%; }
+.RmBarFill.w-25 { width: 50%; }
+.RmBarFill.w-26 { width: 52%; }
+.RmBarFill.w-27 { width: 54%; }
+.RmBarFill.w-28 { width: 56%; }
+.RmBarFill.w-29 { width: 58%; }
+.RmBarFill.w-30 { width: 60%; }
+.RmBarFill.w-31 { width: 62%; }
+.RmBarFill.w-32 { width: 64%; }
+.RmBarFill.w-33 { width: 66%; }
+.RmBarFill.w-34 { width: 68%; }
+.RmBarFill.w-35 { width: 70%; }
+.RmBarFill.w-36 { width: 72%; }
+.RmBarFill.w-37 { width: 74%; }
+.RmBarFill.w-38 { width: 76%; }
+.RmBarFill.w-39 { width: 78%; }
+.RmBarFill.w-40 { width: 80%; }
+.RmBarFill.w-41 { width: 82%; }
+.RmBarFill.w-42 { width: 84%; }
+.RmBarFill.w-43 { width: 86%; }
+.RmBarFill.w-44 { width: 88%; }
+.RmBarFill.w-45 { width: 90%; }
+.RmBarFill.w-46 { width: 92%; }
+.RmBarFill.w-47 { width: 94%; }
+.RmBarFill.w-48 { width: 96%; }
+.RmBarFill.w-49 { width: 98%; }
+.RmBarFill.w-50 { width: 100%; }
+
+.RmCtl,
+.RmAlong {
+    width: 100%;
+    height: 30px;
+    flow-children: right;
+}
+
+.RmButton {
+    width: fill-parent-flow( 1 );
+    height: 30px;
+    margin-left: 6px;
+    background-color: #ffffff0f;
+    border-radius: 4px;
+
+    transition-property: background-color;
+    transition-duration: .1s;
+}
+
+#RmBack {
+    margin-left: 0px;
+}
+
+.RmButton:hover {
+    background-color: #ffffff1c;
+}
+
+.RmButton.RmButtonWide {
+    width: fill-parent-flow( 1.3 );
+}
+
+.RmButton.lit {
+    background-color: #ffd25729;
+}
+
+.RmButton Label {
+    horizontal-align: center;
+    vertical-align: center;
+    font-size: 14px;
+}
+
+.Menu .RmButtonLabel.lit {
+    color: finishColor;
+}
+
+.Menu .RmStopLabel {
+    color: #ff8b80;
+}
+
+.Menu .RmAlongText {
+    width: fill-parent-flow( 1 );
+    vertical-align: center;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.RmButton.RmLeave {
+    width: 80px;
+}
+
+.MenuButton.RmWatch {
+    width: fill-parent-flow( 2 );
+}
+
+.MenuButton.RmWatch.disabled,
+.MenuButton.RmWatch.disabled:hover {
+    background-color: #ffffff12;
+    brightness: 1;
+}
+
+.Menu .RmWatchLabel.disabled {
+    color: mutedColor;
 }

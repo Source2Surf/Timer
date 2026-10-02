@@ -57,6 +57,11 @@ internal interface IRecordModule
 
     int GetTotalRecordCount(int style, int track);
 
+    /// <summary>
+    ///     A leaderboard, fastest first: the map's (stage 0) or one stage's.
+    /// </summary>
+    IReadOnlyList<RunRecord> GetRecords(int style, int track, int stage);
+
     IReadOnlyList<RunCheckpoint>? GetWRCheckpoints(int style, int track);
 
     /// <summary>
@@ -151,8 +156,6 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         _commandManager.AddClientChatCommand("top",     OnCommandTop);
         _commandManager.AddClientChatCommand("recent",  OnCommandRecent);
         _commandManager.AddClientChatCommand("cpr",      OnCommandCpr);
-        _commandManager.AddClientChatCommand("profile", OnCommandProfile);
-        _commandManager.AddClientChatCommand("stats",   OnCommandProfile);
         _commandManager.AddClientChatCommand("swr",      OnCommandStageWR);
         _commandManager.AddClientChatCommand("stagewr",  OnCommandStageWR);
         _commandManager.AddClientChatCommand("btop",     OnCommandBonusTop);
@@ -446,6 +449,9 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     public int GetTotalRecordCount(int style, int track) =>
         _mapCache.GetRecords(style, track).Count;
+
+    public IReadOnlyList<RunRecord> GetRecords(int style, int track, int stage) =>
+        stage == 0 ? _mapCache.GetRecords(style, track) : _mapCache.GetStageRecords(style, track, stage) ?? [];
 
     public IReadOnlyList<RunCheckpoint>? GetWRCheckpoints(int style, int track) =>
         _mapCache.GetWRCheckpoints(style, track);

@@ -1,0 +1,718 @@
+{
+  "hud.title.map_completed": {
+    "en-us": "Map Completed!",
+    "zh-cn": "地图完成！"
+  },
+  "hud.title.bonus_completed": {
+    "en-us": "Bonus {0} Completed!",
+    "zh-cn": "奖励关 {0} 完成！"
+  },
+  "hud.title.practice": {
+    "en-us": "{0} (Practice)",
+    "zh-cn": "{0}（练习）"
+  },
+  "hud.title.run_stopped": {
+    "en-us": "Run Stopped",
+    "zh-cn": "计时已停止"
+  },
+  "hud.title.timer_paused": {
+    "en-us": "Timer Paused",
+    "zh-cn": "计时已暂停"
+  },
+  "hud.title.practice_mode": {
+    "en-us": "Practice Mode",
+    "zh-cn": "练习模式"
+  },
+  "hud.title.replay": {
+    "en-us": "Replay: {0} ({1})",
+    "zh-cn": "回放：{0}（{1}）"
+  },
+  "hud.title.replay_idle": {
+    "en-us": "Replay Bot (Idle)",
+    "zh-cn": "回放机器人（空闲）"
+  },
+  "hud.replay.pick_hint": {
+    "en-us": "Press E to pick a replay",
+    "zh-cn": "按 E 选择回放"
+  },
+  "hud.replay.paused": {
+    "en-us": "[Paused]",
+    "zh-cn": "[已暂停]"
+  },
+  "hud.time": {
+    "en-us": "Time",
+    "zh-cn": "时间"
+  },
+  "hud.final_time": {
+    "en-us": "Final Time",
+    "zh-cn": "最终时间"
+  },
+  "hud.time_line": {
+    "en-us": "{0}: {1}",
+    "zh-cn": "{0}：{1}"
+  },
+  "hud.stage_finished": {
+    "en-us": "Finished [Stage {0}]: {1}",
+    "zh-cn": "完成 [关卡 {0}]：{1}"
+  },
+  "hud.info.sr": {
+    "en-us": "SR: {0}",
+    "zh-cn": "SR：{0}"
+  },
+  "hud.info.pb": {
+    "en-us": "PB: {0}",
+    "zh-cn": "PB：{0}"
+  },
+  "hud.line.zone": {
+    "en-us": "[Zone: {0}]",
+    "zh-cn": "[区域：{0}]"
+  },
+  "hud.line.mode": {
+    "en-us": "Mode: {0}",
+    "zh-cn": "模式：{0}"
+  },
+  "hud.line.speed": {
+    "en-us": "Speed: {0}",
+    "zh-cn": "速度：{0}"
+  },
+  "hud.line.sync": {
+    "en-us": "Sync: {0}%",
+    "zh-cn": "同步率：{0}%"
+  },
+  "hud.line.jumps": {
+    "en-us": "Jumps: {0}",
+    "zh-cn": "跳跃：{0}"
+  },
+  "hud.line.strafes": {
+    "en-us": "Strafes: {0}",
+    "zh-cn": "转向：{0}"
+  },
+  "hud.line.start": {
+    "en-us": "Start: {0} u/s",
+    "zh-cn": "起步：{0} u/s"
+  },
+  "hud.line.end": {
+    "en-us": "End: {0} u/s",
+    "zh-cn": "结束：{0} u/s"
+  },
+  "hud.speed_cmp": {
+    "en-us": " ({0}: {1})",
+    "zh-cn": "（{0}：{1}）"
+  },
+  "hud.tag.pr": {
+    "en-us": "PR",
+    "zh-cn": "PR"
+  },
+  "hud.tag.pb": {
+    "en-us": "PB",
+    "zh-cn": "PB"
+  },
+  "hud.tag.sr": {
+    "en-us": "SR",
+    "zh-cn": "SR"
+  },
+  "hud.zone.map_start": {
+    "en-us": "Map Start Zone",
+    "zh-cn": "地图起点"
+  },
+  "hud.zone.bonus_start": {
+    "en-us": "Bonus {0} Start Zone",
+    "zh-cn": "奖励关 {0} 起点"
+  },
+  "hud.zone.stage_start": {
+    "en-us": "Stage {0} Start Zone",
+    "zh-cn": "关卡 {0} 起点"
+  },
+  "hud.zone.map_end": {
+    "en-us": "Map End Zone",
+    "zh-cn": "地图终点"
+  },
+  "hud.zone.bonus_end": {
+    "en-us": "Bonus {0} End Zone",
+    "zh-cn": "奖励关 {0} 终点"
+  },
+  "hud.zone.none": {
+    "en-us": "None",
+    "zh-cn": "无"
+  },
+  "hud.zone.linear": {
+    "en-us": "Linear",
+    "zh-cn": "线性"
+  },
+  "hud.na": {
+    "en-us": "N/A",
+    "zh-cn": "无"
+  },
+  "hud.track.main": {
+    "en-us": "Main",
+    "zh-cn": "主线"
+  },
+  "hud.track.bonus": {
+    "en-us": "Bonus {0}",
+    "zh-cn": "奖励关 {0}"
+  },
+  "hud.stage.full": {
+    "en-us": "Full run",
+    "zh-cn": "完整"
+  },
+  "hud.stage.n": {
+    "en-us": "Stage {0}",
+    "zh-cn": "关卡 {0}"
+  },
+  "hud.checkpoint.n": {
+    "en-us": "CP {0}",
+    "zh-cn": "检查点 {0}"
+  },
+  "hud.split.vs": {
+    "en-us": "{0} vs {1}",
+    "zh-cn": "{0} 对比 {1}"
+  },
+  "hud.sr": {
+    "en-us": "SR",
+    "zh-cn": "SR"
+  },
+  "hud.pb": {
+    "en-us": "PB",
+    "zh-cn": "PB"
+  },
+  "hud.run": {
+    "en-us": "Run",
+    "zh-cn": "记录"
+  },
+  "hud.rank": {
+    "en-us": "#{0}",
+    "zh-cn": "#{0}"
+  },
+  "hud.rank_of": {
+    "en-us": "#{0} of {1}",
+    "zh-cn": "第 {0} 名 / 共 {1}"
+  },
+  "hud.loading": {
+    "en-us": "Loading…",
+    "zh-cn": "加载中…"
+  },
+  "hud.choice.on": {
+    "en-us": "On",
+    "zh-cn": "开"
+  },
+  "hud.choice.off": {
+    "en-us": "Off",
+    "zh-cn": "关"
+  },
+  "hud.choice.personal_best": {
+    "en-us": "Personal best",
+    "zh-cn": "个人最佳"
+  },
+  "hud.choice.server_record": {
+    "en-us": "Server record",
+    "zh-cn": "服务器纪录"
+  },
+  "hud.choice.horizontal": {
+    "en-us": "Horizontal",
+    "zh-cn": "水平"
+  },
+  "hud.row.zone": {
+    "en-us": "Zone",
+    "zh-cn": "区域"
+  },
+  "hud.row.blank": {
+    "en-us": "Blank line",
+    "zh-cn": "空行"
+  },
+  "hud.row.mode": {
+    "en-us": "Mode",
+    "zh-cn": "模式"
+  },
+  "hud.row.speed": {
+    "en-us": "Speed",
+    "zh-cn": "速度"
+  },
+  "hud.row.start": {
+    "en-us": "Start / end speed",
+    "zh-cn": "起步 / 结束速度"
+  },
+  "hud.row.sync": {
+    "en-us": "Sync",
+    "zh-cn": "同步率"
+  },
+  "hud.row.jumps": {
+    "en-us": "Jumps",
+    "zh-cn": "跳跃"
+  },
+  "hud.row.strafes": {
+    "en-us": "Strafes",
+    "zh-cn": "转向"
+  },
+  "rm.count.times_one": {
+    "en-us": "1 time",
+    "zh-cn": "1 个成绩"
+  },
+  "rm.count.times": {
+    "en-us": "{0} times",
+    "zh-cn": "{0} 个成绩"
+  },
+  "rm.count.runs_one": {
+    "en-us": "1 run",
+    "zh-cn": "1 次记录"
+  },
+  "rm.count.runs": {
+    "en-us": "{0} runs",
+    "zh-cn": "{0} 次记录"
+  },
+  "rm.empty.times": {
+    "en-us": "No times on {0} yet.",
+    "zh-cn": "{0} 还没有成绩。"
+  },
+  "rm.empty.runs_loading": {
+    "en-us": "Loading your runs…",
+    "zh-cn": "正在加载你的记录…"
+  },
+  "rm.empty.runs": {
+    "en-us": "You have no runs here yet.",
+    "zh-cn": "你在这里还没有记录。"
+  },
+  "rm.page": {
+    "en-us": "{0} / {1}",
+    "zh-cn": "{0} / {1}"
+  },
+  "rm.playing": {
+    "en-us": "PLAYING",
+    "zh-cn": "播放中"
+  },
+  "rm.you": {
+    "en-us": "You",
+    "zh-cn": "你"
+  },
+  "rm.ago.now": {
+    "en-us": "Just now",
+    "zh-cn": "刚刚"
+  },
+  "rm.ago.minutes": {
+    "en-us": "{0} min ago",
+    "zh-cn": "{0} 分钟前"
+  },
+  "rm.ago.hours": {
+    "en-us": "{0} h ago",
+    "zh-cn": "{0} 小时前"
+  },
+  "rm.ago.day": {
+    "en-us": "1 day ago",
+    "zh-cn": "1 天前"
+  },
+  "rm.ago.days": {
+    "en-us": "{0} days ago",
+    "zh-cn": "{0} 天前"
+  },
+  "rm.whose.sr": {
+    "en-us": "{0}'s SR",
+    "zh-cn": "{0} 的 SR"
+  },
+  "rm.whose.rank": {
+    "en-us": "{0}'s #{1}",
+    "zh-cn": "{0} 的 #{1}"
+  },
+  "rm.whose.run": {
+    "en-us": "{0}'s run",
+    "zh-cn": "{0} 的记录"
+  },
+  "rm.whose.yours": {
+    "en-us": "your run",
+    "zh-cn": "你的记录"
+  },
+  "rm.whose.yours_timed": {
+    "en-us": "your {0} run",
+    "zh-cn": "你的 {0} 记录"
+  },
+  "rm.status.no_bot": {
+    "en-us": "This server has no replay bot for !replay.",
+    "zh-cn": "此服务器没有用于 !replay 的回放机器人。"
+  },
+  "rm.status.loading": {
+    "en-us": "Loading {0}…",
+    "zh-cn": "正在加载 {0}…"
+  },
+  "rm.status.busy": {
+    "en-us": "The replay bot is busy: {0} is watching {1}. You can watch along, or wait until they stop.",
+    "zh-cn": "回放机器人正忙：{0} 正在观看 {1}。你可以一起观看，或等待其结束。"
+  },
+  "rm.status.someone": {
+    "en-us": "someone",
+    "zh-cn": "某人"
+  },
+  "rm.status.free": {
+    "en-us": "The replay bot is free. Pick a time to watch, or join a team to play.",
+    "zh-cn": "回放机器人空闲。选择一个成绩观看，或加入队伍开始游戏。"
+  },
+  "rm.status.hint": {
+    "en-us": "Pick a time and press Watch. It plays once on the replay bot and you spectate it; Stop puts you back at the start.",
+    "zh-cn": "选择一个成绩并点击观看。回放机器人会播放一次，你将观战；点击停止回到起点。"
+  },
+  "rm.note.no_replay": {
+    "en-us": "No replay saved for {0}.",
+    "zh-cn": "{0} 没有保存回放。"
+  },
+  "rm.note.busy": {
+    "en-us": "Someone else started a replay first. You can watch along.",
+    "zh-cn": "其他人先开始了回放。你可以一起观看。"
+  },
+  "rm.along.owner": {
+    "en-us": "{0} started this replay, so they have the controls.",
+    "zh-cn": "{0} 开始了这个回放，由其控制播放。"
+  },
+  "rm.along.left": {
+    "en-us": "Whoever started this replay left. Pick a time to play your own.",
+    "zh-cn": "开始这个回放的玩家已离开。选择一个成绩播放你自己的回放。"
+  },
+  "rm.button.no_bot": {
+    "en-us": "No replay bot",
+    "zh-cn": "没有回放机器人"
+  },
+  "rm.button.watching_along": {
+    "en-us": "Watching along",
+    "zh-cn": "正在一起观看"
+  },
+  "rm.button.watch_along": {
+    "en-us": "Watch along",
+    "zh-cn": "一起观看"
+  },
+  "rm.button.watch": {
+    "en-us": "Watch",
+    "zh-cn": "观看"
+  },
+  "rm.button.playing": {
+    "en-us": "Playing",
+    "zh-cn": "播放中"
+  },
+  "rm.button.play_what": {
+    "en-us": "Play {0}",
+    "zh-cn": "播放 {0}"
+  },
+  "rm.button.watch_what": {
+    "en-us": "Watch {0}",
+    "zh-cn": "观看 {0}"
+  },
+  "rm.button.pause": {
+    "en-us": "Pause",
+    "zh-cn": "暂停"
+  },
+  "rm.button.play": {
+    "en-us": "Play",
+    "zh-cn": "播放"
+  },
+  "pf.rank": {
+    "en-us": "#{0} of {1} · {2} points",
+    "zh-cn": "第 {0} 名 / 共 {1} · {2} 分"
+  },
+  "pf.points": {
+    "en-us": "{0} points",
+    "zh-cn": "{0} 分"
+  },
+  "pf.joined": {
+    "en-us": "Joined {0}",
+    "zh-cn": "加入于 {0}"
+  },
+  "pf.played": {
+    "en-us": " · Played {0}",
+    "zh-cn": " · 游戏时长 {0}"
+  },
+  "pf.overall": {
+    "en-us": "Overall · {0}",
+    "zh-cn": "总览 · {0}"
+  },
+  "pf.of_total": {
+    "en-us": "of {0} · {1}%",
+    "zh-cn": "共 {0} · {1}%"
+  },
+  "pf.of_total_none": {
+    "en-us": "of {0}",
+    "zh-cn": "共 {0}"
+  },
+  "pf.records": {
+    "en-us": "{0} maps · {1} bonuses · {2} stages",
+    "zh-cn": "地图 {0} · 奖励关 {1} · 关卡 {2}"
+  },
+  "pf.plays_one": {
+    "en-us": "{0} play",
+    "zh-cn": "{0} 次游玩"
+  },
+  "pf.plays": {
+    "en-us": "{0} plays",
+    "zh-cn": "{0} 次游玩"
+  },
+  "pf.none": {
+    "en-us": "None",
+    "zh-cn": "无"
+  },
+  "pf.stage_tile": {
+    "en-us": "STAGE {0}",
+    "zh-cn": "关卡 {0}"
+  },
+  "pf.duration.minutes": {
+    "en-us": "{0} min",
+    "zh-cn": "{0} 分钟"
+  },
+  "pf.duration.hours_minutes": {
+    "en-us": "{0} h {1} min",
+    "zh-cn": "{0} 小时 {1} 分钟"
+  },
+  "pf.duration.hours": {
+    "en-us": "{0} h",
+    "zh-cn": "{0} 小时"
+  },
+  "ui.close": {
+    "en-us": "Close",
+    "zh-cn": "关闭"
+  },
+  "ui.show": {
+    "en-us": "Show",
+    "zh-cn": "显示"
+  },
+  "ui.track": {
+    "en-us": "Track",
+    "zh-cn": "路线"
+  },
+  "ui.stage": {
+    "en-us": "Stage",
+    "zh-cn": "关卡"
+  },
+  "ui.style": {
+    "en-us": "Style",
+    "zh-cn": "模式"
+  },
+  "ui.splits.empty": {
+    "en-us": "Splits show here",
+    "zh-cn": "分段会显示在这里"
+  },
+  "ui.keys.duck": {
+    "en-us": "DUCK",
+    "zh-cn": "蹲"
+  },
+  "ui.keys.jump": {
+    "en-us": "JUMP",
+    "zh-cn": "跳"
+  },
+  "ui.drag.moving": {
+    "en-us": "Moving {0}",
+    "zh-cn": "正在移动{0}"
+  },
+  "ui.drag.place": {
+    "en-us": "Place",
+    "zh-cn": "放置"
+  },
+  "ui.drag.cancel": {
+    "en-us": "Cancel",
+    "zh-cn": "取消"
+  },
+  "ui.drag.reset": {
+    "en-us": "Default spot",
+    "zh-cn": "默认位置"
+  },
+  "ui.drag.free": {
+    "en-us": "Hold for free move",
+    "zh-cn": "按住自由移动"
+  },
+  "ui.target.menu": {
+    "en-us": "menu",
+    "zh-cn": "菜单"
+  },
+  "ui.target.timer": {
+    "en-us": "timer",
+    "zh-cn": "计时器"
+  },
+  "ui.target.cspeed": {
+    "en-us": "center speed",
+    "zh-cn": "中心速度"
+  },
+  "ui.target.records": {
+    "en-us": "records",
+    "zh-cn": "纪录"
+  },
+  "ui.target.splits": {
+    "en-us": "splits",
+    "zh-cn": "分段"
+  },
+  "ui.target.keys": {
+    "en-us": "keys",
+    "zh-cn": "按键"
+  },
+  "ui.menu.title": {
+    "en-us": "HUD settings",
+    "zh-cn": "HUD 设置"
+  },
+  "ui.menu.move": {
+    "en-us": "Move",
+    "zh-cn": "移动"
+  },
+  "ui.menu.reset": {
+    "en-us": "Reset",
+    "zh-cn": "重置"
+  },
+  "ui.tab.hud": {
+    "en-us": "HUD",
+    "zh-cn": "HUD"
+  },
+  "ui.tab.timer": {
+    "en-us": "Timer",
+    "zh-cn": "计时器"
+  },
+  "ui.tab.speed": {
+    "en-us": "Speed",
+    "zh-cn": "速度"
+  },
+  "ui.tab.splits": {
+    "en-us": "Splits",
+    "zh-cn": "分段"
+  },
+  "ui.tab.keys": {
+    "en-us": "Keys",
+    "zh-cn": "按键"
+  },
+  "ui.panels": {
+    "en-us": "Panels",
+    "zh-cn": "面板"
+  },
+  "ui.panel.timer": {
+    "en-us": "Timer",
+    "zh-cn": "计时器"
+  },
+  "ui.panel.cspeed": {
+    "en-us": "Center speed",
+    "zh-cn": "中心速度"
+  },
+  "ui.panel.records": {
+    "en-us": "Records",
+    "zh-cn": "纪录"
+  },
+  "ui.panel.records_desc": {
+    "en-us": "Server record and your PB",
+    "zh-cn": "服务器纪录和你的个人最佳"
+  },
+  "ui.panel.splits": {
+    "en-us": "Splits",
+    "zh-cn": "分段"
+  },
+  "ui.panel.keys": {
+    "en-us": "Keys",
+    "zh-cn": "按键"
+  },
+  "ui.panel.keys_desc": {
+    "en-us": "Also !showkeys",
+    "zh-cn": "也可用 !showkeys"
+  },
+  "ui.timer.lines": {
+    "en-us": "Lines, top to bottom",
+    "zh-cn": "显示行（从上到下）"
+  },
+  "ui.timer.comparison": {
+    "en-us": "Comparison",
+    "zh-cn": "对比"
+  },
+  "ui.timer.compare": {
+    "en-us": "Compare against",
+    "zh-cn": "对比对象"
+  },
+  "ui.timer.live": {
+    "en-us": "Live difference",
+    "zh-cn": "实时差距"
+  },
+  "ui.timer.live_desc": {
+    "en-us": "As you move, against your PB or the SR replay",
+    "zh-cn": "移动时与你的个人最佳或 SR 回放对比"
+  },
+  "ui.speed.section": {
+    "en-us": "Timer and center speed",
+    "zh-cn": "计时器和中心速度"
+  },
+  "ui.speed.colors": {
+    "en-us": "Gain / loss colours",
+    "zh-cn": "加速 / 减速颜色"
+  },
+  "ui.speed.colors_desc": {
+    "en-us": "On center speed",
+    "zh-cn": "用于中心速度"
+  },
+  "ui.speed.measure": {
+    "en-us": "Measure",
+    "zh-cn": "测量方式"
+  },
+  "ui.speed.measure_desc": {
+    "en-us": "3D includes vertical speed",
+    "zh-cn": "3D 包含垂直速度"
+  },
+  "ui.splits.recent": {
+    "en-us": "Recent splits",
+    "zh-cn": "最近分段数"
+  },
+  "ui.splits.fade": {
+    "en-us": "Fade older splits",
+    "zh-cn": "淡化较早的分段"
+  },
+  "ui.splits.tip": {
+    "en-us": "Differences follow Compare against on the Timer tab. Stages on staged maps, checkpoints on linear ones.",
+    "zh-cn": "差距使用计时器页的对比对象。分关地图显示关卡，线性地图显示检查点。"
+  },
+  "ui.keys.turn": {
+    "en-us": "Turn direction",
+    "zh-cn": "视角转动"
+  },
+  "ui.keys.turn_desc": {
+    "en-us": "Arrows light up as you turn",
+    "zh-cn": "转动视角时箭头亮起"
+  },
+  "ui.keys.jump_duck": {
+    "en-us": "Jump and duck",
+    "zh-cn": "跳跃和下蹲"
+  },
+  "ui.replay.title": {
+    "en-us": "Replays",
+    "zh-cn": "回放"
+  },
+  "ui.replay.leaderboard": {
+    "en-us": "Leaderboard",
+    "zh-cn": "排行榜"
+  },
+  "ui.replay.my_runs": {
+    "en-us": "My runs",
+    "zh-cn": "我的记录"
+  },
+  "ui.replay.your_pb": {
+    "en-us": "Your PB",
+    "zh-cn": "我的 PB"
+  },
+  "ui.replay.stop": {
+    "en-us": "Stop",
+    "zh-cn": "停止"
+  },
+  "ui.replay.leave": {
+    "en-us": "Leave",
+    "zh-cn": "离开"
+  },
+  "ui.profile.title": {
+    "en-us": "Profile",
+    "zh-cn": "个人资料"
+  },
+  "ui.profile.maps": {
+    "en-us": "Maps completed",
+    "zh-cn": "完成地图"
+  },
+  "ui.profile.bonuses": {
+    "en-us": "Bonuses completed",
+    "zh-cn": "完成奖励关"
+  },
+  "ui.profile.records": {
+    "en-us": "Server records",
+    "zh-cn": "服务器纪录"
+  },
+  "ui.profile.this_map": {
+    "en-us": "This map",
+    "zh-cn": "当前地图"
+  },
+  "ui.profile.time_here": {
+    "en-us": "Time here",
+    "zh-cn": "本图时长"
+  },
+  "ui.profile.pb": {
+    "en-us": "Personal best",
+    "zh-cn": "个人最佳"
+  }
+}

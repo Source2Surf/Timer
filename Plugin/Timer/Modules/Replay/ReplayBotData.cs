@@ -50,6 +50,17 @@ internal class ReplayBotData : IReplayBotData
 
     public EReplayBotType Type { get; init; } = EReplayBotType.Looping;
 
+    public int  Rank  { get; set; } = 1;
+    public long RunId { get; set; }
+
+    // A central bot's playback. FrameStep carries the part of a frame owed at speeds other than 1.
+    public bool  Paused    { get; set; }
+    public float Speed     { get; set; } = 1f;
+    public float FrameStep { get; set; }
+
+    // The player who started a central bot's replay, and so has its controls.
+    public PlayerSlot? Owner { get; set; }
+
     public Guid? Timer { get; set; } = null;
 
     // Cached PushTimer callbacks, created once per bot (lazy ??=). The start-delay and

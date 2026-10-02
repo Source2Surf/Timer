@@ -93,6 +93,20 @@ public interface IRequestManager
 
     Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10);
 
+    /// <summary>
+    /// A player's most recent finishes on one leaderboard (stage 0 is the map), newest first, slower ones
+    /// included. The replay menu lists them under My runs; a provider that doesn't implement it lists none.
+    /// </summary>
+    Task<IReadOnlyList<RunRecord>> GetPlayerRuns(string mapName, SteamID steamId, int style, int track, int stage, int limit = 10)
+        => Task.FromResult<IReadOnlyList<RunRecord>>([]);
+
+    /// <summary>
+    /// A player's results across every map, for their profile. A provider that doesn't implement it returns
+    /// null, and the profile leaves those stats out.
+    /// </summary>
+    Task<PlayerSummary?> GetPlayerSummary(SteamID steamId)
+        => Task.FromResult<PlayerSummary?>(null);
+
 #endregion
 
 #region Score

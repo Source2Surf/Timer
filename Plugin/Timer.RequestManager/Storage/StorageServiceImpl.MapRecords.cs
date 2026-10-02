@@ -221,7 +221,15 @@ internal sealed partial class StorageServiceImpl
         public string Name { get; set; } = string.Empty;
     }
 
-    public async Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10)
+    public Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10)
+        => GetPlayerRunsCoreAsync(mapName, steamId, null, limit);
+
+    public Task<IReadOnlyList<RunRecord>> GetPlayerRuns(string mapName, SteamID steamId, int style, int track, int stage, int limit = 10)
+        => GetPlayerRunsCoreAsync(mapName, steamId, (style, track, stage), limit);
+
+    // A player's finishes on the map, newest first: on one leaderboard, or every full-map run when board is null.
+    private async Task<IReadOnlyList<RunRecord>> GetPlayerRunsCoreAsync(string mapName, SteamID steamId,
+                                                                       (int Style, int Track, int Stage)? board, int limit)
     {
         var mapId = await ResolveMapIdByNameAsync(mapName);
 
@@ -233,11 +241,24 @@ internal sealed partial class StorageServiceImpl
         var normalizedLimit = NormalizeLimit(limit);
         var steamIdValue    = ToDbSteamId(steamId);
 
-        var rows = await _db.Queryable<RunEntity>()
-                            .Where(x => x.MapId == mapId.Value
-                                        && x.SteamId == steamIdValue
-                                        && x.RunType == RunType.Main
-                                        && x.Stage == 0)
+        var query = _db.Queryable<RunEntity>()
+                       .Where(x => x.MapId == mapId.Value && x.SteamId == steamIdValue);
+
+        if (board is { } b)
+        {
+            var runType = b.Stage == 0 ? RunType.Main : RunType.Stage;
+            var style   = b.Style;
+            var track   = (ushort) b.Track;
+            var stage   = (ushort) b.Stage;
+
+            query = query.Where(x => x.RunType == runType && x.Style == style && x.Track == track && x.Stage == stage);
+        }
+        else
+        {
+            query = query.Where(x => x.RunType == RunType.Main && x.Stage == 0);
+        }
+
+        var rows = await query
                             .OrderByDescending(x => x.DateUnixTimeMilliseconds)
                             .OrderByDescending(x => x.Id)
                             .Select(x => new RecentRunRow

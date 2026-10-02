@@ -34,6 +34,7 @@ using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
 using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Shared;
+using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
 using Source2Surf.Timer.Shared.Interfaces.Modules;
 using Source2Surf.Timer.Shared.Models;
@@ -42,7 +43,7 @@ using ZstdSharp;
 
 namespace Source2Surf.Timer.Modules;
 
-internal class ReplayPlaybackModule : IReplayPlaybackModule,
+internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
                                       IModule,
                                       IGameListener,
                                       IPlayerManagerListener,
@@ -56,6 +57,7 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
     private readonly IStyleModule _styleModule;
     private readonly ReplayProviderProxy _replayProviderProxy;
     private readonly IPlayerManager _playerManager;
+    private readonly IPermissionProvider _permissions;
     private readonly ILogger<ReplayPlaybackModule> _logger;
 
     // Replay cache: stage == 0 means main; stage >= 1 means stage replay
@@ -102,6 +104,7 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
                                 IStyleModule                   styleModule,
                                 ReplayProviderProxy            replayProviderProxy,
                                 IPlayerManager                 playerManager,
+                                IPermissionProvider            permissions,
                                 IGameData                      gameData,
                                 IInlineHookManager             inlineHookManager,
                                 ILogger<ReplayPlaybackModule>  logger)
@@ -111,6 +114,7 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
         _styleModule         = styleModule;
         _replayProviderProxy = replayProviderProxy;
         _playerManager       = playerManager;
+        _permissions         = permissions;
         _logger              = logger;
 
         _hasNoBotParam = bridge.ModSharp.HasCommandLine("-nobots");
@@ -327,6 +331,7 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
         _replayBots.Clear();
         _replayCache.Clear();
         _closestFrameIndices.Clear();
+        Array.Clear(_personalBests);
         Array.Clear(_replayBotBySlot, 0, _replayBotBySlot.Length);
         Array.Clear(_configSlotInUse, 0, _configSlotInUse.Length);
     }
@@ -389,7 +394,7 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
             CurrentFrame = 0,
             Client       = client,
             Status       = EReplayBotStatus.Idle,
-            Type         = EReplayBotType.Looping,
+            Type         = _replayBotConfigs[configIndex].Type,
             Config       = _replayBotConfigs[configIndex],
             ConfigIndex  = configIndex,
         };
@@ -397,6 +402,14 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
         _replayBots.Add(botData);
         _replayBotBySlot[slot]         = botData;
         _configSlotInUse[configIndex]  = true;
+
+        // A central bot waits idle for a player to pick a replay.
+        if (botData.Type == EReplayBotType.Central)
+        {
+            SetupReplayBotName(botData);
+
+            return;
+        }
 
         if (!botData.Config.StageBot)
         {
@@ -412,6 +425,9 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
 
     public void OnClientDisconnected(PlayerSlot slot)
     {
+        OnCentralOwnerLeft(slot);
+        ForgetPersonalBest(slot);
+
         var client = _bridge.ClientManager.GetGameClient(slot);
 
         // Only handle Bot players
@@ -529,6 +545,16 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
                 continue;
             }
 
+            if (WaitsInSpectator(bot))
+            {
+                if (controller.Team != CStrikeTeam.Spectator)
+                {
+                    controller.ChangeTeam(CStrikeTeam.Spectator);
+                }
+
+                continue;
+            }
+
             if (controller.GetPlayerPawn() is not { IsValidEntity: true } pawn)
             {
                 continue;
@@ -597,6 +623,7 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
     private void StartReplay(ReplayBotData bot)
     {
         bot.CurrentFrame = 0;
+        bot.FrameStep    = 0;
 
         var header = bot.Header;
 
@@ -810,7 +837,12 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
                                         {
                                             bot.Timer = null;
 
-                                            if (bot.Type == EReplayBotType.Looping)
+                                            if (bot.Type == EReplayBotType.Central)
+                                            {
+                                                // Played once: free for the next pick.
+                                                GoIdle(bot);
+                                            }
+                                            else if (bot.Type == EReplayBotType.Looping)
                                             {
                                                 if (bot.Config.StageBot)
                                                 {
@@ -856,14 +888,23 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
 
         pawn.Flags = flags;
 
-        pawn.SetMoveType(bot.Status == EReplayBotStatus.Running ? frame.MoveType : MoveType.None);
+        var playing = bot.Status == EReplayBotStatus.Running && !bot.Paused;
+
+        pawn.SetMoveType(playing ? frame.MoveType : MoveType.None);
 
         mv->AbsOrigin = curPos;
         mv->Velocity  = frame.Velocity;
 
-        if (bot.Status == EReplayBotStatus.Running)
+        if (playing)
         {
-            bot.CurrentFrame++;
+            // 2x plays two frames a tick, 0.5x one every other tick.
+            bot.FrameStep += bot.Speed;
+
+            while (bot.FrameStep >= 1f)
+            {
+                bot.CurrentFrame++;
+                bot.FrameStep--;
+            }
         }
     }
 
@@ -892,7 +933,7 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
         {
             trackStr = Utils.GetTrackName(bot.Track);
 
-            if (config.StageBot)
+            if (bot.Stage > 0)
             {
                 stageStr = $" Stage {bot.Stage}";
             }
@@ -941,6 +982,12 @@ internal class ReplayPlaybackModule : IReplayPlaybackModule,
 
     private static bool IsReplayBotMatch(ReplayBotData bot, int style, int track, int stage)
     {
+        // The central bot plays what a player picked.
+        if (bot.Type == EReplayBotType.Central)
+        {
+            return false;
+        }
+
         if ((bot.Style != style && bot.Style >= 0) || (bot.Track != track && bot.Track >= 0))
         {
             return false;

@@ -96,6 +96,12 @@ internal sealed class RequestManagerProxy : ExternalModuleProxy<IRequestManager>
     public Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10)
         => Current.GetRecentRecords(mapName, steamId, limit);
 
+    public Task<IReadOnlyList<RunRecord>> GetPlayerRuns(string mapName, SteamID steamId, int style, int track, int stage, int limit = 10)
+        => Current.GetPlayerRuns(mapName, steamId, style, track, stage, limit);
+
+    public Task<PlayerSummary?> GetPlayerSummary(SteamID steamId)
+        => Current.GetPlayerSummary(steamId);
+
     public Task<int> RecalculateMapScoresAsync(string mapName, IReadOnlyDictionary<int, double>? styleFactors = null)
         => Current.RecalculateMapScoresAsync(mapName, styleFactors);
 

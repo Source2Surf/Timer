@@ -42,6 +42,8 @@ internal partial class HudModule
 
     private static readonly Dictionary<string, KeyValuesVariantValueItem> NoKeyValues = [];
 
+    private static readonly CEntityHandle<IBaseEntity> NoEntity = new (uint.MaxValue); // default(...) is the world
+
     private enum DragEnd
     {
         Place,
@@ -102,7 +104,7 @@ internal partial class HudModule
             Aim        = view,
         };
 
-        FreezeView(p.Drag, pawn, view);
+        FreezeView(p, p.Drag, pawn, view);
         p.MenuDirty = true;
         GetLayout(p)?.SetInputCaptureEnabled(p.Slot, false);
     }
@@ -156,14 +158,14 @@ internal partial class HudModule
         }
 
         // Hand back the view the drag froze and turned.
-        UnfreezeView(drag);
+        UnfreezeView(p, drag);
 
         if (_bridge.TryGetController(p.Slot, out var controller) && controller.GetPlayerPawn() is { IsAlive: true } pawn)
         {
             pawn.Teleport(angles: drag.View);
         }
 
-        GetLayout(p)?.SetInputCaptureEnabled(p.Slot, p.MenuOpen);
+        GetLayout(p)?.SetInputCaptureEnabled(p.Slot, p.AnyMenuOpen);
         RefreshNow(p); // show where it landed without waiting for the refresh
     }
 
@@ -264,51 +266,83 @@ internal partial class HudModule
     ///     Holds what the player sees still while they drag: a controlled camera at their eyes, facing where they
     ///     faced, as their view entity. Their mouse still turns the view their client sends, which moves the panel.
     /// </summary>
-    private void FreezeView(HudDragState drag, IBasePlayerPawn pawn, Vector view)
+    private void FreezeView(HudPlayer p, HudDragState drag, IBasePlayerPawn pawn, Vector view)
     {
-        if (pawn.GetCameraService() is not { } cameras
-            || _bridge.EntityManager.SpawnEntitySync<ICustomPlayerCamera>("custom_player_camera", NoKeyValues) is not
-            {
-                IsValidEntity: true,
-            } camera)
+        if (pawn.GetCameraService() is not { } cameras)
         {
-            return; // the drag still works, the view just turns with it
+            return;
+        }
+
+        var camera = p.Camera;
+
+        if (camera is null || !camera.IsValid())
+        {
+            camera = _bridge.EntityManager.SpawnEntitySync<ICustomPlayerCamera>("custom_player_camera", NoKeyValues);
+
+            if (camera is not { IsValidEntity: true })
+            {
+                p.Camera = null;
+
+                return; // the drag still works, the view just turns with it
+            }
+
+            p.Camera = camera;
         }
 
         camera.Teleport(pawn.GetEyePosition(), view);
         camera.PawnHandle = pawn.RefHandle.As<IBasePlayerPawn>();
         camera.CameraMode = CustomCameraMode.Controlled;
 
-        drag.Camera        = camera;
-        drag.PreviousView  = cameras.ViewEntityHandle;
+        drag.Frozen        = true;
+        drag.Pawn          = pawn.RefHandle.As<IBasePlayerPawn>();
+        drag.PreviousView  = HandsBack(cameras.ViewEntityHandle, pawn, camera) ? cameras.ViewEntityHandle : NoEntity;
         cameras.ViewEntity = camera;
     }
 
     /// <summary>
-    ///     Gives the view back to whatever held it before the drag, unless something else took it since.
+    ///     Gives the view back to the map camera that held it before the drag, else to the player's own eyes, and
+    ///     switches the camera off. The pawn is found by its own handle, and a view entity that's gone is let go of
+    ///     too, so a camera something else removed can't keep holding the view either.
     /// </summary>
-    private static void UnfreezeView(HudDragState drag)
+    private void UnfreezeView(HudPlayer p, HudDragState drag)
     {
-        if (drag.Camera is not { } camera)
+        if (!drag.Frozen)
         {
             return;
         }
 
-        drag.Camera = null;
+        drag.Frozen = false;
 
-        if (!camera.IsValid())
+        var camera = p.Camera is { } c && c.IsValid() ? c : null;
+
+        if (_bridge.EntityManager.FindEntityByHandle(drag.Pawn) is { IsValidEntity: true } pawn
+            && pawn.GetCameraService() is { } cameras)
         {
-            return;
+            var current = cameras.ViewEntityHandle;
+            var held    = camera is not null && current == camera.Handle;
+            var gone    = current.IsValid() && _bridge.EntityManager.FindEntityByHandle(current) is not { IsValidEntity: true };
+
+            if (held || gone)
+            {
+                cameras.ViewEntityHandle = HandsBack(drag.PreviousView, pawn, camera) ? drag.PreviousView : NoEntity;
+            }
         }
 
-        if (camera.Pawn?.GetCameraService() is { } cameras && cameras.ViewEntityHandle == camera.Handle)
+        if (camera is not null)
         {
-            cameras.ViewEntityHandle = drag.PreviousView;
+            camera.CameraMode = CustomCameraMode.Disabled;
         }
-
-        camera.CameraMode = CustomCameraMode.Disabled;
-        camera.Kill();
     }
+
+    /// <summary>
+    ///     Whether a view entity is worth handing back: one that still exists and is neither the player nor the
+    ///     drag camera.
+    /// </summary>
+    private bool HandsBack(CEntityHandle<IBaseEntity> view, IBasePlayerPawn pawn, ICustomPlayerCamera? camera)
+        => view.IsValid()
+           && _bridge.EntityManager.FindEntityByHandle(view) is { IsValidEntity: true } entity
+           && entity.Index != pawn.Index
+           && (camera is null || entity.Index != camera.Index);
 
     /// <summary>
     ///     The glide lives on both the panel and its wrapper, since each carries part of the offset.

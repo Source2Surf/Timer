@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer;
+using Source2Surf.Timer.Modules;
 using Source2Surf.Timer.Modules.Hud;
 using Source2Surf.Timer.Shared.Models.Replay;
 using Xunit;
@@ -16,32 +18,137 @@ namespace Timer.Tests;
 public sealed class HudFormatTests
 {
     [Theory]
-    [InlineData(0f, "00:00:00")]
-    [InlineData(10f, "00:10:00")]
-    [InlineData(65.5f, "01:05:50")]
-    [InlineData(14.203125f, "00:14:20")]     // truncated, like every timer
-    [InlineData(3723.456f, "01:02:03:45")]   // hours only past an hour
-    [InlineData(-5f, "00:00:00")]
-    public void FormatsTimesAsMinutesSecondsCentiseconds(float seconds, string expected)
+    [InlineData(0f, "0.000")]
+    [InlineData(10f, "10.000")]
+    [InlineData(14.203125f, "14.203")]       // truncated, like every timer
+    [InlineData(65.5f, "01:05.500")]         // minutes once there are any
+    [InlineData(600f, "10:00.000")]
+    [InlineData(3723.456f, "01:02:03.456")]  // hours only past an hour
+    [InlineData(-5f, "0.000")]               // the HUD never shows a negative time
+    public void FormatsTimesTheWayTheTimerDoes(float seconds, string expected)
         => Assert.Equal(expected, HudFormat.FormatTime(seconds));
 
     [Fact]
     public void DifferencesAgreeWithTheTimesOnScreen()
     {
-        // 00:30:00 against 00:14:20 must read 15:80, not the 15:79 raw seconds would give.
-        var diff = HudFormat.DiffTime(30f, 14.203125f);
+        // 30.000 against 14.203 must read 15.797, not the 15.796 the raw 15.796875 seconds would show.
+        var diff = HudFormat.DiffMillis(30f, 14.203125f);
 
-        Assert.Equal("+00:15:80", HudFormat.FormatDiff(diff));
-        Assert.Equal("-00:15:80", HudFormat.FormatDiff(-diff));
+        Assert.Equal(15797, diff);
+        Assert.Equal("+15.797", HudFormat.FormatDiff(diff));
+        Assert.Equal("-15.797", HudFormat.FormatDiff(-diff));
+        Assert.Equal("+01:02.030", HudFormat.FormatDiff(62030));
+        Assert.Equal("+0.000", HudFormat.FormatDiff(0));
+    }
+
+    [Theory]
+    [InlineData(5.123f, true, "5.123")]
+    [InlineData(5.19f, false, "5.1")]           // tenths, truncated
+    [InlineData(65.55f, false, "01:05.5")]
+    [InlineData(-1.5f, true, "-1.500")]         // chat deltas keep their sign
+    [InlineData(-0.0001f, true, "0.000")]       // but not on a time that shows as zero
+    [InlineData(7322.5f, false, "02:02:02.5")]
+    [InlineData(36000f, true, "10:00:00.000")]
+    [InlineData(float.NaN, true, "0.000")]
+    public void UtilsFormatsTimesThatGrowWithThem(float seconds, bool precise, string expected)
+        => Assert.Equal(expected, Utils.FormatTime(seconds, precise));
+
+    [Theory]
+    [InlineData(null, 0, 0, 1, "SR")]
+    [InlineData(null, 0, 3, 4, "Stage 3 #4")]
+    [InlineData(null, 2, 0, 1, "Bonus 2 SR")]
+    [InlineData("Sideways", 1, 0, 12, "Sideways Bonus 1 #12")]
+    [InlineData(null, 0, 0, 0, "Run")]
+    [InlineData(null, 0, 2, 0, "Stage 2 Run")]
+    public void TagsAReplayByStyleTrackStageAndRank(string? style, int track, int stage, int rank, string expected)
+        => Assert.Equal(expected, HudFormat.ReplayTag(HudTr.English, style, track, stage, rank));
+
+    [Theory]
+    [InlineData("aoba", 1, false, "aoba's SR")]
+    [InlineData("tofu", 4, false, "tofu's #4")]
+    [InlineData("tofu", 4, true, "your run")]
+    [InlineData("mizu", 0, false, "mizu's run")]
+    public void SaysWhoseRunItIs(string name, int rank, bool you, string expected)
+        => Assert.Equal(expected, HudFormat.Whose(HudTr.English, name, rank, you));
+
+    [Theory]
+    [InlineData(0f, "0 min")]
+    [InlineData(12 * 60 + 59f, "12 min")]
+    [InlineData(3 * 3600 + 12 * 60f, "3 h 12 min")]
+    [InlineData(96 * 3600 + 1800f, "96 h")]
+    [InlineData(1240 * 3600f, "1,240 h")]
+    [InlineData(float.NaN, "0 min")]
+    public void SaysHowLongWasPlayed(float seconds, string expected)
+        => Assert.Equal(expected, HudFormat.Duration(HudTr.English, seconds));
+
+    [Theory]
+    [InlineData(41, 212, "of 212 · 19%")]
+    [InlineData(211, 212, "of 212 · 99%")]
+    [InlineData(5, 2427, "of 2,427 · 0%")]
+    [InlineData(0, 0, "of 0")]
+    public void SaysHowMuchOfTheTotalIsDone(int done, int total, string expected)
+        => Assert.Equal(expected, HudFormat.OfTotal(HudTr.English, done, total));
+
+    [Fact]
+    public void NamesYourOwnRunsByTheirTime()
+        => Assert.Equal("your 31.200 run", HudFormat.OwnRun(HudTr.English, 31.2f));
+
+    [Theory]
+    [InlineData(20, "Just now")]
+    [InlineData(5 * 60, "5 min ago")]
+    [InlineData(3 * 3600 + 59 * 60, "3 h ago")]
+    [InlineData(30 * 3600, "1 day ago")]
+    [InlineData(5 * 86400, "5 days ago")]
+    [InlineData(40 * 86400, "2026-08-23")]
+    public void SaysHowLongAgoARunWasSet(int secondsAgo, string expected)
+    {
+        var now = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+
+        Assert.Equal(expected, HudFormat.Ago(HudTr.English, now.AddSeconds(-secondsAgo), now));
+    }
+
+    [Theory]
+    [InlineData(0.5f, "0.5×")]
+    [InlineData(1f, "1×")]
+    [InlineData(2f, "2×")]
+    public void TagsPlaybackSpeed(float speed, string expected)
+        => Assert.Equal(expected, HudFormat.SpeedTag(speed));
+
+    [Theory]
+    [InlineData(0f, 30f, 0)]
+    [InlineData(15f, 30f, 25)]
+    [InlineData(30f, 30f, 50)]
+    [InlineData(31f, 30f, 50)]
+    [InlineData(5f, 0f, 0)]
+    [InlineData(float.NaN, 30f, 0)]
+    public void StepsProgressInTwoPercents(float elapsed, float total, int expected)
+        => Assert.Equal(expected, HudFormat.ProgressStep(elapsed, total));
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(8, 1)]
+    [InlineData(9, 2)]
+    [InlineData(23, 3)]
+    public void CountsPagesOfEight(int count, int expected)
+        => Assert.Equal(expected, HudFormat.PageCount(count, 8));
+
+    [Fact]
+    public void ReplayTimeStartsWhereTheRunDoes()
+    {
+        // 64 pre-run frames, then the run: the bot at frame 64 is at 00:00:00.
+        Assert.Equal(0f, HudFormat.ReplayElapsed(10, 64, 1000));
+        Assert.Equal(0f, HudFormat.ReplayElapsed(64, 64, 1000));
+        Assert.Equal(1f, HudFormat.ReplayElapsed(128, 64, 1000));
+        Assert.Equal(HudFormat.ReplayElapsed(1000, 64, 1000), HudFormat.ReplayElapsed(1200, 64, 1000));
     }
 
     [Fact]
     public void NonFiniteAndHugeTimesNeitherThrowNorOverflow()
     {
-        Assert.Equal(0, HudFormat.Centis(float.NaN));
-        Assert.Equal(0, HudFormat.Centis(float.PositiveInfinity));
+        Assert.Equal(0, Utils.Millis(float.NaN));
+        Assert.Equal(0, Utils.Millis(float.PositiveInfinity));
 
-        var huge = HudFormat.Centis(float.MaxValue);
+        var huge = Utils.Millis(float.MaxValue);
         Assert.True(huge > 0);
         Assert.NotEmpty(HudFormat.FormatTime(float.MaxValue));
     }
@@ -154,18 +261,23 @@ public sealed class HudOptionsTests
     }
 
     [Fact]
-    public void LiveDifferenceIsGreyedOutUnlessComparingAgainstTheServerRecord()
+    public void LiveDifferenceIsGreyedOutOnlyWithoutAComparison()
     {
         var settings = HudOptions.NewSettings();
 
-        var (choice, disabled) = HudOptions.Display(HudOptions.Live, settings);
-        Assert.True(disabled);
-        Assert.Equal("Off", choice.Label);
+        // Against your PB (the default) or the server record, it follows its switch.
+        foreach (var compare in new[] { HudOptions.ComparePersonalBest, HudOptions.CompareServerRecord })
+        {
+            settings[HudOptions.Compare.Index] = compare;
+            var (choice, disabled) = HudOptions.Display(HudOptions.Live, settings);
+            Assert.False(disabled);
+            Assert.Equal("On", choice.Label);
+        }
 
-        settings[HudOptions.Compare.Index] = HudOptions.CompareServerRecord;
-        (choice, disabled) = HudOptions.Display(HudOptions.Live, settings);
-        Assert.False(disabled);
-        Assert.Equal("On", choice.Label);
+        settings[HudOptions.Compare.Index] = HudOptions.CompareOff;
+        var (off, greyed) = HudOptions.Display(HudOptions.Live, settings);
+        Assert.True(greyed);
+        Assert.Equal("Off", off.Label);
     }
 
     [Fact]
@@ -208,12 +320,12 @@ public sealed class HudPlayerTests
 
         for (var i = 1; i <= 10; i++)
         {
-            p.AddSplit(new HudSplit($"CP {i}", i, null, null, i, null, null));
+            p.AddSplit(new HudSplit(false, i, i, null, null, i, null, null));
         }
 
         Assert.Equal(HudPlayer.MaxSplits, p.Splits.Count);
-        Assert.Equal("CP 10", p.Splits[0].Name);
-        Assert.Equal("CP 3", p.Splits[^1].Name);
+        Assert.Equal(10, p.Splits[0].Number);
+        Assert.Equal(3, p.Splits[^1].Number);
         Assert.Equal(10, p.SplitSerial);
     }
 
@@ -221,7 +333,7 @@ public sealed class HudPlayerTests
     public void ANewAttemptClearsTheRunWithoutReplayingTheAnimation()
     {
         var p = new HudPlayer(new PlayerSlot(0), 0);
-        p.AddSplit(new HudSplit("Stage 1", 10, null, null, 10, null, null));
+        p.AddSplit(new HudSplit(true, 1, 10, null, null, 10, null, null));
         p.Finish  = new HudFinish(0, 30, null, null, null, 1000, null, null, false);
         p.Stopped = true;
 
@@ -397,6 +509,33 @@ public sealed class HudLayoutContractTests
             Assert.Contains(id, Ids);
         }
 
+        string[] replayMenu =
+        [
+            "RMenu", "RmTrackPrev", "RmTrackValue", "RmTrackNext", "RmStagePrev", "RmStageValue", "RmStageNext",
+            "RmStylePrev", "RmStyleValue", "RmStyleNext", "RmTabBoard", "RmTabBoardLabel", "RmTabRuns", "RmTabRunsLabel", "RmCount", "RmJumpWr", "RmJumpPb", "RmEmpty", "RmPagePrev", "RmPage", "RmPageNext",
+            "RmStatus", "RmNow", "RmNowName", "RmNowTag", "RmNowTime", "RmBarFill", "RmCtl", "RmBack", "RmPause",
+            "RmPauseLabel", "RmFwd", "RmSpeed", "RmSpeedLabel", "RmStop", "RmAlong", "RmAlongText", "RmLeave",
+            "RmClose", "RmWatch", "RmWatchLabel",
+        ];
+
+        string[] profile =
+        [
+            "PfMenu", "PfName", "PfRank", "PfJoined", "PfStylePrev", "PfStyleValue", "PfStyleNext", "PfOverall",
+            "PfOverallTitle", "PfMaps", "PfMapsOf", "PfBonuses", "PfBonusesOf", "PfRecords", "PfHere", "PfPlays",
+            "PfTrackPrev", "PfTrackValue", "PfTrackNext", "PfPb", "PfPbRank", "PfStages", "PfClose",
+        ];
+
+        foreach (var id in profile.Concat(HudModule.ProfileStageIds).Concat(HudModule.ProfileStageNameIds).Concat(HudModule.ProfileStageTimeIds))
+        {
+            Assert.Contains(id, Ids);
+        }
+
+        foreach (var id in replayMenu.Concat(HudModule.ReplayRowIds).Concat(HudModule.ReplayRankIds).Concat(HudModule.ReplayNameIds)
+                                     .Concat(HudModule.ReplayTimeIds).Concat(HudModule.ReplayGapIds))
+        {
+            Assert.Contains(id, Ids);
+        }
+
         for (var i = 0; i < HudPlayer.MaxSplits; i++)
         {
             Assert.Contains($"Split{i}", Ids);
@@ -412,9 +551,12 @@ public sealed class HudLayoutContractTests
         var classes = new List<string>
         {
             "Hidden", "on", "off", "disabled", "active", "placed", "dragging", "editing", "smooth", "moving", "shown",
-            "in-zone", "gain", "loss", "gap", "blank", "stopped", "paused", "practice", "replay", "finished", "faster", "slower",
-            "nofade", "shift-a", "shift-b", "enter-a", "enter-b", "Closed",
+            "gain", "loss", "gap", "blank", "stopped", "paused", "practice", "replay", "finished", "faster", "slower",
+            "nofade", "shift-a", "shift-b", "enter-a", "enter-b", "Closed", "sel", "you", "now", "wr", "warn", "lit", "none",
         };
+
+        // The replay menu's progress bar, in 2% steps.
+        classes.AddRange(Enumerable.Range(0, 51).Select(i => $"w-{i}"));
 
         classes.AddRange(HudOptions.All.SelectMany(o => o.Choices).Select(c => c.Class).OfType<string>());
 
@@ -441,6 +583,11 @@ public sealed class HudReplayKeysTests
         public int                            CurrentFrame { get; init; }
         public EReplayBotStatus               Status       { get; init; } = EReplayBotStatus.Running;
         public EReplayBotType                 Type         { get; init; }
+        public int                            Rank         { get; init; } = 1;
+        public long                           RunId        { get; init; }
+        public bool                           Paused       { get; init; }
+        public float                          Speed        { get; init; } = 1f;
+        public PlayerSlot?                    Owner        { get; init; }
     }
 
     private static ReplayFrameData Frame(float yaw, UserCommandButtons buttons = 0)
@@ -493,6 +640,111 @@ public sealed class HudReplayKeysTests
     }
 }
 
+// The HUD's texts against the shipped locale file, and the translator's fallbacks.
+public sealed class HudLocaleTests
+{
+    private static readonly Dictionary<string, Dictionary<string, string>> Locale
+        = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(File.ReadAllText(HudAssets.Locale()))!;
+
+    private static string Placeholders(string text)
+        => string.Join(",", Regex.Matches(text, @"{(d+)}").Select(m => m.Groups[1].Value).Order());
+
+    [Fact]
+    public void EveryHudTextIsInTheLocaleFileWithItsEnglish()
+    {
+        Assert.Equal(HudTexts.All.Count, HudTexts.All.Select(t => t.Key).Distinct().Count());
+
+        foreach (var text in HudTexts.All)
+        {
+            Assert.True(Locale.TryGetValue(text.Key, out var translations), text.Key);
+            Assert.Equal(text.English, translations["en-us"]);
+        }
+
+        Assert.Empty(Locale.Keys.Except(HudTexts.All.Select(t => t.Key)));
+    }
+
+    [Fact]
+    public void EveryTranslationKeepsThePlaceholders()
+    {
+        foreach (var (key, translations) in Locale)
+        {
+            foreach (var (language, text) in translations)
+            {
+                Assert.True(Placeholders(text) == Placeholders(translations["en-us"]), $"{key} ({language})");
+            }
+        }
+    }
+
+    // How Timer.Localization gets templates out of LocalizerManager, which only formats.
+    [Fact]
+    public void TemplatesFormattedWithTheirOwnPlaceholdersComeBackUnchanged()
+    {
+        foreach (var translations in Locale.Values)
+        {
+            foreach (var text in translations.Values)
+            {
+                Assert.Equal(text, string.Format(System.Globalization.CultureInfo.InvariantCulture, text, "{0}", "{1}", "{2}", "{3}", "{4}", "{5}"));
+            }
+        }
+    }
+
+    [Fact]
+    public void EveryFixedLabelIsSetByThePlugin()
+    {
+        var xml    = File.ReadAllText(HudAssets.Layout());
+        var labels = HudLabels.All.ToList();
+
+        Assert.Equal(labels.Count, labels.Select(l => l.Id).Distinct().Count());
+
+        foreach (var (id, _) in labels)
+        {
+            Assert.Matches($"<Label id=\"{id}\"[^>]* text=\"{Regex.Escape("{s:text}")}\"", xml);
+        }
+
+        // Anything else a label shows comes from the plugin, or reads the same in every language.
+        string[] same = ["W", "A", "S", "D", "−5s", "+5s"];
+        var literal = Regex.Matches(xml, "<Label[^>]* text=\"([^\"]*)\"")
+                           .Select(m => Regex.Replace(m.Groups[1].Value, @"{[sg]:[a-z_:]+}", ""))
+                           .Where(t => t.Any(char.IsLetter) && !same.Contains(t));
+
+        Assert.Empty(literal);
+    }
+
+    // custom_hud refuses the whole layout over one: "Layout contains disallowed attribute html for panel type 'Label'".
+    [Fact]
+    public void TheLayoutUsesNoHtmlLabels()
+        => Assert.DoesNotMatch(@"<Label[^>]* html=", File.ReadAllText(HudAssets.Layout()));
+
+    [Theory]
+    [InlineData("of 2 · 50%", false)]
+    [InlineData("共 2 · 50%", true)]
+    [InlineData("10 次游玩", true)]
+    [InlineData("#3 of 12", false)]
+    [InlineData("", false)]
+    public void TellsNotesInAFallbackScript(string note, bool cjk)
+        => Assert.Equal(cjk, HudFormat.HasCjk(note));
+
+    [Theory]
+    [InlineData("1", "of 2 · 50%", 0)]         // English: nothing to fix
+    [InlineData("1", "共 2 · 50%", 2)]         // a CJK note sits low after a plain number
+    [InlineData("2 小时 59 分钟", "13 次游玩", 1)] // and a little low after CJK text
+    [InlineData("无", "", 0)]
+    public void LiftsACjkNoteOntoItsValue(string value, string note, int lift)
+        => Assert.Equal(lift, HudFormat.NoteLift(value, note));
+
+    [Fact]
+    public void TheTranslatorFallsBackToEnglish()
+    {
+        var chinese = new HudTr(key => key == HudTexts.LineSpeed.Key ? "速度：{0}" : null);
+        Assert.Equal("速度：25", chinese.Format(HudTexts.LineSpeed, 25));
+        Assert.Equal("Sync: 91.80%", chinese.Format(HudTexts.LineSync, "91.80")); // no translation
+
+        var broken = new HudTr(_ => "{3}");
+        Assert.Equal("Speed: 25", broken.Format(HudTexts.LineSpeed, 25)); // placeholders that don't fit
+        Assert.Equal("Speed: 25", HudTr.English.Format(HudTexts.LineSpeed, 25));
+    }
+}
+
 internal static class HudAssets
 {
     private static readonly string Root = FindRoot();
@@ -502,6 +754,9 @@ internal static class HudAssets
 
     public static string Style(string file)
         => Path.Combine(Root, "panorama", "styles", "custom_game", "surftimer", file);
+
+    public static string Locale()
+        => Path.Combine(Root, "Plugin", "Timer.Localization", "locales", "surftimer.json");
 
     // The repository root: the first directory up from the test binaries that holds the panorama folder.
     private static string FindRoot()

@@ -48,41 +48,72 @@ internal static class Utils
         }
     }
 
+    /// <summary>
+    ///     The milliseconds a time shows: truncated, like every timer, and safe for any float (0 when not finite).
+    /// </summary>
+    public static long Millis(float seconds)
+        => float.IsFinite(seconds) ? (long) Math.Clamp(Math.Floor((seconds * 1000d) + 1e-6), -1e15, 1e15) : 0;
+
+    /// <summary>
+    ///     A time that grows with it: "5.123", then "01:05.500", then "01:02:03.450". Truncated to milliseconds when
+    ///     precise, else to tenths ("5.1").
+    /// </summary>
     public static void FormatTime(ref Utf16ValueStringBuilder sb, float totalSeconds, bool precise = false)
     {
-        var negative = totalSeconds < 0;
-        var total    = Math.Abs(totalSeconds);
+        var ms = Millis(MathF.Abs(totalSeconds));
 
-        var totalSecondsInt = (int) total;
-        var hours           = totalSecondsInt / 3600;
-        var minutes         = (totalSecondsInt / 60) % 60;
-        var seconds         = totalSecondsInt % 60;
-
-        var fractional = total - totalSecondsInt;
-        var ms         = precise ? (int) (fractional * 1000) : (int) (fractional * 10);
-
-        if (negative) sb.Append('-');
-
-        if (hours > 0)
+        if (totalSeconds < 0 && ms > 0)
         {
-            sb.Append(hours);
-            sb.Append(':');
+            sb.Append('-');
         }
 
-        AppendPadded2(ref sb, minutes);
-
-        sb.Append(':');
-        AppendPadded2(ref sb, seconds);
-        sb.Append('.');
-
-        if (precise)
-            AppendPadded3(ref sb, ms);
-        else
-            sb.Append((char) ('0' + ms));
+        AppendMillis(ref sb, ms, precise);
     }
 
     /// <summary>
-    ///     Appends a chat-colored (green) formatted time: <c>{green}MM:SS.mmm{white}</c>.
+    ///     A non-negative time in whole milliseconds, as <see cref="FormatTime(ref Utf16ValueStringBuilder, float, bool)" />
+    ///     shows it.
+    /// </summary>
+    public static void AppendMillis(ref Utf16ValueStringBuilder sb, long ms, bool precise = true)
+    {
+        var seconds = ms / 1000;
+        var hours   = seconds / 3600;
+        var minutes = (seconds / 60) % 60;
+
+        if (hours > 0)
+        {
+            if (hours < 10)
+            {
+                sb.Append('0');
+            }
+
+            sb.Append(hours);
+            sb.Append(':');
+            AppendPadded2(ref sb, (int) minutes);
+            sb.Append(':');
+            AppendPadded2(ref sb, (int) (seconds % 60));
+        }
+        else if (minutes > 0)
+        {
+            AppendPadded2(ref sb, (int) minutes);
+            sb.Append(':');
+            AppendPadded2(ref sb, (int) (seconds % 60));
+        }
+        else
+        {
+            sb.Append(seconds);
+        }
+
+        sb.Append('.');
+
+        if (precise)
+            AppendPadded3(ref sb, (int) (ms % 1000));
+        else
+            sb.Append((char) ('0' + (ms % 1000 / 100)));
+    }
+
+    /// <summary>
+    ///     Appends a chat-colored (green) formatted time: <c>{green}01:05.500{white}</c>.
     /// </summary>
     public static void AppendColoredTime(ref Utf16ValueStringBuilder sb, float time, bool precise = true)
     {

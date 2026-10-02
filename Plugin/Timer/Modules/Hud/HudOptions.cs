@@ -124,11 +124,12 @@ internal static class HudOptions
     public const int CompareOff          = 2;
 
     /// <summary>
-    ///     The position-based difference against the server record's replay, continuously while running.
+    ///     The position-based difference against the replay of what the time is compared with (the player's PB, or
+    ///     the server record), for the style and track they're on, continuously while running.
     /// </summary>
     public static readonly HudOption Live = new ("OptLive", OnOff)
     {
-        Needs = settings => settings[Compare.Index] == CompareServerRecord,
+        Needs = settings => settings[Compare.Index] != CompareOff,
     };
 
     // Speed tab: the measure is shared by the timer's speed line and center speed; the colours are center speed's
@@ -210,18 +211,18 @@ internal static class HudLines
     public static readonly string[] RowValues = Ids("Row{0}Value");
     public static readonly string[] RowToggle = Ids("Row{0}Toggle");
 
-    public static string Name(HudLine line)
+    public static HudText Name(HudLine line)
         => line switch
         {
-            HudLine.Zone    => "Zone",
-            HudLine.Gap     => "Blank line",
-            HudLine.Mode    => "Mode",
-            HudLine.Speed   => "Speed",
-            HudLine.Start   => "Start / end speed",
-            HudLine.Sync    => "Sync",
-            HudLine.Jumps   => "Jumps",
-            HudLine.Strafes => "Strafes",
-            _               => line.ToString(),
+            HudLine.Zone    => HudTexts.RowZone,
+            HudLine.Gap     => HudTexts.RowBlank,
+            HudLine.Mode    => HudTexts.RowMode,
+            HudLine.Speed   => HudTexts.RowSpeed,
+            HudLine.Start   => HudTexts.RowStart,
+            HudLine.Sync    => HudTexts.RowSync,
+            HudLine.Jumps   => HudTexts.RowJumps,
+            HudLine.Strafes => HudTexts.RowStrafes,
+            _               => throw new ArgumentOutOfRangeException(nameof(line), line, null),
         };
 
     /// <summary>
@@ -301,7 +302,7 @@ internal sealed record HudTargetDef(
     (float X, float Y) Start,
     (float W, float H) Size,
     bool            Offscreen,
-    string          Name,
+    HudText         Name,
     string          SaveKey);
 
 internal static class HudTargets
@@ -312,12 +313,12 @@ internal static class HudTargets
 
     private static readonly HudTargetDef[] Defs =
     [
-        new ("Menu", "MenuPos", (-39, 0), (20, 58), false, "menu", "menu"),
-        new ("RunPanel", "RunPos", (0, 24), (15, 18), true, "timer", "run"),
-        new ("CSpeedPanel", "CSpeedPos", (0, 8), (6, 5), true, "center speed", "cspeed"),
-        new ("InfoPanel", "InfoPos", (-46, -47), (10, 6), true, "records", "info"),
-        new ("SplitsPanel", "SplitsPos", (-40, -34), (20, 19), true, "splits", "splits"),
-        new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, "keys", "keys"),
+        new ("Menu", "MenuPos", (-39, 0), (20, 58), false, HudTexts.TargetMenu, "menu"),
+        new ("RunPanel", "RunPos", (0, 24), (15, 18), true, HudTexts.TargetRun, "run"),
+        new ("CSpeedPanel", "CSpeedPos", (0, 8), (6, 5), true, HudTexts.TargetCSpeed, "cspeed"),
+        new ("InfoPanel", "InfoPos", (-46, -47), (10, 6), true, HudTexts.TargetInfo, "info"),
+        new ("SplitsPanel", "SplitsPos", (-40, -34), (20, 19), true, HudTexts.TargetSplits, "splits"),
+        new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, HudTexts.TargetKeys, "keys"),
     ];
 
     /// <summary>
