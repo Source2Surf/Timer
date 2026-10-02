@@ -16,19 +16,24 @@
  */
 
 using System;
-using Cysharp.Text;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Sharp.Shared;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.HookParams;
+using Sharp.Shared.Managers;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Player;
+using Source2Surf.Timer.Modules.Hud;
 using Source2Surf.Timer.Modules.Practice;
-using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Shared;
+using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
 using Source2Surf.Timer.Shared.Interfaces.Modules;
-using Source2Surf.Timer.Shared.Models.Replay;
 using Source2Surf.Timer.Shared.Models.Timer;
 using Source2Surf.Timer.Shared.Models.Zone;
 
@@ -38,100 +43,286 @@ internal interface IHudModule
 {
 }
 
-internal class HudModule : IModule, IHudModule, ITimerModuleListener, IZoneModuleListener
+/// <summary>
+///     The timer HUD: a Panorama layout (panorama/layout/custom_game/surftimer/hud.xml, which clients get from the
+///     server's workshop addon) on a <c>custom_hud_layout</c> entity of each player's own, networked only to them.
+///     The entity's whole state is that player's, so every value and class is set on it directly, and nothing one
+///     player's HUD does costs anyone else bandwidth.
+/// </summary>
+internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZoneModuleListener, IPlayerManagerListener
 {
-    private const float HudUpdateInterval = 0.10f;
+    private const float HudUpdateInterval   = 0.10f; // seconds between a player's HUD refreshes
+    private const float SyncInterval        = 0.5f;  // sync barely moves, so it refreshes less often
+    private const float LayoutRetryInterval = 5f;    // after the layout entity failed to spawn
+    private const float SaveDelay           = 1f;    // settings are written this long after the last change
 
-    private readonly InterfaceBridge _bridge;
+    private const string DefaultLayout = "panorama/layout/custom_game/surftimer/hud.vxml_c"; // the compiled resource name
 
-    private readonly ITimerModule    _timerModule;
-    private readonly IReplayModule   _replayModule;
-    private readonly IRecordModule   _recordModule;
-    private readonly IZoneModule     _zoneModule;
-    private readonly IPracticeModule _practiceModule;
+    private readonly InterfaceBridge    _bridge;
+    private readonly IPanoramaManager   _panorama;
+    private readonly ITransmitManager   _transmit;
+    private readonly ITimerModule       _timerModule;
+    private readonly IReplayModule      _replayModule;
+    private readonly IRecordModule      _recordModule;
+    private readonly IZoneModule        _zoneModule;
+    private readonly IStyleModule       _styleModule;
+    private readonly IPracticeModule    _practiceModule;
+    private readonly IPlayerManager     _playerManager;
+    private readonly ICommandManager    _commandManager;
+    private readonly IRequestManager    _request;
+    private readonly ILogger<HudModule> _logger;
+    private readonly HudSettingsStore   _store;
 
-    private readonly float[] _nextHudUpdateTime = new float[PlayerSlot.MaxPlayerCount];
+    private readonly HudPlayer?[] _players = new HudPlayer?[PlayerSlot.MaxPlayerCount];
 
-    // Cached WRCP diff from the last completed stage, shown inline after the main timer
-    private readonly float?[] _lastStageDelta = new float?[PlayerSlot.MaxPlayerCount];
+    // The keys panel's turn arrows, sampled every tick for every pawn (bots too, for spectated replays).
+    private readonly float[] _keyYaw = new float[PlayerSlot.MaxPlayerCount];
+    private readonly int[]   _turn   = new int[PlayerSlot.MaxPlayerCount]; // 1 turning left, -1 right, 0 not turning
+    private readonly float[] _turnAt = new float[PlayerSlot.MaxPlayerCount];
 
     // ReSharper disable InconsistentNaming
-    private readonly IGameEvent show_survival_respawn_status_event;
+    private readonly IConVar timer_hud_layout;
 
     // ReSharper restore InconsistentNaming
 
-    public HudModule(InterfaceBridge bridge,
-                     ITimerModule    timerModule,
-                     IReplayModule   replayModule,
-                     IRecordModule   recordModule,
-                     IZoneModule     zoneModule,
-                     IPracticeModule practiceModule)
+    public HudModule(InterfaceBridge    bridge,
+                     ISharedSystem      shared,
+                     ITimerModule       timerModule,
+                     IReplayModule      replayModule,
+                     IRecordModule      recordModule,
+                     IZoneModule        zoneModule,
+                     IStyleModule       styleModule,
+                     IPracticeModule    practiceModule,
+                     IPlayerManager     playerManager,
+                     ICommandManager    commandManager,
+                     IRequestManager    request,
+                     ILogger<HudModule> logger)
     {
         _bridge         = bridge;
+        _panorama       = shared.GetPanoramaManager();
+        _transmit       = shared.GetTransmitManager();
         _timerModule    = timerModule;
         _replayModule   = replayModule;
         _recordModule   = recordModule;
         _zoneModule     = zoneModule;
+        _styleModule    = styleModule;
         _practiceModule = practiceModule;
+        _playerManager  = playerManager;
+        _commandManager = commandManager;
+        _request        = request;
+        _logger         = logger;
+        _store          = new HudSettingsStore(bridge.TimerDataPath, logger);
 
-        show_survival_respawn_status_event = bridge.EventManager.CreateEvent("show_survival_respawn_status", true)
-                                             ?? throw new
-                                                 NullReferenceException("Failed to create show_survival_respawn_status event, this should never happen?!?!?!");
-
-        show_survival_respawn_status_event.SetInt("duration", 1);
-        show_survival_respawn_status_event.SetInt("userid", -1);
+        timer_hud_layout = bridge.ConVarManager.CreateConVar("timer_hud_layout",
+                                                             DefaultLayout,
+                                                             "Panorama layout of the timer HUD. Clients must have it mounted (workshop addon).")!;
     }
 
     public bool Init()
     {
+        _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerRunCommand.InstallHookPost(OnPlayerRunCommandPost);
-
         _bridge.ModSharp.InstallGameFrameHook(null, OnGameFramePost);
+        _panorama.InstallClickListener(OnHudClicked);
 
         _timerModule.RegisterListener(this);
         _zoneModule.RegisterListener(this);
+        _playerManager.RegisterListener(this);
+
+        _commandManager.AddClientChatCommand("hud", OnCommandHud);
+        _commandManager.AddClientChatCommand("showkeys", OnCommandShowKeys);
 
         return true;
     }
 
     public void Shutdown()
     {
-        show_survival_respawn_status_event.Dispose();
         _timerModule.UnregisterListener(this);
         _zoneModule.UnregisterListener(this);
+        _playerManager.UnregisterListener(this);
 
+        _panorama.RemoveClickListener(OnHudClicked);
+        _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPost(OnPlayerRunCommandPost);
         _bridge.ModSharp.RemoveGameFrameHook(null, OnGameFramePost);
-    }
 
-    public void OnPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
-    {
-        _lastStageDelta[controller.PlayerSlot] = null;
-    }
-
-    public void OnZoneStartTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
-    {
-        if (info.ZoneType == EZoneType.Start)
+        foreach (var p in _players)
         {
-            _lastStageDelta[controller.PlayerSlot] = null;
+            if (p is null)
+            {
+                continue;
+            }
+
+            FlushSettings(p, true);
+            RemoveEntities(p);
+        }
+
+        Array.Clear(_players);
+    }
+
+    // ------------------------------------------------------------------ players
+
+    public void OnClientPutInServer(PlayerSlot slot)
+    {
+        if (_bridge.ClientManager.GetGameClient(slot) is not { IsFakeClient: false } client)
+        {
+            return;
+        }
+
+        // Put in again (a map change), or a previous occupant's state if its disconnect went unseen.
+        if (_players[slot] is { } previous)
+        {
+            FlushSettings(previous);
+            RemoveEntities(previous);
+        }
+
+        var p = new HudPlayer(slot, _bridge.GlobalVars.CurTime);
+        _players[slot] = p;
+
+        LoadSettings(p, client.SteamId);
+    }
+
+    public void OnClientDisconnected(PlayerSlot slot)
+    {
+        if (_players[slot] is not { } p)
+        {
+            return;
+        }
+
+        FlushSettings(p);
+        RemoveEntities(p);
+        _players[slot] = null;
+    }
+
+    // The SteamID can be missing when the player is put in the server; this is the second chance.
+    public void OnClientInfoLoaded(SteamID steamId)
+    {
+        if (_bridge.ClientManager.GetGameClient(steamId) is { } client
+            && _players[client.Slot] is { SettingsLoaded: false } p)
+        {
+            LoadSettings(p, steamId);
         }
     }
 
-    public void OnPlayerStageTimerFinish(IPlayerController controller, IPlayerPawn pawn, IStageTimerInfo stageTimerInfo)
+    private void LoadSettings(HudPlayer p, SteamID steamId)
     {
-        var stage = stageTimerInfo.Stage;
+        var id = (ulong) steamId;
 
-        if (_recordModule.GetWR(stageTimerInfo.Style, stageTimerInfo.Track, stage) is { } stageWr)
+        if (id == 0)
         {
-            _lastStageDelta[controller.PlayerSlot] = stageTimerInfo.Time - stageWr.Time;
+            return;
         }
-        else
+
+        p.SteamId        = id;
+        p.SettingsLoaded = true;
+
+        if (_store.Load(id) is not { } saved)
         {
-            _lastStageDelta[controller.PlayerSlot] = null;
+            return;
+        }
+
+        HudSettingsStore.Apply(saved, p);
+
+        foreach (var target in HudTargets.All)
+        {
+            ClampPosition(p, target);
+        }
+
+        p.MenuDirty = true;
+    }
+
+    private void MarkSettingsChanged(HudPlayer p)
+        => p.SaveAt = _bridge.GlobalVars.CurTime + SaveDelay;
+
+    private void FlushSettings(HudPlayer p, bool wait = false)
+    {
+        if (float.IsNaN(p.SaveAt))
+        {
+            return;
+        }
+
+        p.SaveAt = float.NaN;
+
+        if (p.SteamId != 0)
+        {
+            _store.Save(p.SteamId, HudSettingsStore.Capture(p), wait);
         }
     }
 
-    private void OnGameFramePost(bool arg1, bool arg2, bool arg3)
+    // ------------------------------------------------------------------ layout entity
+
+    private static ICustomHudLayout? GetLayout(HudPlayer p)
+        => p.Layout is { } layout && layout.IsValid() ? layout : null;
+
+    /// <summary>
+    ///     The player's own layout entity, spawned when missing: on joining, after a map change, or if anything
+    ///     removed it. Only its player receives it, and a fresh entity holds none of the HUD's values yet.
+    /// </summary>
+    private ICustomHudLayout? EnsureLayout(HudPlayer p, IPlayerController controller, float now)
+    {
+        if (GetLayout(p) is { } existing)
+        {
+            return existing;
+        }
+
+        if (now < p.NextLayoutAttempt && p.NextLayoutAttempt - now <= LayoutRetryInterval)
+        {
+            return null;
+        }
+
+        p.NextLayoutAttempt = now + LayoutRetryInterval;
+
+        if (_panorama.CreateLayout(timer_hud_layout.GetString(), $"timer_hud_{p.Slot}") is not { } layout)
+        {
+            _logger.LogWarning("Failed to spawn the HUD layout for slot {slot}", p.Slot);
+
+            return null;
+        }
+
+        // Hidden from everyone, then shown to its player.
+        _transmit.AddEntityHooks(layout, false);
+        _transmit.SetEntityState(layout.Index, controller.Index, true, -1);
+
+        p.Layout    = layout;
+        p.MenuDirty = true; // a new entity holds none of it yet
+        p.ForgetSent();
+
+        if (p.MenuOpen && p.Drag is null)
+        {
+            layout.SetInputCaptureEnabled(p.Slot, true);
+        }
+
+        return layout;
+    }
+
+    /// <summary>
+    ///     Removes the entities the HUD spawned for the player: their layout, and a drag's camera.
+    /// </summary>
+    private static void RemoveEntities(HudPlayer? p)
+    {
+        if (p is null)
+        {
+            return;
+        }
+
+        if (p.Drag is { } drag)
+        {
+            UnfreezeView(drag);
+        }
+
+        if (GetLayout(p) is { } layout)
+        {
+            layout.SetInputCaptureEnabled(p.Slot, false);
+            layout.Kill();
+        }
+
+        p.Layout = null;
+        p.ForgetSent();
+    }
+
+    // ------------------------------------------------------------------ refresh
+
+    private void OnGameFramePost(bool simulating, bool firstTick, bool lastTick)
     {
         var gameRules = _bridge.GameRules;
 
@@ -139,419 +330,535 @@ internal class HudModule : IModule, IHudModule, ITimerModuleListener, IZoneModul
         {
             gameRules.IsGameRestart = gameRules.RestartRoundTime < _bridge.GlobalVars.CurTime;
         }
+
+        var now = _bridge.GlobalVars.CurTime;
+
+        foreach (var p in _players)
+        {
+            if (p is null)
+            {
+                continue;
+            }
+
+            // CurTime starts over on a map change, so a time further ahead than it could be is stale.
+            if (!float.IsNaN(p.SaveAt) && (now >= p.SaveAt || p.SaveAt - now > SaveDelay))
+            {
+                FlushSettings(p);
+            }
+
+            if (now < p.NextHudAt && p.NextHudAt - now <= HudUpdateInterval)
+            {
+                continue;
+            }
+
+            p.NextHudAt = now + HudUpdateInterval;
+            Refresh(p, now);
+        }
+    }
+
+    private void Refresh(HudPlayer p, float now)
+    {
+        // Only for a fully connected player, like ModSharp's transmit example: the data is ready by then.
+        if (!_bridge.TryGetController(p.Slot, out var controller)
+            || controller.ConnectedState != PlayerConnectedState.PlayerConnected)
+        {
+            return;
+        }
+
+        // A dead pawn stops running commands, so the run-command hook can't end its drag (and free the view): here.
+        if (p.Drag is not null && controller.GetPlayerPawn() is not { IsAlive: true })
+        {
+            EndDrag(p, DragEnd.Cancel); // refreshes
+
+            return;
+        }
+
+        TrackRun(p);
+
+        if (EnsureLayout(p, controller, now) is { } layout)
+        {
+            UpdateHud(p, layout, controller, now);
+        }
+    }
+
+    /// <summary>
+    ///     Applies a click or command straight away rather than on the next refresh.
+    /// </summary>
+    private void RefreshNow(HudPlayer p)
+        => Refresh(p, _bridge.GlobalVars.CurTime);
+
+    /// <summary>
+    ///     The timer stops silently (noclip, !stop, a skipped stage or checkpoint...), so a run that stopped short
+    ///     of the end is noticed here: stopped without a finish, and not by going back to the start.
+    /// </summary>
+    private void TrackRun(HudPlayer p)
+    {
+        if (_timerModule.GetTimerInfo(p.Slot) is not { } info)
+        {
+            return;
+        }
+
+        var status = info.Status;
+
+        if (p.LastStatus != ETimerStatus.Stopped
+            && status == ETimerStatus.Stopped
+            && p.Finish is null
+            && p.ZoneType != EZoneType.Start)
+        {
+            p.Stopped = true;
+        }
+
+        p.LastStatus = status;
+    }
+
+    // While a drag holds the player's view still, their client still turns the view it sends: that moves the panel,
+    // and is then taken back out of the command, so the pawn keeps facing where it did and spectators don't see it spin.
+    private unsafe HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      param,
+                                                                         HookReturnValue<EmptyHookReturn> ret)
+    {
+        if (_players[param.Client.Slot] is not { Drag: { } drag })
+        {
+            return new ();
+        }
+
+        var cmd = param.BaseUserCmd;
+
+        if (cmd == null || cmd->ViewAngles == null)
+        {
+            return new ();
+        }
+
+        drag.Aim = cmd->ViewAngles->Value;
+
+        if (drag.Camera is not null)
+        {
+            cmd->ViewAngles->Value = drag.View;
+        }
+
+        return new ();
     }
 
     private void OnPlayerRunCommandPost(IPlayerRunCommandHookParams param, HookReturnValue<EmptyHookReturn> ret)
     {
-        var client = param.Client;
-
-        if (client.IsFakeClient)
-        {
-            return;
-        }
-
-        var slot = client.Slot;
-        var now  = _bridge.GlobalVars.CurTime;
-        var next = _nextHudUpdateTime[slot];
-
-        // Skip while within one interval of the scheduled update; if `next` is further
-        // ahead than one interval it is stale (CurTime reset on map change) — fall
-        // through and re-anchor.
-        if (now < next && next - now <= HudUpdateInterval)
-        {
-            return;
-        }
-
-        _nextHudUpdateTime[slot] = now + HudUpdateInterval;
-
+        var slot = param.Client.Slot;
         var pawn = param.Pawn;
+        var now  = _bridge.GlobalVars.CurTime;
 
-        if (pawn.AsObserver() is { } observer && observer.GetObserverService() is { } observerService)
-        {
-            if (observerService.ObserverMode is ObserverMode.None or ObserverMode.Roaming)
-            {
-                return;
-            }
+        TrackTurn(slot, pawn.GetEyeAngles().Y, now);
 
-            var observerTarget = observerService.ObserverTarget;
-
-            if (!observerTarget.IsValid()
-                || _bridge.EntityManager.FindEntityByHandle(observerTarget)?.AsPlayerPawn() is not { } targetPawn
-                || targetPawn.GetController() is not { } targetController)
-            {
-                return;
-            }
-
-            if (targetController.IsFakeClient)
-            {
-                if (_replayModule.GetReplayBotData(targetController.PlayerSlot) is not ReplayBotData replayData)
-                {
-                    return;
-                }
-
-                PrintReplayHud(client, targetPawn, replayData);
-
-                return;
-            }
-
-            if (_timerModule.GetTimerInfo(targetController.PlayerSlot) is not { } targetTimerInfo)
-            {
-                return;
-            }
-
-            PrintPlayerHud(client, targetController.PlayerSlot, targetPawn, targetTimerInfo);
-
-            return;
-        }
-
-        if (_timerModule.GetTimerInfo(slot) is not { } timerInfo)
+        if (param.Client.IsFakeClient || _players[slot] is not { Drag: { } drag } p)
         {
             return;
         }
 
-        PrintPlayerHud(client, slot, pawn, timerInfo);
+        if (!pawn.IsAlive || pawn.AsObserver() is not null)
+        {
+            EndDrag(p, DragEnd.Cancel);
+
+            return;
+        }
+
+        TickDrag(p, drag, param.KeyButtons, param.ChangedButtons, now);
     }
 
-    private void PrintPlayerHud(IGameClient client, PlayerSlot slot, IBasePlayerPawn pawn, ITimerInfo timerInfo)
+    private void TrackTurn(PlayerSlot slot, float yaw, float now)
     {
-        var velocity = pawn.GetAbsVelocity();
+        var turned = AngleDelta(yaw, _keyYaw[slot]);
+        _keyYaw[slot] = yaw;
 
-        var sb = ZString.CreateStringBuilder(true);
+        if (MathF.Abs(turned) > 0.05f)
+        {
+            _turn[slot]   = turned > 0 ? 1 : -1;
+            _turnAt[slot] = now;
+        }
+        else if (now - _turnAt[slot] > 0.1f || now < _turnAt[slot])
+        {
+            _turn[slot] = 0;
+        }
+    }
 
+    /// <summary>
+    ///     Signed difference a - b in degrees, in [-180, 180).
+    /// </summary>
+    private static float AngleDelta(float a, float b)
+        => ((a - b + 540f) % 360f) - 180f;
+
+    // ------------------------------------------------------------------ commands and clicks
+
+    private ECommandAction OnCommandHud(PlayerSlot slot, StringCommand command)
+    {
+        if (_players[slot] is { } p)
+        {
+            SetMenuOpen(p, !p.MenuOpen);
+            RefreshNow(p);
+        }
+
+        return ECommandAction.Handled;
+    }
+
+    private ECommandAction OnCommandShowKeys(PlayerSlot slot, StringCommand command)
+    {
+        if (_players[slot] is { } p)
+        {
+            p.Settings[HudOptions.Keys.Index] = p.IsOn(HudOptions.Keys) ? 1 : 0;
+            p.MenuDirty = true;
+            MarkSettingsChanged(p);
+            RefreshNow(p);
+        }
+
+        return ECommandAction.Handled;
+    }
+
+    private void SetMenuOpen(HudPlayer p, bool open)
+    {
+        p.MenuOpen  = open;
+        p.MenuDirty = true;
+
+        if (!open)
+        {
+            EndDrag(p, DragEnd.Cancel);
+        }
+
+        GetLayout(p)?.SetInputCaptureEnabled(p.Slot, open);
+    }
+
+    private void OnHudClicked(IPlayerController player, ICustomHudLayout layout, string buttonId)
+    {
+        if (_players[player.PlayerSlot] is not { } p || !layout.Equals(p.Layout))
+        {
+            return;
+        }
+
+        if (Array.IndexOf(HudTabs.Tabs, buttonId) is var tab and >= 0)
+        {
+            p.Tab = tab;
+        }
+        else if (TryParseStep(buttonId, out var stepped, out var delta))
+        {
+            StepOption(p, stepped, delta);
+        }
+        else if (TryParseRow(buttonId, out var row, out var action))
+        {
+            ClickRow(p, row, action);
+        }
+        else if (HudOptions.ById.TryGetValue(buttonId, out var option))
+        {
+            // Greyed-out options ignore clicks; sizes only change through their steppers.
+            if ((option.Needs is null || option.Needs(p.Settings)) && !option.IsSize)
+            {
+                p.Settings[option.Index] = (p.Settings[option.Index] + 1) % option.Choices.Length;
+                MarkSettingsChanged(p);
+            }
+        }
+        else if (buttonId == "MenuReset")
+        {
+            p.ResetSettings();
+            Array.Fill(p.UnplaceAt, float.NaN);
+            MarkSettingsChanged(p);
+        }
+        else if (buttonId == "MenuClose")
+        {
+            SetMenuOpen(p, false);
+        }
+        else if (HudTargets.Buttons.TryGetValue(buttonId, out var target)
+                 && player.GetPlayerPawn() is { IsAlive: true } pawn)
+        {
+            StartDrag(p, pawn, target);
+        }
+
+        p.MenuDirty = true;
+        RefreshNow(p);
+    }
+
+    private static bool TryParseStep(string buttonId, out HudOption option, out int delta)
+    {
+        foreach (var candidate in HudOptions.All)
+        {
+            if (!candidate.IsSize)
+            {
+                continue;
+            }
+
+            if (buttonId == candidate.DownId || buttonId == candidate.UpId)
+            {
+                option = candidate;
+                delta  = buttonId == candidate.UpId ? 1 : -1;
+
+                return true;
+            }
+        }
+
+        option = null!;
+        delta  = 0;
+
+        return false;
+    }
+
+    private void StepOption(HudPlayer p, HudOption option, int delta)
+    {
+        var index = p.Settings[option.Index] + delta;
+
+        if (index >= 0 && index < option.Choices.Length)
+        {
+            p.Settings[option.Index] = index;
+            MarkSettingsChanged(p);
+        }
+    }
+
+    private enum RowAction
+    {
+        Up,
+        Down,
+        Toggle,
+    }
+
+    /// <summary>
+    ///     Row&lt;i&gt;Up / Row&lt;i&gt;Down / Row&lt;i&gt;Toggle on the Timer tab.
+    /// </summary>
+    private static bool TryParseRow(string buttonId, out int row, out RowAction action)
+    {
+        row    = -1;
+        action = RowAction.Toggle;
+
+        if (buttonId.Length < 6 || !buttonId.StartsWith("Row", StringComparison.Ordinal) || !char.IsAsciiDigit(buttonId[3]))
+        {
+            return false;
+        }
+
+        row = buttonId[3] - '0';
+
+        switch (buttonId.AsSpan(4))
+        {
+            case "Up":
+                action = RowAction.Up;
+
+                break;
+            case "Down":
+                action = RowAction.Down;
+
+                break;
+            case "Toggle":
+                action = RowAction.Toggle;
+
+                break;
+            default:
+                return false;
+        }
+
+        return row < HudLines.Count;
+    }
+
+    /// <summary>
+    ///     Timer tab row i: move the line in slot i, or switch it (the blank line has no switch).
+    /// </summary>
+    private void ClickRow(HudPlayer p, int row, RowAction action)
+    {
+        if (action == RowAction.Toggle)
+        {
+            if (HudLines.Option(p.Order[row]) is { } option)
+            {
+                p.Settings[option.Index] = (p.Settings[option.Index] + 1) % option.Choices.Length;
+                MarkSettingsChanged(p);
+            }
+
+            return;
+        }
+
+        var to = row + (action == RowAction.Up ? -1 : 1);
+
+        if (to < 0 || to >= HudLines.Count)
+        {
+            return;
+        }
+
+        (p.Order[row], p.Order[to]) = (p.Order[to], p.Order[row]);
+        MarkSettingsChanged(p);
+    }
+
+    // ------------------------------------------------------------------ run events
+
+    public void OnZoneStartTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
+    {
+        if (_players[controller.PlayerSlot] is not { } p
+            || info.ZoneType is not (EZoneType.Start or EZoneType.Stage or EZoneType.End))
+        {
+            return;
+        }
+
+        p.ZoneType  = info.ZoneType;
+        p.ZoneTrack = info.Track;
+        p.ZoneData  = info.Data;
+
+        // Back at the start: a new attempt.
+        if (info.ZoneType == EZoneType.Start)
+        {
+            p.ClearRun();
+        }
+    }
+
+    public void OnZoneEndTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
+    {
+        if (_players[controller.PlayerSlot] is { } p
+            && p.ZoneType == info.ZoneType
+            && p.ZoneTrack == info.Track
+            && p.ZoneData == info.Data)
+        {
+            p.ZoneType = EZoneType.Invalid;
+        }
+    }
+
+    public void OnPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
+    {
+        if (_players[controller.PlayerSlot] is not { } p)
+        {
+            return;
+        }
+
+        p.ClearRun();
+        FetchPbCheckpoints(p, timerInfo.Style, timerInfo.Track);
+    }
+
+    // Read the records here: saving the run can replace them right after.
+    public void OnPlayerStageTimerFinish(IPlayerController controller, IPlayerPawn pawn, IStageTimerInfo stageTimerInfo)
+    {
+        if (_players[controller.PlayerSlot] is not { } p)
+        {
+            return;
+        }
+
+        var stage = stageTimerInfo.Stage;
+        var style = stageTimerInfo.Style;
+        var track = stageTimerInfo.Track;
+
+        if (stage is < 1 or >= TimerConstants.MAX_STAGE)
+        {
+            return;
+        }
+
+        var pb = _recordModule.GetPlayerRecord(p.Slot, style, track, stage)?.Time;
+        var wr = _recordModule.GetWR(style, track, stage)?.Time;
+
+        // The run's time here, and the server record's from its replay's stage marks.
+        var cum   = _timerModule.GetTimerInfo(p.Slot)?.Time ?? stageTimerInfo.Time;
+        var cumWr = RecordStageSplit(style, track, stage);
+
+        p.LastStage = new HudStageResult(stage, stageTimerInfo.Time, pb, wr);
+        p.AddSplit(new HudSplit($"Stage {stage}", stageTimerInfo.Time, pb, wr, cum, null, cumWr));
+    }
+
+    public void OnReachCheckpoint(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo, int checkpoint)
+    {
+        if (_players[controller.PlayerSlot] is not { } p || checkpoint < 1 || checkpoint > timerInfo.Checkpoints.Count)
+        {
+            return;
+        }
+
+        var time = timerInfo.Checkpoints[checkpoint - 1].Time;
+        var wr   = _recordModule.GetWRCheckpoints(timerInfo.Style, timerInfo.Track) is { } wrs && wrs.Count >= checkpoint
+            ? wrs[checkpoint - 1].Time
+            : (float?) null;
+
+        var pbs = p.PbCheckpoints;
+        var pb = pbs.Style == timerInfo.Style && pbs.Track == timerInfo.Track && pbs.Checkpoints is { } list
+                 && list.Count >= checkpoint
+            ? list[checkpoint - 1].Time
+            : (float?) null;
+
+        p.AddSplit(new HudSplit($"CP {checkpoint}", time, pb, wr, time, pb, wr));
+    }
+
+    public void OnPlayerFinishMap(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
+    {
+        if (_players[controller.PlayerSlot] is not { } p)
+        {
+            return;
+        }
+
+        var style = timerInfo.Style;
+        var track = timerInfo.Track;
+        var pb    = _recordModule.GetPlayerRecord(p.Slot, style, track);
+        var wr    = _recordModule.GetWR(style, track);
+
+        // The last stage's own time, on staged maps.
+        var stage = p.LastStage is { } last && last.Stage == _zoneModule.GetTotalStages(track) ? last : null;
+
+        p.Finish = new HudFinish(track,
+                                 timerInfo.Time,
+                                 pb?.Time,
+                                 wr?.Time,
+                                 stage,
+                                 HudFormat.RoundSpeed(timerInfo.EndVelocity.Length2D()),
+                                 pb is null ? null : HudFormat.RoundSpeed(Length2D(pb.VelocityEndX, pb.VelocityEndY)),
+                                 wr is null ? null : HudFormat.RoundSpeed(Length2D(wr.VelocityEndX, wr.VelocityEndY)),
+                                 _practiceModule.IsInPractice(p.Slot));
+
+        p.Stopped = false;
+    }
+
+    private static float Length2D(float x, float y)
+        => MathF.Sqrt((x * x) + (y * y));
+
+    /// <summary>
+    ///     The server record's run time at the end of a stage, from its replay's stage marks; null without a replay.
+    /// </summary>
+    private float? RecordStageSplit(int style, int track, int stage)
+    {
+        if (_replayModule.GetCachedReplay(style, track, 0) is not { Header: { StageTicks: { } ticks } header }
+            || stage > ticks.Count)
+        {
+            return null;
+        }
+
+        var frames = ticks[stage - 1] - header.PreFrame;
+
+        return frames > 0 ? frames * TimerConstants.TickInterval : null;
+    }
+
+    /// <summary>
+    ///     The record cache keeps the server record's checkpoint splits but not a player's own, so those are
+    ///     fetched per style and track, like !cpr does.
+    /// </summary>
+    private void FetchPbCheckpoints(HudPlayer p, int style, int track)
+    {
+        if (!_zoneModule.CurrentTrackHasCheckpoints(track))
+        {
+            return;
+        }
+
+        if (_recordModule.GetPlayerRecord(p.Slot, style, track) is not { } pb)
+        {
+            p.PbCheckpoints = (style, track, 0, null);
+
+            return;
+        }
+
+        if (p.PbCheckpoints.Style == style && p.PbCheckpoints.Track == track && p.PbCheckpoints.RecordId == pb.Id)
+        {
+            return;
+        }
+
+        p.PbCheckpoints = (style, track, pb.Id, null);
+        _               = LoadPbCheckpointsAsync(p, style, track, pb.Id);
+    }
+
+    private async Task LoadPbCheckpointsAsync(HudPlayer p, int style, int track, long recordId)
+    {
         try
         {
-            // Two complementary diffs:
-            //   posDelta: live position projection vs WR replay (continuous, updates every HUD tick)
-            //   cpDelta:  checkpoint-anchored (precise at gates), or last stage WRCP if no CPs yet
-            var posDelta = TryComputePositionDelta(pawn, timerInfo);
-            var cpDelta  = TryComputeCheckpointDelta(timerInfo) ?? _lastStageDelta[slot];
+            var checkpoints = await _request.GetRecordCheckpoints(recordId).ConfigureAwait(false);
 
-            // Timer color based on status: running=green, paused=yellow, stopped=white
-            var timeColor = timerInfo.Status switch
+            await _bridge.ModSharp.InvokeFrameActionAsync(() =>
             {
-                ETimerStatus.Running => "#00FF00",
-                ETimerStatus.Paused  => "#FFD700",
-                _                    => "#FFFFFF",
-            };
-
-            sb.AppendFormat("<span color='{0}'>", timeColor);
-            Utils.FormatTime(ref sb, timerInfo.Time);
-
-            if (timerInfo.Status == ETimerStatus.Paused)
-            {
-                sb.Append(" ‖ PAUSED");
-            }
-
-            sb.Append("</span>");
-
-            // Practice marker — visible whenever the player has saved/teleported.
-            if (_practiceModule.IsInPractice(slot))
-            {
-                sb.Append(" <span color='#FF8800'>[PRACTICE]</span>");
-            }
-
-            // WR diff inline after time. The whole parens block is gated on cpDelta —
-            // matches the pre-time-diff behavior where nothing was shown if there was no
-            // checkpoint/stage delta available. The live position diff is layered IN FRONT
-            // of WRCP when available, so the result reads "(±posDelta | WRCP: ±cpDelta)".
-            if (cpDelta is { } cd)
-            {
-                sb.Append(" <span color='#888888'>(</span>");
-
-                if (posDelta is { } pd)
+                if (_players[p.Slot] == p && p.PbCheckpoints == (style, track, recordId, null))
                 {
-                    AppendColoredDelta(ref sb, pd);
-                    sb.Append("<span color='#888888'> | </span>");
+                    p.PbCheckpoints = (style, track, recordId, checkpoints);
                 }
-
-                sb.Append("<span color='#888888'>WRCP: </span>");
-                AppendColoredDelta(ref sb, cd);
-                sb.Append("<span color='#888888'>)</span>");
-            }
-
-            sb.Append("<br>");
-
-            sb.AppendFormat("<span color='#FFFFFF'>{0}&nbsp;&nbsp;&nbsp;&nbsp;",
-                            (int) velocity.Length2D());
-
-            sb.Append("Sync: ");
-            AppendFixedPoint1(ref sb, timerInfo.Sync * 100);
-            sb.Append("%</span>");
-
-            sb.Append("<br>");
-
-            sb.Append("<span color='#808080'>PB: ");
-
-            if (_recordModule.GetPlayerRecord(slot, timerInfo.Style, timerInfo.Track) is { } pb)
-            {
-                Utils.FormatTime(ref sb, pb.Time, true);
-            }
-            else
-            {
-                sb.Append("N/A");
-            }
-
-            sb.Append(" ‖ WR: ");
-
-            if (_recordModule.GetWRTime(timerInfo.Style, timerInfo.Track) is { } wr)
-            {
-                Utils.FormatTime(ref sb, wr, true);
-            }
-            else
-            {
-                sb.Append("N/A");
-            }
-
-            sb.Append("</span>");
-
-            PrintHtmlToPlayer(client, sb.ToString());
+            }).ConfigureAwait(false);
         }
-        finally
+        catch (Exception e)
         {
-            sb.Dispose();
+            _logger.LogWarning(e, "Failed to load PB checkpoints of record {recordId} for the HUD", recordId);
         }
-    }
-
-    // Hide live diff if the closest WR frame is farther than this — beyond ~one ramp width the
-    // projection is meaningless (player on a wholly different path).
-    private const float MaxPositionDiffDistSq = 256f * 256f;
-
-    // Suppress nonsense large deltas (wrong replay associated, teleport mid-run, etc).
-    private const float MaxAbsPositionDelta = 600f;
-
-    private float? TryComputePositionDelta(IBasePlayerPawn pawn, ITimerInfo timerInfo)
-    {
-        // Only meaningful while the clock is actually counting and after the start zone.
-        if (timerInfo.Status != ETimerStatus.Running)
-        {
-            return null;
-        }
-
-        if (!float.IsFinite(timerInfo.Time) || timerInfo.Time <= 0f)
-        {
-            return null;
-        }
-
-        var replay = _replayModule.GetCachedReplay(timerInfo.Style, timerInfo.Track, stage: 0);
-        if (replay is null || replay.Frames.Count == 0)
-        {
-            return null;
-        }
-
-        // Spatially identical frames are common while stationary and at route crossings.
-        // Prefer the frame nearest the player's current elapsed-time projection so an exact
-        // spatial tie cannot jump to an unrelated point in the replay timeline.
-        var projectedFrame = replay.Header.PreFrame + ((double) timerInfo.Time / TimerConstants.TickInterval);
-        var preferredFrame = (int) Math.Clamp(Math.Round(projectedFrame), 0d, replay.Frames.Count - 1d);
-
-        var pos = pawn.GetAbsOrigin();
-        var idx = _replayModule.FindClosestFrameIndex(timerInfo.Style, timerInfo.Track, stage: 0, pos,
-                                                      preferredFrame, out var distSq);
-
-        if (idx < 0 || distSq > MaxPositionDiffDistSq)
-        {
-            return null;
-        }
-
-        // Closest frame falls inside the pre-run prefix — player is still in / near the start zone,
-        // no meaningful comparison yet.
-        var wrTimeFrames = idx - replay.Header.PreFrame;
-        if (wrTimeFrames <= 0)
-        {
-            return null;
-        }
-
-        var wrTime = wrTimeFrames * TimerConstants.TickInterval;
-        var delta  = timerInfo.Time - wrTime;
-
-        if (delta < -MaxAbsPositionDelta || delta > MaxAbsPositionDelta)
-        {
-            return null;
-        }
-
-        return delta;
-    }
-
-    private float? TryComputeCheckpointDelta(ITimerInfo timerInfo)
-    {
-        var wrCheckpoints = _recordModule.GetWRCheckpoints(timerInfo.Style, timerInfo.Track);
-        var cpIndex       = timerInfo.Checkpoint;
-
-        if (wrCheckpoints is not { Count: > 0 } || cpIndex < 1 || cpIndex > wrCheckpoints.Count)
-        {
-            return null;
-        }
-
-        var wrCpTime = wrCheckpoints[cpIndex - 1].Time;
-
-        var playerCpTime = timerInfo.Checkpoints.Count >= cpIndex
-            ? timerInfo.Checkpoints[cpIndex - 1].Time
-            : timerInfo.Time;
-
-        return playerCpTime - wrCpTime;
-    }
-
-    private void PrintReplayHud(IGameClient client, IPlayerPawn pawn, ReplayBotData bot)
-    {
-        if (bot.Status == EReplayBotStatus.Idle)
-        {
-            var idleSb = ZString.CreateStringBuilder(true);
-            try
-            {
-                idleSb.Append("<span class='fontSize-xl' color='");
-                AppendRainbowHex(ref idleSb, _bridge.GlobalVars.CurTime);
-                idleSb.Append("'>IDLE</span>");
-                PrintHtmlToPlayer(client, idleSb.ToString());
-            }
-            finally
-            {
-                idleSb.Dispose();
-            }
-
-            return;
-        }
-
-        var          sb              = ZString.CreateStringBuilder(true);
-        const string colorLabel      = "#AAAAAA";
-        const string colorData       = "#E0E0E0";
-        const string colorStageBot   = "#2196F3";
-        const string colorFullRunBot = "#FFD700";
-        const string colorSubtleInfo = "#B0B0B0";
-
-        try
-        {
-            if (bot.Stage > 0)
-            {
-                sb.AppendFormat("<span color='{0}'>Stage {1} Replay Bot</span>", colorStageBot, bot.Stage);
-            }
-            else
-            {
-                sb.AppendFormat("<span color='{0}'>Replay Bot</span>", colorFullRunBot);
-
-                var currentStage = bot.GetCurrentStage();
-
-                if (currentStage > 0)
-                {
-                    sb.AppendFormat(" <span color='{0}'>(Stage {1})</span>", colorSubtleInfo, currentStage);
-                }
-            }
-
-            sb.Append("<br>");
-
-            var header = bot.Header!;
-
-            sb.AppendFormat("<span color='{0}'>Player:</span> <span color='{1}'>{2}</span>",
-                            colorLabel,
-                            colorData,
-                            header.PlayerName);
-
-            sb.Append("<br>");
-
-            sb.AppendFormat("<span color='{0}'>Time: </span>", colorLabel);
-            var timedFrame = Math.Clamp(bot.CurrentFrame, header.PreFrame, header.PostFrame);
-
-            sb.AppendFormat("<span color='{0}'>", colorData);
-            Utils.FormatTime(ref sb, TimerConstants.TickInterval * (timedFrame - header.PreFrame));
-            sb.Append('/');
-            Utils.FormatTime(ref sb, bot.Time);
-            sb.Append("</span>");
-
-            sb.Append("<br>");
-
-            sb.AppendFormat("<span color='{0}'>Speed:</span> <span color='{1}'>{2}</span>",
-                            colorLabel,
-                            colorData,
-                            (int) MathF.Round(pawn.GetAbsVelocity().Length2D()));
-
-            PrintHtmlToPlayer(client, sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
-    }
-
-    private static void AppendRainbowHex(ref Utf16ValueStringBuilder sb, float curtime)
-    {
-        const float frequency = 3.5f;
-        const float amplitude = 127f;
-        const float center    = 128f;
-
-        const float sin120 = 0.86602540f;
-        const float cos120 = -0.5f;
-
-        var (sin, cos) = MathF.SinCos(frequency * curtime);
-
-        var rBase = sin;
-        var gBase = (sin * cos120) + (cos * sin120);
-        var bBase = (sin * cos120) - (cos * sin120);
-        var r     = (int) ((rBase * amplitude) + center);
-        var g     = (int) ((gBase * amplitude) + center);
-        var b     = (int) ((bBase * amplitude) + center);
-
-        sb.Append('#');
-        AppendHex2(ref sb, r);
-        AppendHex2(ref sb, g);
-        AppendHex2(ref sb, b);
-    }
-
-    private static void AppendHex2(ref Utf16ValueStringBuilder sb, int value)
-    {
-        var h1 = (value >> 4) & 0xF;
-        var h2 = value        & 0xF;
-
-        sb.Append((char) (h1 < 10 ? h1 + '0' : h1 + ('A' - 10)));
-        sb.Append((char) (h2 < 10 ? h2 + '0' : h2 + ('A' - 10)));
-    }
-
-    // Compact signed delta: "+1.3", "-0.4", "+1:23.4" etc. One decimal of seconds.
-    // Mirrors what surf/bhop players are used to seeing inline next to their timer.
-    private static void AppendDelta(ref Utf16ValueStringBuilder sb, float delta)
-    {
-        sb.Append(delta >= 0f ? '+' : '-');
-
-        var abs = MathF.Abs(delta);
-
-        if (abs < 60f)
-        {
-            var seconds = (int) abs;
-            var deci    = (int) ((abs - seconds) * 10f);
-            if (deci > 9) deci = 9;
-
-            sb.Append(seconds);
-            sb.Append('.');
-            sb.Append((char) ('0' + deci));
-        }
-        else
-        {
-            // Re-use existing MM:SS.D formatter for long deltas (rare; usually sub-minute).
-            Utils.FormatTime(ref sb, abs);
-        }
-    }
-
-    private static void AppendColoredDelta(ref Utf16ValueStringBuilder sb, float delta)
-    {
-        // Positive delta = behind WR (red). Negative delta = ahead of WR (green).
-        var color = delta >= 0f ? "#FF4444" : "#44FF44";
-        sb.AppendFormat("<span color='{0}'>", color);
-        AppendDelta(ref sb, delta);
-        sb.Append("</span>");
-    }
-
-    private static void AppendFixedPoint1(ref Utf16ValueStringBuilder sb, float value)
-    {
-        var intPart      = (int) value;
-        var decimalDigit = (int) ((value - intPart) * 10);
-
-        sb.Append(intPart);
-        sb.Append('.');
-        sb.Append((char) ('0' + Math.Abs(decimalDigit)));
-    }
-
-    private void PrintHtmlToPlayer(IGameClient client, string html)
-    {
-        show_survival_respawn_status_event.SetString("loc_token", html);
-
-        show_survival_respawn_status_event.FireToClient(client);
     }
 }
+

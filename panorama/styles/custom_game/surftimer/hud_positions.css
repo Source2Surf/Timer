@@ -1,0 +1,51 @@
+/* Generated position classes for draggable panels. A placed panel is centre-aligned; the plugin sets mx-/my-
+   (tens of percent, m = minus) on it and fx-/fy- (0-9 percent) on its full-screen *Pos wrapper, and the
+   two add up to its centre's offset from the screen centre: -37% is mx-m4 plus fx-3. The range covers
+   -50..+50, the furthest a panel can be dragged (+50 is mx-5 plus fx-0).
+   Kept small on purpose: every class name and every (panel, class) entry a player uses is networked. */
+
+.mx-m5 { x: -50%; }
+.mx-m4 { x: -40%; }
+.mx-m3 { x: -30%; }
+.mx-m2 { x: -20%; }
+.mx-m1 { x: -10%; }
+.mx-0 { x: 0%; }
+.mx-1 { x: 10%; }
+.mx-2 { x: 20%; }
+.mx-3 { x: 30%; }
+.mx-4 { x: 40%; }
+.mx-5 { x: 50%; }
+
+.my-m5 { y: -50%; }
+.my-m4 { y: -40%; }
+.my-m3 { y: -30%; }
+.my-m2 { y: -20%; }
+.my-m1 { y: -10%; }
+.my-0 { y: 0%; }
+.my-1 { y: 10%; }
+.my-2 { y: 20%; }
+.my-3 { y: 30%; }
+.my-4 { y: 40%; }
+.my-5 { y: 50%; }
+
+.fx-0 { x: 0%; }
+.fx-1 { x: 1%; }
+.fx-2 { x: 2%; }
+.fx-3 { x: 3%; }
+.fx-4 { x: 4%; }
+.fx-5 { x: 5%; }
+.fx-6 { x: 6%; }
+.fx-7 { x: 7%; }
+.fx-8 { x: 8%; }
+.fx-9 { x: 9%; }
+
+.fy-0 { y: 0%; }
+.fy-1 { y: 1%; }
+.fy-2 { y: 2%; }
+.fy-3 { y: 3%; }
+.fy-4 { y: 4%; }
+.fy-5 { y: 5%; }
+.fy-6 { y: 6%; }
+.fy-7 { y: 7%; }
+.fy-8 { y: 8%; }
+.fy-9 { y: 9%; }

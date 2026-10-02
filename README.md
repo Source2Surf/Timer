@@ -19,6 +19,31 @@ dotnet publish Plugin/Timer.Shared/Timer.Shared.csproj -c Release -p:Platform=x6
 Merge `sharp/` into `{CS2}/game/sharp/`, preserving existing configuration.
 Deploy all three published folders with their dependencies from the same build.
 
+## HUD
+
+The HUD is a Panorama layout that every client has to have mounted. The server
+only drives it. The layout needs ModSharp `2.1.159` or later, which is the first
+version with the Panorama API.
+
+1. Copy `panorama/` into a workshop addon's content folder, for example
+   `content/csgo_addons/<addon>/panorama/`. Compile it with
+   `resourcecompiler -f -i <file>` from `game/bin/win64`, or through the addon
+   tools, then publish the addon.
+2. Make clients download the addon, for example with MultiAddonManager.
+
+The layout is `panorama/layout/custom_game/surftimer/hud.vxml_c`. A layout
+spawned at runtime needs the compiled resource name, `_c` included. If you ship
+it at another path, set `timer_hud_layout` to that path.
+
+Each player gets their own `custom_hud_layout` entity, networked only to them.
+
+Commands:
+
+- `!hud` opens the settings menu. In it, a player can click a panel to drag it.
+- `!showkeys` toggles the keys panel.
+
+Settings are saved per player in `sharp/data/surftimer/hud/<steamid64>.json`.
+
 ## RequestManager
 
 Merge into `sharp/configs/timer.jsonc`:

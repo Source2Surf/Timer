@@ -185,9 +185,10 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
 
     public void Shutdown()
     {
-        foreach (var (command, _) in _serverCommands)
+        // The engine command itself goes once its last callback is released.
+        foreach (var (command, handler) in _serverCommands)
         {
-            _bridge.ConVarManager.ReleaseCommand(command);
+            _bridge.ConVarManager.ReleaseServerCommandCallback(command, handler);
         }
 
         _bridge.ClientManager.RemoveClientListener(this);

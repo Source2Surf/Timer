@@ -1,0 +1,888 @@
+/* Surf timer HUD. Sizes are in 1080p reference pixels. Every class the plugin switches is set on the element it
+   styles (the engine doesn't restyle children when a per-player class changes on their parent), so no rule
+   below depends on a plugin-set class on an ancestor. */
+
+/* Monodigit = fixed-width digits, so the running time and speed don't jitter. */
+@define timerFont: Stratum2 Bold Monodigit, Stratum2, 'Arial Unicode MS';
+@define textShadow: 0px 1px 3px 3.0 #000000d0;     /* no panel backgrounds, so the shadow carries legibility */
+@define lineGap: 20px;              /* one empty line of the original hint text */
+
+@define gainColor: #7ce27c;
+@define lossColor: #ff6b5e;
+@define zoneColor: #7ce27c;
+@define finishColor: #ffd257;
+@define accentColor: #5ab4ff;
+@define goodColor: #6fdc8c;
+@define mutedColor: #93a0ad;
+
+.Root,
+.Timer {
+    width: 100%;
+    height: 100%;
+    overflow: noclip;
+}
+
+.Hidden {
+    visibility: collapse;
+}
+
+/* ---- Panel shells ---- */
+
+/* Every HUD panel is a Button (so it can be clicked to drag while the menu is open) with a transparent outline,
+   fill and glow that the editing and dragging states colour in. Every state sets flat colours, including this
+   resting one: a fade from a gradient, or to an unset value, can stop partway and leave a tint behind. */
+.RunPanel,
+.CSpeedPanel,
+.InfoPanel,
+.SplitsPanel,
+.KeysPanel {
+    width: fit-children;
+    height: fit-children;
+    border: 2px solid #5ab4ff00;
+    border-radius: 6px;
+    background-color: #0a0e1300;
+    box-shadow: #5ab4ff00 0px 0px 0px 0px;
+    transition-property: background-color, border-color, box-shadow;
+    transition-duration: .1s;
+}
+
+.PanelBody {
+    width: fit-children;
+    height: fit-children;
+    flow-children: down;
+}
+
+/* Size setting: ui-scale on the panel's body, which scales everything inside it. */
+.PanelBody.size-70  { ui-scale: 70%; }
+.PanelBody.size-80  { ui-scale: 80%; }
+.PanelBody.size-90  { ui-scale: 90%; }
+.PanelBody.size-110 { ui-scale: 110%; }
+.PanelBody.size-120 { ui-scale: 120%; }
+.PanelBody.size-130 { ui-scale: 130%; }
+.PanelBody.size-140 { ui-scale: 140%; }
+.PanelBody.size-150 { ui-scale: 150%; }
+
+/* ---- Timer ---- */
+
+.RunPanel {
+    horizontal-align: center;
+    vertical-align: bottom;
+    margin-bottom: 180px;
+    min-width: 266px;
+    padding: 16px 20px;
+}
+
+.RunPanel .PanelBody {
+    horizontal-align: center;
+}
+
+.RunPanel Label,
+.InfoPanel Label {
+    font-family: timerFont;
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+    text-shadow: textShadow;
+}
+
+.RunPanel Label {
+    horizontal-align: center;
+    text-align: center;
+
+    transition-property: color;
+    transition-duration: .15s;
+}
+
+.Spacer {
+    width: 1px;
+    height: lineGap;
+}
+
+/* A slot showing the blank line: one empty line's height, and any text left from another item hidden. */
+.Line.gap {
+    height: lineGap;
+    opacity: 0;
+}
+
+.Line.in-zone {
+    color: zoneColor;
+}
+
+.Title.stopped {
+    color: lossColor;
+}
+
+.Title.paused {
+    color: finishColor;
+}
+
+.Title.practice {
+    color: #ff9f43;
+}
+
+/* Spectating a replay: blue, so it can't be mistaken for your own timer */
+.Title.replay {
+    color: accentColor;
+}
+
+.Cmp.faster {
+    color: gainColor;
+}
+
+.Cmp.slower {
+    color: lossColor;
+}
+
+.Time {
+    transform-origin: 50% 50%;
+}
+
+.Time.finished {
+    color: finishColor;
+    animation-name: 'timer-finish';
+    animation-duration: .4s;
+    animation-timing-function: ease-out;
+}
+
+@keyframes 'timer-finish'
+{
+    0%   { transform: scale3d( 1.25, 1.25, 1 ); }
+    100% { transform: scale3d( 1, 1, 1 ); }
+}
+
+/* ---- Center speed ---- */
+
+.CSpeedPanel {
+    horizontal-align: center;
+    vertical-align: center;
+    y: 8%;
+    min-width: 96px;
+    padding: 2px 12px;
+}
+
+.CSpeedPanel .PanelBody {
+    horizontal-align: center;
+}
+
+.CSpeed {
+    horizontal-align: center;
+    text-align: center;
+    font-family: timerFont;
+    font-size: 34px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0px 1px 3px 3.0 #000000d9;
+
+    transition-property: color;
+    transition-duration: .15s;
+}
+
+.CSpeed.gain {
+    color: gainColor;
+}
+
+.CSpeed.loss {
+    color: lossColor;
+}
+
+/* ---- Records ---- */
+
+/* Flush in the top-left corner (the radar is hidden on the server). */
+.InfoPanel {
+    horizontal-align: left;
+    vertical-align: top;
+}
+
+.InfoPanel Label {
+    font-size: 23px;
+}
+
+/* ---- Splits ---- */
+
+.SplitsPanel {
+    horizontal-align: left;
+    vertical-align: top;
+    margin: 66px 0px 0px 0px;       /* under the records panel: two 29px lines, its outline, a small gap */
+}
+
+.SplitsBody {
+    width: 380px;
+}
+
+.SplitRow {
+    width: 100%;
+    height: 36px;
+    margin-bottom: 4px;
+    padding: 0px 14px;
+    flow-children: right;
+    border-radius: 4px;
+    background-color: #161c24c7;
+    border: 1px solid #ffffff0f;
+}
+
+/* Older rows fade by slot; the top slot is always the newest, so this never needs sending. */
+.SplitRow.Fade1 { opacity: .8; }
+.SplitRow.Fade2 { opacity: .6; }
+.SplitRow.Fade3 { opacity: .45; }
+.SplitRow.Fade4 { opacity: .3; }
+.SplitRow.nofade { opacity: 1; }
+
+.SplitRow Label {
+    vertical-align: center;
+    font-family: timerFont;
+    font-weight: bold;
+}
+
+.SplitName {
+    width: 78px;
+    font-size: 16px;
+    color: white;
+}
+
+.SplitTime {
+    width: fill-parent-flow( 1 );
+    font-size: 14px;
+    color: #d6dee6b3;
+}
+
+.SplitDiff {
+    font-size: 21px;
+    color: white;
+}
+
+.SplitDiff.faster {
+    color: goodColor;
+}
+
+.SplitDiff.slower {
+    color: lossColor;
+}
+
+.SplitsEmpty {
+    visibility: collapse;
+    margin: 6px 10px;
+    font-family: timerFont;
+    font-size: 14px;
+    font-weight: bold;
+    color: mutedColor;
+}
+
+.SplitsEmpty.shown {
+    visibility: visible;
+}
+
+/* A new split: the list starts one row (36px + 4px gap) higher and settles, so the rows look like they move
+   down, and the new top row fades in. Two identical pairs let the animation replay without a removal step. */
+@keyframes 'split-shift-a'
+{
+    0%   { transform: translateY( -40px ); }
+    100% { transform: translateY( 0px ); }
+}
+
+@keyframes 'split-shift-b'
+{
+    0%   { transform: translateY( -40px ); }
+    100% { transform: translateY( 0px ); }
+}
+
+@keyframes 'split-enter-a'
+{
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+@keyframes 'split-enter-b'
+{
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+.SplitsBody.shift-a { animation-name: 'split-shift-a'; animation-duration: .28s; animation-timing-function: ease-out; }
+.SplitsBody.shift-b { animation-name: 'split-shift-b'; animation-duration: .28s; animation-timing-function: ease-out; }
+.SplitRow.enter-a { animation-name: 'split-enter-a'; animation-duration: .28s; animation-timing-function: ease-out; }
+.SplitRow.enter-b { animation-name: 'split-enter-b'; animation-duration: .28s; animation-timing-function: ease-out; }
+
+/* ---- Keys ---- */
+
+.KeysPanel {
+    horizontal-align: center;
+    vertical-align: center;
+    y: -20%;                        /* 30% of the screen from the top */
+    padding: 10px;
+}
+
+.KeysBody {
+    horizontal-align: center;
+}
+
+.KeyRow {
+    horizontal-align: center;
+    width: fit-children;
+    height: fit-children;
+    margin-bottom: 5px;
+    flow-children: right;
+}
+
+.Cap {
+    width: 36px;
+    margin: 0px 2px;
+    padding: 8px 0px;
+    font-family: timerFont;
+    font-size: 15px;
+    font-weight: bold;
+    text-align: center;
+    color: #ffffffcc;
+    text-shadow: textShadow;
+    background-color: #0d121880;    /* keeps the caps readable on bright maps */
+    border: 1px solid #ffffff66;
+    border-radius: 4px;
+}
+
+.Cap.on {
+    background-color: #ffffffe6;
+    border-color: #00000000;
+    color: #0d1218;
+    text-shadow: none;
+}
+
+.Cap.Arrow {
+    background-color: #00000000;
+    border-color: #00000000;
+    font-size: 18px;
+    padding: 6px 0px;
+    color: #ffffff4d;
+}
+
+.Cap.Arrow.on {
+    background-color: #00000000;
+    color: white;
+}
+
+.Cap.Wide {
+    width: 78px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 10px 0px;
+}
+
+.KeyGap {
+    width: 36px;
+    height: 1px;
+}
+
+/* ---- Dragging (menu and every HUD panel) ---- */
+
+/* Full-screen, so its fine x/y offset adds to the panel's coarse one (timer_positions.css). A panel near a screen
+   edge sits partly outside its wrapper (and a wrapper partly off-screen), which the default overflow (squish)
+   would answer by squeezing the panel to fit: noclip lets it keep its size and simply run past. */
+.DragPos {
+    width: 100%;
+    height: 100%;
+    overflow: noclip;
+}
+
+/* Once a panel has been dragged it is centre-aligned, and its position classes offset its centre from the
+   screen centre, so the centre line is offset 0 at any size or aspect ratio. Until then the layout above
+   positions it. */
+.Menu.placed,
+.RunPanel.placed,
+.CSpeedPanel.placed,
+.InfoPanel.placed,
+.SplitsPanel.placed,
+.KeysPanel.placed {
+    horizontal-align: center;
+    vertical-align: center;
+    margin: 0px;
+}
+
+/* While dragging, position changes (snaps included) glide between the ten-per-second updates instead of
+   stepping. Each rule keeps the element's own transitions and adds position. */
+.DragPos.smooth {
+    transition-property: position;
+    transition-duration: .12s;
+    transition-timing-function: linear;
+    transition-high-framerate: true;
+}
+
+.Menu.smooth {
+    transition-property: opacity, transform, position;
+    transition-duration: .15s, .15s, .12s;
+    transition-timing-function: ease-out, ease-out, linear;
+    transition-high-framerate: false, false, true;
+}
+
+.RunPanel.smooth,
+.CSpeedPanel.smooth,
+.InfoPanel.smooth,
+.SplitsPanel.smooth,
+.KeysPanel.smooth {
+    transition-property: background-color, border-color, box-shadow, position;
+    transition-duration: .1s, .1s, .1s, .12s;
+    transition-timing-function: ease, ease, ease, linear;
+    transition-high-framerate: false, false, false, true;
+}
+
+/* Menu open: a faint outline and a slight dark fill show which panels can be clicked (and their bounds on
+   bright surfaces); the one under the cursor lights up. */
+.RunPanel.editing,
+.CSpeedPanel.editing,
+.InfoPanel.editing,
+.SplitsPanel.editing,
+.KeysPanel.editing {
+    border-color: #5ab4ff59;
+    background-color: #0a0e1359;
+}
+
+.RunPanel.editing:hover,
+.CSpeedPanel.editing:hover,
+.InfoPanel.editing:hover,
+.SplitsPanel.editing:hover,
+.KeysPanel.editing:hover {
+    border-color: #5ab4ffd9;
+    background-color: #0a0e1380;
+}
+
+/* Being dragged: a dark background and a blue outline with a soft glow. */
+.RunPanel.editing.dragging,
+.CSpeedPanel.editing.dragging,
+.InfoPanel.editing.dragging,
+.SplitsPanel.editing.dragging,
+.KeysPanel.editing.dragging {
+    background-color: #0a0e13b8;
+    border-color: accentColor;
+    box-shadow: #5ab4ff59 0px 0px 14px 2px;
+}
+
+.Guide {
+    visibility: collapse;
+    background-color: #5ab4ff8c;
+}
+
+.Guide.shown {
+    visibility: visible;
+}
+
+.GuideX {
+    width: 2px;
+    height: 100%;
+    horizontal-align: center;
+}
+
+.GuideY {
+    width: 100%;
+    height: 2px;
+    vertical-align: center;
+}
+
+/* Key hint bar at the top while dragging. It fades with opacity, so its children never depend on a class on it. */
+.DragToast {
+    horizontal-align: center;
+    vertical-align: top;
+    margin-top: 150px;
+    width: fit-children;
+    height: fit-children;
+    padding: 9px 16px;
+    flow-children: right;
+    border-radius: 6px;
+    background-color: #0a0e13eb;
+    border: 1px solid #5ab4ff59;
+    box-shadow: #00000066 0px 10px 28px 0px;
+    opacity: 0;
+
+    transition-property: opacity;
+    transition-duration: .15s;
+}
+
+.DragToast.shown {
+    opacity: 1;
+}
+
+.DragToast Label {
+    vertical-align: center;
+    font-family: timerFont;
+    font-size: 14px;
+    font-weight: bold;
+    color: mutedColor;
+}
+
+.DragToast .ToastWhat {
+    margin-right: 14px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: accentColor;
+}
+
+.ToastPair {
+    vertical-align: center;
+    margin-right: 14px;
+    flow-children: right;
+}
+
+.DragToast .Kbd {
+    margin-right: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: white;
+    background-color: #ffffff1a;
+    border-radius: 3px;
+}
+
+/* ---- Settings menu ---- */
+
+@define menuBackground: #0d1218f2;
+@define menuLine: #ffffff14;
+@define menuHover: #ffffff0f;
+@define menuPress: #ffffff1f;
+@define menuPrimary: #2d74b8;
+
+.Menu {
+    horizontal-align: left;
+    vertical-align: center;
+    margin-left: 40px;
+    width: 380px;
+    height: fit-children;
+    padding: 16px 14px 14px 14px;
+    flow-children: down;
+
+    background-color: menuBackground;
+    border: 1px solid #ffffff14;
+    border-radius: 8px;
+    box-shadow: #00000073 0px 16px 40px 0px;
+
+    transition-property: opacity, transform;
+    transition-duration: .15s;
+    transition-timing-function: ease-out;
+}
+
+.Menu.Closed {
+    opacity: 0;
+    transform: translateX( -16px );
+}
+
+.Menu.moving {
+    box-shadow: #5ab4ff80 0px 0px 14px 0px;
+}
+
+.Menu Label {
+    font-family: timerFont;
+    font-size: 15px;
+    font-weight: bold;
+    color: white;
+}
+
+.MenuHeader {
+    width: 100%;
+    height: 34px;
+    margin-bottom: 8px;
+    padding: 0px 8px;
+    flow-children: right;
+    border-radius: 4px;
+
+    transition-property: background-color;
+    transition-duration: .1s;
+}
+
+.MenuHeader:hover {
+    background-color: menuHover;
+}
+
+.Menu .MenuTitle {
+    width: fill-parent-flow( 1 );
+    vertical-align: center;
+    font-size: 19px;
+}
+
+.Menu .MenuGrip {
+    vertical-align: center;
+    padding: 3px 8px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: mutedColor;
+    border: 1px solid #ffffff24;
+    border-radius: 3px;
+}
+
+.MenuHeader:hover .MenuGrip {
+    color: accentColor;
+}
+
+.MenuTabs {
+    width: 100%;
+    height: 36px;
+    padding: 3px;
+    flow-children: right;
+    background-color: #ffffff0a;
+    border-radius: 5px;
+}
+
+.MenuTab {
+    width: fill-parent-flow( 1 );
+    height: 100%;
+    margin: 0px 2px;
+    border-radius: 3px;
+    border-bottom: 2px solid #00000000;
+
+    transition-property: background-color;
+    transition-duration: .1s;
+}
+
+.MenuTab:hover {
+    background-color: menuHover;
+}
+
+.MenuTab.active {
+    background-color: #ffffff1a;
+    border-bottom: 2px solid accentColor;
+}
+
+.Menu .MenuTabLabel {
+    horizontal-align: center;
+    vertical-align: center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: mutedColor;
+}
+
+.Menu .MenuTabLabel.active {
+    color: white;
+}
+
+/* Every tab keeps the same height, so the menu doesn't jump when you switch. */
+.MenuPages {
+    width: 100%;
+    height: 410px;
+    margin-top: 6px;
+}
+
+.MenuPage {
+    width: 100%;
+    height: fit-children;
+    flow-children: down;
+}
+
+.MenuSection {
+    width: 100%;
+    height: fit-children;
+    margin: 12px 0px 4px 0px;
+    padding: 0px 8px;
+    flow-children: right;
+}
+
+.Menu .MenuSectionLabel {
+    vertical-align: center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: mutedColor;
+}
+
+.MenuRule {
+    width: fill-parent-flow( 1 );
+    height: 1px;
+    margin-left: 10px;
+    vertical-align: center;
+    background-color: menuLine;
+}
+
+.MenuRow {
+    width: 100%;
+    height: 32px;
+    padding: 0px 8px;
+    flow-children: right;
+    border-radius: 4px;
+
+    transition-property: background-color, opacity;
+    transition-duration: .1s;
+}
+
+.MenuRow.tall {
+    height: 44px;
+}
+
+.MenuRow:hover {
+    background-color: menuHover;
+}
+
+.MenuRow:active {
+    background-color: menuPress;
+}
+
+.MenuRow.static:hover,
+.MenuRow.static:active {
+    background-color: #00000000;
+}
+
+.MenuRow.disabled {
+    opacity: .4;
+}
+
+.MenuRow.disabled:hover {
+    background-color: #00000000;
+}
+
+.Menu .MenuName {
+    width: fill-parent-flow( 1 );
+    vertical-align: center;
+}
+
+.MenuText {
+    width: fill-parent-flow( 1 );
+    height: fit-children;
+    vertical-align: center;
+    flow-children: down;
+}
+
+.MenuText .MenuName {
+    width: fit-children;
+    vertical-align: top;
+}
+
+.Menu .MenuDesc {
+    font-size: 12px;
+    color: mutedColor;
+}
+
+/* Value pills: on (green), off (outlined grey), anything else a plain pick. */
+.Menu .MenuValue {
+    vertical-align: center;
+    height: 22px;
+    min-width: 38px;
+    padding: 3px 8px 0px 8px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: center;
+    color: white;
+    background-color: #ffffff14;
+    border: 1px solid #00000000;
+    border-radius: 3px;
+}
+
+.Menu .MenuValue.on {
+    background-color: #6fdc8c29;
+    color: goodColor;
+}
+
+.Menu .MenuValue.off {
+    background-color: #00000000;
+    border-color: #ffffff29;
+    color: mutedColor;
+}
+
+.Menu .MenuTip {
+    margin: 4px 8px 6px 8px;
+    font-size: 12px;
+    color: mutedColor;
+}
+
+.Stepper {
+    vertical-align: center;
+    width: fit-children;
+    height: fit-children;
+    margin-right: 12px;
+    flow-children: right;
+}
+
+.Step {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #ffffff29;
+    border-radius: 3px;
+
+    transition-property: background-color, opacity;
+    transition-duration: .1s;
+}
+
+.Step:hover {
+    background-color: #ffffff14;
+}
+
+.Step.disabled {
+    opacity: .35;
+}
+
+.Step Label {
+    horizontal-align: center;
+    vertical-align: center;
+}
+
+.Stepper .MenuValue {
+    margin: 0px 6px;
+    min-width: 52px;
+}
+
+.PillButton {
+    vertical-align: center;
+    width: fit-children;
+    height: fit-children;
+}
+
+/* The blank line has nothing to switch: its pill keeps its space (so the arrows line up) but isn't shown. */
+.PillButton.blank {
+    opacity: 0;
+}
+
+.Menu .MenuName.blank {
+    color: mutedColor;
+}
+
+/* Move up / down, before a line's pill */
+.RowSteps {
+    vertical-align: center;
+    width: fit-children;
+    height: fit-children;
+    margin-right: 10px;
+    flow-children: right;
+}
+
+.RowSteps .Step {
+    margin-left: 4px;
+}
+
+.RowSteps .Step Label {
+    font-size: 10px;
+}
+
+.MenuFooter {
+    width: 100%;
+    margin-top: 14px;
+    flow-children: right;
+}
+
+.MenuButton {
+    width: fill-parent-flow( 1 );
+    height: 36px;
+    border: 1px solid #ffffff24;
+    border-radius: 4px;
+
+    transition-property: background-color, brightness;
+    transition-duration: .1s;
+}
+
+.MenuButton:hover {
+    background-color: menuHover;
+}
+
+.MenuButton--primary {
+    margin-left: 8px;
+    background-color: menuPrimary;
+    border-color: #00000000;
+}
+
+.MenuButton--primary:hover {
+    background-color: menuPrimary;
+    brightness: 1.2;
+}
+
+.MenuButton:active {
+    brightness: .85;
+}
+
+.MenuButton Label {
+    horizontal-align: center;
+    vertical-align: center;
+}

@@ -9,8 +9,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.12" />
+    <PackageReference Include="ModSharp.Sharp.Shared" Version="*" />
     <ProjectReference Include="../Timer/Timer.csproj" />
     <ProjectReference Include="../Timer.Shared/Timer.Shared.csproj" />
   </ItemGroup>

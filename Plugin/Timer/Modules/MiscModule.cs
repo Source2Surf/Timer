@@ -95,7 +95,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
 
         FindOrCreateQuantizedFloatEncoder
             = (delegate* unmanaged<QuantizedEncoderReg_t*, bool, byte*, int, int, float, float, void>)
-            bridge.Modules.Tier0.GetFunctionByName("FindOrCreateQuantizedFloatEncoder");
+            bridge.Modules.Tier0.GetExportFunction("FindOrCreateQuantizedFloatEncoder");
 
         if (FindOrCreateQuantizedFloatEncoder == null)
         {
