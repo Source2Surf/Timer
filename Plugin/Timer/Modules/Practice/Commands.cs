@@ -29,6 +29,7 @@ internal sealed partial class PracticeManager
     private void InitCommands()
     {
         _commandManager.AddClientChatCommand("saveloc",  OnCommandSaveLoc);
+        _commandManager.AddClientChatCommand("save",     OnCommandSaveLoc);
         _commandManager.AddClientChatCommand("sl",       OnCommandSaveLoc);
 
         _commandManager.AddClientChatCommand("loc",      OnCommandLoc);
