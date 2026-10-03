@@ -314,20 +314,19 @@ internal sealed partial class PracticeManager : IModule,
     {
         var movement = pawn.GetMovementService()?.AsPlayerMovementService();
 
-        return new PhysicsSnapshot(
-            Origin:         pawn.GetAbsOrigin(),
-            Angles:         pawn.GetEyeAngles(),
-            Velocity:       pawn.GetAbsVelocity(),
-            BaseVelocity:   pawn.BaseVelocity,
-            MoveType:       pawn.ActualMoveType,
-            Flags:          pawn.Flags,
-            GravityScale:   pawn.GravityScale,
-            Stamina:        movement?.Stamina                                ?? 0f,
-            Ducked:         movement?.GetNetVar<bool>("m_bDucked")            ?? false,
-            Ducking:        movement?.GetNetVar<bool>("m_bDucking")           ?? false,
-            DuckAmount:     movement?.GetNetVar<float>("m_flDuckAmount")      ?? 0f,
-            DuckSpeed:      movement?.DuckSpeed                              ?? 7.0f,
-            LadderNormal:   movement?.GetNetVar<Vector>("m_vecLadderNormal")  ?? new Vector());
+        return new PhysicsSnapshot(pawn.GetAbsOrigin(),
+                                   pawn.GetEyeAngles(),
+                                   pawn.GetAbsVelocity(),
+                                   pawn.BaseVelocity,
+                                   pawn.ActualMoveType,
+                                   pawn.Flags,
+                                   pawn.GravityScale,
+                                   movement?.Stamina                                ?? 0f,
+                                   movement?.GetNetVar<bool>("m_bDucked")           ?? false,
+                                   movement?.GetNetVar<bool>("m_bDucking")          ?? false,
+                                   movement?.GetNetVar<float>("m_flDuckAmount")     ?? 0f,
+                                   movement?.DuckSpeed                              ?? 7.0f,
+                                   movement?.GetNetVar<Vector>("m_vecLadderNormal") ?? new Vector());
     }
 
     private static void ApplyPhysics(IPlayerPawn pawn, PhysicsSnapshot p)
@@ -343,16 +342,16 @@ internal sealed partial class PracticeManager : IModule,
 
         if (pawn.GetMovementService()?.AsPlayerMovementService() is { } movement)
         {
-            movement.SetNetVar("m_bDucked",         p.Ducked);
-            movement.SetNetVar("m_bDucking",        p.Ducking);
-            movement.SetNetVar("m_flDuckAmount",    p.DuckAmount);
-            movement.SetNetVar("m_vecLadderNormal", p.LadderNormal);
-
             movement.Stamina   = p.Stamina;
             movement.DuckSpeed = p.DuckSpeed;
+            movement.SetNetVar("m_bDucked", p.Ducked);
+            movement.SetNetVar("m_bDucking", p.Ducking);
+            movement.SetNetVar("m_flDuckAmount", p.DuckAmount);
+            movement.SetNetVar("m_vecLadderNormal", p.LadderNormal);
         }
 
-        pawn.Teleport(p.Origin, p.Angles, p.Velocity);
+        pawn.Teleport(p.Origin, null, p.Velocity);
+        pawn.SnapViewAngles(p.Angles);
     }
 
     private static IPlayerController? TryResolveAlivePawn(IGameClient client, out IPlayerPawn pawn)
