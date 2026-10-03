@@ -53,6 +53,14 @@ jobs:
           -o sharp/shared/Timer.Shared
           --no-restore
 
+      - name: Publish Timer.Localization
+        run: >
+          dotnet publish Plugin/Timer.Localization/Timer.Localization.csproj
+          -c ${{ env.CONFIGURATION }}
+          -p:Platform=x64
+          -o sharp/modules/Timer.Localization
+          --no-restore
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

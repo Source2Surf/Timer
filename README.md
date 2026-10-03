@@ -14,10 +14,13 @@ From the repository root:
 dotnet publish Plugin/Timer/Timer.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/modules/Timer
 dotnet publish Plugin/Timer.RequestManager/Timer.RequestManager.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/modules/Timer.RequestManager
 dotnet publish Plugin/Timer.Shared/Timer.Shared.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/shared/Timer.Shared
+dotnet publish Plugin/Timer.Localization/Timer.Localization.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/modules/Timer.Localization
 ```
 
 Merge `sharp/` into `{CS2}/game/sharp/`, preserving existing configuration.
-Deploy all three published folders with their dependencies from the same build.
+Deploy all four published folders with their dependencies from the same build.
+Timer.Localization is optional (players read English without it) and needs
+ModSharp's LocalizerManager module; see [Localization](#localization).
 
 ## HUD
 
