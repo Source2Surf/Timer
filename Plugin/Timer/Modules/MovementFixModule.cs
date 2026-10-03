@@ -38,6 +38,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule
     // ReSharper disable InconsistentNaming
 
     private readonly IConVar timer_slopefix;
+    private readonly IConVar timer_telehop;
 
     private readonly IConVar sv_standable_normal;
 
@@ -56,6 +57,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule
                                                            "Keep the speed a downhill slope gives when landing on it without colliding with it first")
             !;
 
+        timer_telehop = bridge.ConVarManager.CreateConVar("timer_telehop",
+                                                          true,
+                                                          "Give back the speed a collision or landing took in the same tick a trigger_teleport fires")
+            !;
+
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
     }
 
@@ -63,13 +69,18 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule
     {
         _instance = this;
 
-        InstallSlopeFix();
+        ResetTelehopState();
+        InstallHooks();
+
+        _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
 
         return true;
     }
 
     public void Shutdown()
     {
+        _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
+
         // InlineHookManager shuts down first and removes the detours.
         _instance = null;
     }
