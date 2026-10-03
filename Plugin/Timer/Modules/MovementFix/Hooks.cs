@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Iced.Intel;
@@ -39,6 +40,15 @@ internal unsafe partial class MovementFixModule
     private static delegate* unmanaged<nint, MoveData*, bool, void>             CCSPlayer_MovementServices_CategorizePosition;
     private static delegate* unmanaged<nint, MoveData*, nint, nint, nint, void> CCSPlayer_MovementServices_TryPlayerMove;
     private static delegate* unmanaged<nint, nint, nint>                        CTriggerTeleport_Teleport;
+
+    // bool (this, CBaseEntity* pEntity, CBaseEntity* pDestination, Vector vecAbsOrigin, QAngle angAbs,
+    //       Vector* pNewOrigin, QAngle* pNewAngles, Vector* pNewVelocity)
+    // System V passes the by-value vectors in XMM registers, xy as a double, then z.
+    private static delegate* unmanaged<nint, nint, nint, Vector*, Vector*, Vector*, Vector*, Vector*, byte>
+        CTriggerTeleport_BuildTeleportParams_Windows;
+
+    private static delegate* unmanaged<nint, nint, nint, Vector*, Vector*, Vector*, double, float, double, float, byte>
+        CTriggerTeleport_BuildTeleportParams_Linux;
 
     private static delegate* unmanaged[SuppressGCTransition]<nint, TraceShapeRay*, Vector*, Vector*, CTraceFilter*, CGameTrace*, bool>
         CGamePhysicsQueryInterface_TraceShape;
@@ -72,6 +82,7 @@ internal unsafe partial class MovementFixModule
     private static int CCSPlayer_MovementServices_m_bDucked_offset;
     private static int CBaseTrigger_m_hTouchingEntities_offset;
     private static int CBaseTrigger_m_bDisabled_offset;
+    private static int CCSPlayerPawn_m_angEyeAngles_offset;
 
     private const int CGlobalVars_frametime_offset = 0x34;
 
@@ -105,6 +116,7 @@ internal unsafe partial class MovementFixModule
         CCSPlayer_MovementServices_m_bDucked_offset = schema.GetNetVarOffset("CCSPlayer_MovementServices", "m_bDucked");
         CBaseTrigger_m_hTouchingEntities_offset     = schema.GetNetVarOffset("CBaseTrigger", "m_hTouchingEntities");
         CBaseTrigger_m_bDisabled_offset             = schema.GetNetVarOffset("CBaseTrigger", "m_bDisabled");
+        CCSPlayerPawn_m_angEyeAngles_offset         = schema.GetNetVarOffset("CCSPlayerPawn", "m_angEyeAngles");
 
         // All of these come from ModSharp's own gamedata.
         var gameData = _bridge.ModSharp.GetGameData();
@@ -163,12 +175,39 @@ internal unsafe partial class MovementFixModule
             CCSPlayer_MovementServices_TryPlayerMove = (delegate* unmanaged<nint, MoveData*, nint, nint, nint, void>) trampoline;
         }
 
+        var teleport = FindTriggerTeleportTeleport();
+
         if (Hook("CTriggerTeleport teleport",
-                 FindTriggerTeleportTeleport(),
+                 teleport,
                  (nint) (delegate* unmanaged<nint, nint, nint>) (&hk_CTriggerTeleport_Teleport),
                  out trampoline))
         {
             CTriggerTeleport_Teleport = (delegate* unmanaged<nint, nint, nint>) trampoline;
+        }
+
+        var buildTeleportParams = FindBuildTeleportParams(teleport);
+
+        if (OperatingSystem.IsWindows())
+        {
+            if (Hook("CTriggerTeleport::BuildTeleportParams",
+                     buildTeleportParams,
+                     (nint) (delegate* unmanaged<nint, nint, nint, Vector*, Vector*, Vector*, Vector*, Vector*, byte>)
+                     (&hk_CTriggerTeleport_BuildTeleportParams_Windows),
+                     out trampoline))
+            {
+                CTriggerTeleport_BuildTeleportParams_Windows
+                    = (delegate* unmanaged<nint, nint, nint, Vector*, Vector*, Vector*, Vector*, Vector*, byte>) trampoline;
+            }
+        }
+        else if (Hook("CTriggerTeleport::BuildTeleportParams",
+                      buildTeleportParams,
+                      (nint) (delegate* unmanaged<nint, nint, nint, Vector*, Vector*, Vector*, double, float, double, float, byte>)
+                      (&hk_CTriggerTeleport_BuildTeleportParams_Linux),
+                      out trampoline))
+        {
+            CTriggerTeleport_BuildTeleportParams_Linux
+                = (delegate* unmanaged<nint, nint, nint, Vector*, Vector*, Vector*, double, float, double, float, byte>)
+                trampoline;
         }
 
         gameData.GetVFuncIndex("CBaseTrigger::PassesTriggerFilters", out CBaseTrigger_PassesTriggerFilters_index);
@@ -323,6 +362,49 @@ internal unsafe partial class MovementFixModule
         }
 
         return found;
+    }
+
+    // The direct callee of CTriggerTeleport's teleport that logs "Trigger %s is teleporting %s ...". Finds nothing rather
+    // than the wrong function if the logging ever moves into a cold function.
+    private nint FindBuildTeleportParams(nint teleport)
+    {
+        var server = _bridge.Modules.Server;
+
+        var logString = server.FindStringExact("Trigger %s is teleporting %s from ( %f %f %f ) to ( %f %f %f )\n");
+
+        if (teleport == nint.Zero
+            || logString == nint.Zero
+            || server.GetReferencesFromPointer(logString) is not [var logReference]
+            || !server.GetFunctionRange(teleport, out var start, out var end)
+            || end <= start)
+        {
+            return nint.Zero;
+        }
+
+        var reader  = new UnsafeCodeReader((byte*) start, (uint) (end - start));
+        var decoder = Decoder.Create(64, reader, (ulong) start, DecoderOptions.AMD);
+
+        while (reader.CanReadByte)
+        {
+            var instr = decoder.Decode();
+
+            if (instr.IsInvalid || instr.Code != Code.Call_rel32_64)
+            {
+                continue;
+            }
+
+            var target = (nint) instr.NearBranchTarget;
+
+            if (server.GetFunctionRange(target, out var calleeStart, out var calleeEnd)
+                && calleeStart == target
+                && logReference >= calleeStart
+                && logReference < calleeEnd)
+            {
+                return target;
+            }
+        }
+
+        return nint.Zero;
     }
 
 #region Raw entity access
@@ -483,4 +565,52 @@ internal unsafe partial class MovementFixModule
     [UnmanagedCallersOnly]
     private static nint hk_CTriggerTeleport_Teleport(nint trigger, nint other)
         => RunTriggerTeleport(trigger, other, out _);
+
+    [UnmanagedCallersOnly]
+    private static byte hk_CTriggerTeleport_BuildTeleportParams_Windows(nint    trigger,
+                                                                         nint    entity,
+                                                                         nint    destination,
+                                                                         Vector* absOrigin,
+                                                                         Vector* absAngles,
+                                                                         Vector* newOrigin,
+                                                                         Vector* newAngles,
+                                                                         Vector* newVelocity)
+    {
+        var result = CTriggerTeleport_BuildTeleportParams_Windows(trigger,
+                                                                  entity,
+                                                                  destination,
+                                                                  absOrigin,
+                                                                  absAngles,
+                                                                  newOrigin,
+                                                                  newAngles,
+                                                                  newVelocity);
+
+        return KeepTeleportAngles(entity, newAngles) ? (byte) 0 : result;
+    }
+
+    [UnmanagedCallersOnly]
+    private static byte hk_CTriggerTeleport_BuildTeleportParams_Linux(nint    trigger,
+                                                                       nint    entity,
+                                                                       nint    destination,
+                                                                       Vector* newOrigin,
+                                                                       Vector* newAngles,
+                                                                       Vector* newVelocity,
+                                                                       double  absOriginXY,
+                                                                       float   absOriginZ,
+                                                                       double  absAnglesXY,
+                                                                       float   absAnglesZ)
+    {
+        var result = CTriggerTeleport_BuildTeleportParams_Linux(trigger,
+                                                                entity,
+                                                                destination,
+                                                                newOrigin,
+                                                                newAngles,
+                                                                newVelocity,
+                                                                absOriginXY,
+                                                                absOriginZ,
+                                                                absAnglesXY,
+                                                                absAnglesZ);
+
+        return KeepTeleportAngles(entity, newAngles) ? (byte) 0 : result;
+    }
 }

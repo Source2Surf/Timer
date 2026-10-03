@@ -44,6 +44,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private readonly IConVar timer_telehop;
     private readonly IConVar timer_edgebug;
     private readonly IConVar timer_triggerjump;
+    private readonly IConVar timer_teleport_keep_angles;
 
     private readonly IConVar sv_standable_normal;
 
@@ -53,6 +54,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private static bool  _telehopEnabled;
     private static bool  _edgebugEnabled;
     private static bool  _triggerJumpEnabled;
+    private static bool  _keepTeleportAnglesEnabled;
     private static float _standableNormal;
 
     // CGlobalVars*, set once a map is loaded.
@@ -90,6 +92,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
                                                               "Fire trigger_teleports lying in the gap between a landing player and the ground")
             !;
 
+        timer_teleport_keep_angles = bridge.ConVarManager.CreateConVar("timer_teleport_keep_angles",
+                                                                       false,
+                                                                       "Keep players' view angles and velocity when a trigger_teleport moves them, instead of turning both to the destination")
+            !;
+
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
     }
 
@@ -102,6 +109,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.InstallChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_edgebug, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_triggerjump, OnConVarChanged);
+        _bridge.ConVarManager.InstallChangeHook(timer_teleport_keep_angles, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(sv_standable_normal, OnConVarChanged);
 
         InstallHooks();
@@ -123,6 +131,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.RemoveChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_edgebug, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_triggerjump, OnConVarChanged);
+        _bridge.ConVarManager.RemoveChangeHook(timer_teleport_keep_angles, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(sv_standable_normal, OnConVarChanged);
 
         // InlineHookManager shuts down first and removes the detours.
@@ -151,8 +160,9 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _slopefixEnabled = timer_slopefix.GetBool();
         _telehopEnabled  = timer_telehop.GetBool();
         _edgebugEnabled     = timer_edgebug.GetBool();
-        _triggerJumpEnabled = timer_triggerjump.GetBool();
-        _standableNormal    = sv_standable_normal.GetFloat();
+        _triggerJumpEnabled        = timer_triggerjump.GetBool();
+        _keepTeleportAnglesEnabled = timer_teleport_keep_angles.GetBool();
+        _standableNormal           = sv_standable_normal.GetFloat();
     }
 
     private static void ResetPlayerState()
