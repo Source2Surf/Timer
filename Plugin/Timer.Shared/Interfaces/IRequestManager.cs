@@ -43,6 +43,12 @@ public interface IRequestManager
 
 #region MapInfo
 
+    /// <summary>
+    /// Binds the map being loaded to its Steam Workshop item (0 = not from the workshop), so its data
+    /// follows the item when an update renames the map. Call before the map's first request.
+    /// </summary>
+    void SetMapWorkshopId(string mapName, ulong workshopId);
+
     Task<MapProfile> GetMapInfo(string map);
 
     Task UpdateMapInfo(MapProfile info);

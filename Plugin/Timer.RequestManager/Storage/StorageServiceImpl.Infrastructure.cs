@@ -19,6 +19,96 @@ internal sealed partial class StorageServiceImpl
             or Npgsql.PostgresException { SqlState: "23505" }
            || (exception.InnerException is { } inner && IsUniqueKeyViolation(inner));
 
+    public void SetMapWorkshopId(string mapName, ulong workshopId)
+    {
+        _workshopMap = workshopId == 0 ? null : new (ToMapKey(mapName), workshopId);
+
+        // A workshop update may have moved a cached name to another row.
+        _mapIdCache.Clear();
+    }
+
+    private ulong GetWorkshopId(string mapKey)
+        => _workshopMap is { } workshopMap && workshopMap.MapKey == mapKey ? workshopMap.WorkshopId : 0;
+
+    private Task<MapEntity?> FindMapAsync(string mapKey)
+        => GetWorkshopId(mapKey) is var workshopId and not 0
+               ? FindWorkshopMapAsync(mapKey, workshopId)
+               : FindMapByNameAsync(mapKey);
+
+    // A workshop map is identified by its item, not its file name: carry the item's row over to a
+    // renamed file, or claim the row stored under this name.
+    private async Task<MapEntity?> FindWorkshopMapAsync(string mapKey, ulong workshopId)
+    {
+        var itemMaps = await _db.Queryable<MapEntity>()
+                                .Where(x => x.WorkshopId == workshopId)
+                                .OrderBy(x => x.MapId)
+                                .ToListAsync(OperationCancellation);
+
+        if (itemMaps.Find(x => x.File == mapKey) is { } current)
+        {
+            return current;
+        }
+
+        var named = await FindMapByNameAsync(mapKey);
+
+        if (named is null && itemMaps.Count > 0)
+        {
+            var renamed = itemMaps[0];
+
+            try
+            {
+                await _db.Updateable<MapEntity>()
+                         .SetColumns(x => x.File == mapKey)
+                         .Where(x => x.MapId == renamed.MapId)
+                         .ExecuteCommandAsync(OperationCancellation);
+
+                _logger.LogInformation("Workshop item {workshopId} renamed map {old} to {map}.", workshopId, renamed.File, mapKey);
+                _mapIdCache.TryRemove(renamed.File, out _);
+                renamed.File = mapKey;
+
+                return renamed;
+            }
+            catch (Exception ex)
+            {
+                // Another server created the new name meanwhile.
+                named = await FindMapByNameAsync(mapKey);
+
+                if (named is null)
+                {
+                    throw;
+                }
+
+                _logger.LogDebug(ex, "Rename to map {map} raced with its creation.", mapKey);
+            }
+        }
+
+        if (named is null)
+        {
+            return null;
+        }
+
+        if (itemMaps.Count > 0)
+        {
+            _logger.LogWarning("Workshop item {workshopId} is stored as map {old}, but {map} has its own row; using {map}.",
+                               workshopId, itemMaps[0].File, mapKey);
+
+            return named;
+        }
+
+        if (named.WorkshopId != 0)
+        {
+            _logger.LogInformation("Map {map} moved from workshop item {old} to {workshopId}.", mapKey, named.WorkshopId, workshopId);
+        }
+
+        await _db.Updateable<MapEntity>()
+                 .SetColumns(x => x.WorkshopId == workshopId)
+                 .Where(x => x.MapId == named.MapId)
+                 .ExecuteCommandAsync(OperationCancellation);
+        named.WorkshopId = workshopId;
+
+        return named;
+    }
+
     private async Task<MapEntity?> FindMapByNameAsync(string mapName)
     {
         var map = await _db.Queryable<MapEntity>()
@@ -39,7 +129,7 @@ internal sealed partial class StorageServiceImpl
             return cachedMapId;
         }
 
-        var mapEntity = await FindMapByNameAsync(mapKey);
+        var mapEntity = await FindMapAsync(mapKey);
 
         if (mapEntity is null)
         {
@@ -65,15 +155,16 @@ internal sealed partial class StorageServiceImpl
 
     private async Task<MapEntity> EnsureMapEntityByKeyAsync(string mapKey, string mapName)
     {
-        var mapEntity = await FindMapByNameAsync(mapKey);
+        var mapEntity = await FindMapAsync(mapKey);
 
         if (mapEntity is null)
         {
             mapEntity = new ()
             {
-                File   = mapKey,
-                Tier   = 1,
-                Stages = 0,
+                File       = mapKey,
+                Tier       = 1,
+                Stages     = 0,
+                WorkshopId = GetWorkshopId(mapKey),
             };
 
             try
@@ -236,6 +327,8 @@ internal sealed partial class StorageServiceImpl
                     .OrderBy(x => x.File)
                     .Select(x => x.File)
                     .ToListAsync(OperationCancellation);
+
+    private sealed record WorkshopMap(string MapKey, ulong WorkshopId);
 
     private sealed class AttemptBestTimesRow
     {

@@ -44,6 +44,9 @@ internal sealed class RequestManagerProxy : ExternalModuleProxy<IRequestManager>
     protected override void ShutdownFallback()
     { }
 
+    public void SetMapWorkshopId(string mapName, ulong workshopId)
+        => Current.SetMapWorkshopId(mapName, workshopId);
+
     public Task<MapProfile> GetMapInfo(string map)
         => Current.GetMapInfo(map);
 

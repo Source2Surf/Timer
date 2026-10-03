@@ -195,6 +195,8 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         // load would let consumers key data (e.g. replays) against the WRONG MapId.
         _currentMapProfileInfo = new () { MapName = _bridge.CurrentMapName };
 
+        BindWorkshopItem(_bridge.CurrentMapName);
+
         var loadTask = Task.Run(async () =>
         {
             try
@@ -217,6 +219,24 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         }, _bridge.CancellationToken);
 
         _taskTracker.Track(loadTask);
+    }
+
+    // Must run before any module's first request for this map.
+    private void BindWorkshopItem(string mapName)
+    {
+        try
+        {
+            var workshopId = WorkshopMaps.FindItemId(mapName,
+                                                     _bridge.ModSharp.ListWorkshopMaps(),
+                                                     _bridge.ModSharp.GetAddonName());
+
+            _requestManager.SetMapWorkshopId(mapName, workshopId);
+            _logger.LogInformation("Map {map} workshop item: {workshopId}", mapName, workshopId);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error when binding map {map} to its workshop item", mapName);
+        }
     }
 
     public void OnGameActivate()

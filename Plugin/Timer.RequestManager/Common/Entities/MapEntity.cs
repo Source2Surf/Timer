@@ -32,4 +32,10 @@ internal sealed class MapEntity
 
     [SugarColumn(DefaultValue = "0")]
     public float TotalPlayTime { get; set; }
+
+    /// <summary>
+    /// Steam Workshop item the map comes from; 0 for maps outside the workshop.
+    /// </summary>
+    [SugarColumn(DefaultValue = "0")]
+    public ulong WorkshopId { get; set; }
 }

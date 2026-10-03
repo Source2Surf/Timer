@@ -25,6 +25,7 @@ internal sealed partial class StorageServiceImpl
         {
             MapId         = mapInfo.MapId,
             MapName       = mapInfo.File,
+            WorkshopId    = mapInfo.WorkshopId,
             Stages        = mapInfo.Stages,
             Bonuses       = mapInfo.Bonuses,
             Tier          = tiers,

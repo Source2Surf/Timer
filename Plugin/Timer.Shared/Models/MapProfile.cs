@@ -29,6 +29,9 @@ public class MapProfile
 
     public required string MapName { get; init; }
 
+    // 0 when the map isn't from the Steam Workshop.
+    public ulong WorkshopId { get; set; }
+
     public int Stages  { get; set; }
     public int Bonuses { get; set; }
 

@@ -19,6 +19,7 @@ internal sealed partial class StorageServiceImpl : IRequestManager
     private ISqlSugarClient _db => _operationDb.Value ?? (ISqlSugarClient)_rootDb;
     private readonly ILogger<StorageServiceImpl> _logger;
     private readonly ConcurrentDictionary<string, ulong> _mapIdCache = new (StringComparer.Ordinal);
+    private volatile WorkshopMap? _workshopMap;
     private readonly ConcurrentDictionary<(ulong mapId, RunType runType), byte> _bestRunMapSeededCache = new();
     private readonly ConcurrentDictionary<(ulong mapId, RunType runType), SemaphoreSlim> _bestRunSeedLocks = new();
     private readonly ConcurrentDictionary<(ulong mapId, RunType runType, int style, ushort track, ushort stage), byte> _bestRunSeededCache = new();
