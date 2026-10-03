@@ -16,6 +16,8 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Iced.Intel;
@@ -170,7 +172,7 @@ internal unsafe partial class MovementFixModule
         }
 
         if (Hook("CCSPlayer_MovementServices::TryPlayerMove",
-                 FindFunction("CCSPlayer_MovementServices::TryPlayerMove"),
+                 FindTryPlayerMove(),
                  (nint) (delegate* unmanaged<nint, MoveData*, nint, nint, nint, void>) (&hk_CCSPlayer_MovementServices_TryPlayerMove),
                  out trampoline))
         {
@@ -330,6 +332,63 @@ internal unsafe partial class MovementFixModule
         }
 
         return nint.Zero;
+    }
+
+    private nint FindTryPlayerMove()
+    {
+        var scanned   = ScanTryPlayerMove();
+        var signature = FindFunction("CCSPlayer_MovementServices::TryPlayerMove");
+
+        if (scanned != nint.Zero && signature != nint.Zero && scanned != signature)
+        {
+            _logger.LogError("CCSPlayer_MovementServices::TryPlayerMove: heuristic scan found 0x{Scanned:X} but the signature found 0x{Signature:X}",
+                             scanned,
+                             signature);
+
+            return nint.Zero;
+        }
+
+        return scanned != nint.Zero ? scanned : signature;
+    }
+
+    // The only function using both cvars, for the first plane's overbounce (checked on Windows and Linux, 2026-10).
+    private nint ScanTryPlayerMove()
+    {
+        var readers = FunctionsReadingConVar("sv_walkable_normal");
+
+        readers.IntersectWith(FunctionsReadingConVar("sv_bounce"));
+
+        return readers.Count == 1 && readers.First() is var function && IsFunctionStart(_bridge.Modules.Server, function)
+            ? function
+            : nint.Zero;
+    }
+
+    // Functions referencing the cvar's data pointer, or the CConVar object 8 bytes before it, which the Linux build
+    // addresses instead.
+    private HashSet<nint> FunctionsReadingConVar(string name)
+    {
+        var functions = new HashSet<nint>();
+
+        if (_bridge.ConVarManager.FindConVar(name, true) is not { } conVar)
+        {
+            return functions;
+        }
+
+        var server = _bridge.Modules.Server;
+
+        foreach (var slot in server.FindPointers(conVar.GetAbsPtr()))
+        {
+            foreach (var reference in server.GetReferencesFromPointer(slot)
+                                            .Concat(server.GetReferencesFromPointer(slot - 8)))
+            {
+                if (server.GetFunctionRange(reference, out var start, out _))
+                {
+                    functions.Add(start);
+                }
+            }
+        }
+
+        return functions;
     }
 
     // CBaseTrigger::StartTouch calls this virtual with the toucher, the only one past CBaseToggle's that CTriggerTeleport
