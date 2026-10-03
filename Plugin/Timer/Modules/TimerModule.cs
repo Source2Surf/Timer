@@ -77,6 +77,13 @@ internal interface ITimerModule
     ///     <see cref="RestoreTimerSnapshot"/>, no listeners are notified.
     /// </summary>
     void RestoreStageTimerSnapshot(PlayerSlot slot, StageTimerStateSnapshot snapshot);
+
+    /// <summary>
+    ///     Ignore zone exits that would start the main or stage timer for the next few ticks.
+    ///     Call before teleporting a player: the teleport fires EndTouch for the zone they
+    ///     were standing in, which would otherwise start a fresh timer at the destination.
+    /// </summary>
+    void SuppressZoneStarts(PlayerSlot slot);
 }
 
 // TODO:
@@ -98,6 +105,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     private readonly StageTimerInfo?[] _stageTimerInfo;
     private readonly bool[]            _authenticated;
     private readonly PauseState?[]     _pauseState;
+    private readonly int[]             _zoneStartSuppressedUntil;
 
     private static readonly TraceShapeHull StandingHull = new()
     {
@@ -118,6 +126,11 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     // Prejump-limit grace window: jumps only count against GetMaxPrejumps while the
     // player has been grounded for at most this many ticks.
     private const int PrejumpGraceTicks = 10;
+
+    // How long SuppressZoneStarts lasts. The EndTouch a teleport causes lands within a
+    // tick or two; the margin only costs a timer start if the player leaves a zone this
+    // soon after being teleported into it.
+    private const int ZoneStartSuppressTicks = 4;
 
     private readonly IZoneModule _zoneModule;
 
@@ -147,6 +160,8 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _stageTimerInfo = new StageTimerInfo?[PlayerSlot.MaxPlayerCount];
         _authenticated  = new bool[PlayerSlot.MaxPlayerCount];
         _pauseState     = new PauseState?[PlayerSlot.MaxPlayerCount];
+
+        _zoneStartSuppressedUntil = new int[PlayerSlot.MaxPlayerCount];
 
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
 
@@ -431,6 +446,14 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         timerInfo.UpdateInZone(EZoneType.Invalid);
         stageTimer.UpdateInZone(EZoneType.Invalid);
 
+        // Both cases below start a timer. After a practice teleport this EndTouch comes from
+        // the zone the player was teleported out of, so starting would throw away the restored
+        // timer and start a clean, record-eligible run from the teleport destination.
+        if (_bridge.GlobalVars.TickCount <= _zoneStartSuppressedUntil[controller.PlayerSlot])
+        {
+            return;
+        }
+
         var velocity = pawn.GetAbsVelocity();
 
         switch (info.ZoneType)
@@ -539,6 +562,9 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
     public void RestoreStageTimerSnapshot(PlayerSlot slot, StageTimerStateSnapshot snapshot)
         => _stageTimerInfo[slot]?.RestoreState(snapshot);
+
+    public void SuppressZoneStarts(PlayerSlot slot)
+        => _zoneStartSuppressedUntil[slot] = _bridge.GlobalVars.TickCount + ZoneStartSuppressTicks;
 
     public void RegisterListener(ITimerModuleListener listener)
         => _listenerHub.Register(listener);
@@ -799,6 +825,8 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
         _timerInfo[slot]      = new ();
         _stageTimerInfo[slot] = new ();
+
+        _zoneStartSuppressedUntil[slot] = 0;
 
         // when the server is not connected to the steam server, or maybe GC server,
         // it won't trigger OnClientPostAdminCheck, and we want to save records from authenticated players

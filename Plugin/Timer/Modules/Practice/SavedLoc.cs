@@ -30,7 +30,6 @@ internal readonly record struct PhysicsSnapshot(
     MoveType    MoveType,
     EntityFlags Flags,
     float       GravityScale,
-    float       LaggedMovement,
     float       Stamina,
     bool        Ducked,
     bool        Ducking,

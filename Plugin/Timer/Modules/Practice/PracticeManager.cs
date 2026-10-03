@@ -178,10 +178,29 @@ internal sealed partial class PracticeManager : IModule,
 
         var loc = locs[index];
 
-        ApplyPhysics(pawn, loc.Physics);
+        if (_timerModule.GetTimerInfo(slot) is { } timerInfo)
+        {
+            // Restoring would resume the timer while TimerModule still holds the pause state.
+            if (timerInfo.Status == ETimerStatus.Paused)
+            {
+                controller.PrintToChat("Cannot teleport while the timer is paused.");
+                return false;
+            }
+
+            // The snapshot carries the style, but switching style also replicates that style's
+            // movement cvars to the client (StyleModule), which a restore would skip.
+            if (loc.Timer is { } savedTimer && savedTimer.State.Style != timerInfo.Style)
+            {
+                controller.PrintToChat("That location was saved on a different style.");
+                return false;
+            }
+        }
 
         var forcePractice = !loc.Segmented || loc.SteamId != client.SteamId;
 
+        // Everything below happens before the teleport, because the teleport fires zone touches
+        // (an End zone at the destination finishes the run). Those must see a run that is
+        // already flagged and the destination's timer state, and must not start a new timer.
         if (forcePractice)
         {
             _state[slot] |= EPracticeFlags.Practice;
@@ -200,6 +219,10 @@ internal sealed partial class PracticeManager : IModule,
         {
             _timerModule.RestoreStageTimerSnapshot(slot, stageSnapshot);
         }
+
+        _timerModule.SuppressZoneStarts(slot);
+
+        ApplyPhysics(pawn, loc.Physics);
 
         _cursor[slot] = index;
 
@@ -285,6 +308,8 @@ internal sealed partial class PracticeManager : IModule,
     private static bool IsSegmentedStyle(int style)
         => false;
 
+    // The duck and ladder fields are declared on CCSPlayer_MovementServices, not the pawn;
+    // asking the pawn for them throws "Invalid NetVar".
     private static PhysicsSnapshot CapturePhysics(IPlayerPawn pawn)
     {
         var movement = pawn.GetMovementService()?.AsPlayerMovementService();
@@ -297,13 +322,12 @@ internal sealed partial class PracticeManager : IModule,
             MoveType:       pawn.ActualMoveType,
             Flags:          pawn.Flags,
             GravityScale:   pawn.GravityScale,
-            LaggedMovement: pawn.GetNetVar<float>("m_flLaggedMovementValue"),
-            Stamina:        movement?.Stamina   ?? 0f,
-            Ducked:         pawn.GetNetVar<bool>("m_bDucked"),
-            Ducking:        pawn.GetNetVar<bool>("m_bDucking"),
-            DuckAmount:     pawn.GetNetVar<float>("m_flDuckAmount"),
-            DuckSpeed:      movement?.DuckSpeed ?? 7.0f,
-            LadderNormal:   pawn.GetNetVar<Vector>("m_vecLadderNormal"));
+            Stamina:        movement?.Stamina                                ?? 0f,
+            Ducked:         movement?.GetNetVar<bool>("m_bDucked")            ?? false,
+            Ducking:        movement?.GetNetVar<bool>("m_bDucking")           ?? false,
+            DuckAmount:     movement?.GetNetVar<float>("m_flDuckAmount")      ?? 0f,
+            DuckSpeed:      movement?.DuckSpeed                              ?? 7.0f,
+            LadderNormal:   movement?.GetNetVar<Vector>("m_vecLadderNormal")  ?? new Vector());
     }
 
     private static void ApplyPhysics(IPlayerPawn pawn, PhysicsSnapshot p)
@@ -313,14 +337,13 @@ internal sealed partial class PracticeManager : IModule,
         pawn.GravityScale = p.GravityScale;
         pawn.BaseVelocity = p.BaseVelocity;
 
-        pawn.SetNetVar("m_flLaggedMovementValue", p.LaggedMovement);
-        pawn.SetNetVar("m_bDucked",               p.Ducked);
-        pawn.SetNetVar("m_bDucking",              p.Ducking);
-        pawn.SetNetVar("m_flDuckAmount",          p.DuckAmount);
-        pawn.SetNetVar("m_vecLadderNormal",       p.LadderNormal);
-
         if (pawn.GetMovementService()?.AsPlayerMovementService() is { } movement)
         {
+            movement.SetNetVar("m_bDucked",         p.Ducked);
+            movement.SetNetVar("m_bDucking",        p.Ducking);
+            movement.SetNetVar("m_flDuckAmount",    p.DuckAmount);
+            movement.SetNetVar("m_vecLadderNormal", p.LadderNormal);
+
             movement.Stamina   = p.Stamina;
             movement.DuckSpeed = p.DuckSpeed;
         }
