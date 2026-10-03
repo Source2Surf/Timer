@@ -38,6 +38,12 @@ internal class PlayerFrameData
 
     public int AttemptId { get; set; }
 
+    /// <summary>
+    /// Changes whenever frames are trimmed off the front of <see cref="Frames"/>, which shifts every frame index.
+    /// A <see cref="ReplayMark"/> from another lineage no longer describes this recording.
+    /// </summary>
+    public int Lineage { get; set; }
+
     public PendingRecordResult? PendingMainRecordResult   { get; set; }
     public Dictionary<int, PendingRecordResult> PendingStageRecordResults { get; } = [];
 

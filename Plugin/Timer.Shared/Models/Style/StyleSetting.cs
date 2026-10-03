@@ -74,6 +74,13 @@ public record StyleSetting
     public bool BlockD { get; init; } = false;
 
     /// <summary>
+    /// Segmented style: players may save and teleport back to their own locations during a run and the run still
+    /// counts for records. On any other style, teleporting to a saved location turns the run into practice.
+    /// </summary>
+    [JsonPropertyName("segmented")]
+    public bool Segmented { get; init; } = false;
+
+    /// <summary>
     /// Score multiplier for this style.
     /// Defaults to 1.0. Set to 1.5 for a 1.5x score multiplier, or 0 to exclude this style from scoring.
     /// </summary>

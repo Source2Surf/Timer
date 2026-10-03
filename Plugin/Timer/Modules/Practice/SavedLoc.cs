@@ -18,6 +18,7 @@
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Modules.Timer;
 
 namespace Source2Surf.Timer.Modules.Practice;
@@ -50,4 +51,13 @@ internal sealed class SavedLoc
     public TimerStateSnapshot? Timer { get; init; }
 
     public StageTimerStateSnapshot? StageTimer { get; init; }
+
+    /// <summary>
+    ///     Where the replay recording stood when a segmented loc was saved mid-run; teleporting back rewinds the replay
+    ///     to it. Null when there is nothing to keep in step: not segmented, no run going, or not recorded.
+    /// </summary>
+    public ReplayMark? Replay { get; init; }
+
+    /// <summary>Set once the frames <see cref="Replay"/> points at are gone, so this loc only works as practice.</summary>
+    public bool ReplayLost { get; set; }
 }

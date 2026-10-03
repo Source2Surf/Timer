@@ -17,6 +17,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Source2Surf.Timer.Modules.Practice;
+using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Shared.Interfaces.Modules;
 
 namespace Source2Surf.Timer.Modules;
@@ -39,6 +40,7 @@ internal static class ModuleDI
         services.AddSingleton<ICentralReplay>(x => x.GetRequiredService<ReplayPlaybackModule>());
         services.AddSingleton<IPersonalBestReplays>(x => x.GetRequiredService<ReplayPlaybackModule>());
         services.ImplSingleton<IReplayRecorderModule, IModule, ReplayRecorderModule>();
+        services.AddSingleton<IReplayRewind>(x => x.GetRequiredService<ReplayRecorderModule>());
         services.ImplSingleton<IHudModule, IModule, HudModule>();
         services.ImplSingleton<IMessageModule, IModule, MessageModule>();
 

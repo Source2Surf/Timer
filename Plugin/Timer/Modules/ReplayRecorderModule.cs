@@ -44,6 +44,7 @@ using Source2Surf.Timer.Shared.Models.Timer;
 namespace Source2Surf.Timer.Modules;
 
 internal class ReplayRecorderModule : IReplayRecorderModule,
+                                      IReplayRewind,
                                       IModule,
                                       IGameListener,
                                       IRecordModuleListener,
@@ -74,6 +75,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
     // Auto-increment AttemptId counter; overflow wraps harmlessly.
     private int _nextAttemptId;
+    private int _nextLineage;
 
     private readonly string _replayDirectory;
 
@@ -279,6 +281,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             Frames  = new List<ReplayFrameData>(TimerConstants.Tickrate * 60 * 5),
             SteamId = client.SteamId,
             Name    = client.Name,
+            Lineage = _nextLineage++,
         };
 
         _playerFrameData[slot] = data;
@@ -373,8 +376,23 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             return;
         }
 
+        StartNewAttempt(frameData);
+
+        var maxPreFrame = (int) (timer_replay_prerun_time.GetFloat() * TimerConstants.Tickrate);
+        ReplayShared.TrimPreRunFrames(frameData, maxPreFrame);
+        frameData.Lineage = _nextLineage++;
+
+        frameData.NewStageTicks.Clear();
+        frameData.StageTimerStartTicks.Clear();
+
+        frameData.TimerStartFrame = frameData.Frames.Count;
+    }
+
+    // Finish any pending post-run captures, then move to a fresh AttemptId so the next record can't pair with them.
+    private void StartNewAttempt(PlayerFrameData frameData)
+    {
         // StopTimer triggers ForceCallOnStop → snapshot creation.
-        // Flush BOTH pending post-frame timers before bumping AttemptId and trimming frames:
+        // Flush BOTH pending post-frame timers before bumping AttemptId and changing frames:
         // their forced callbacks build their snapshots from the current frame state under the
         // still-correct (finish-time) AttemptId. If we bumped first, a stage snapshot flushed
         // afterwards would key on the new AttemptId and never match its OnRecordSaved event.
@@ -394,14 +412,30 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         frameData.PendingMainRecordResult = null;
         frameData.PendingStageRecordResults.Clear();
+    }
 
-        var maxPreFrame = (int) (timer_replay_prerun_time.GetFloat() * TimerConstants.Tickrate);
-        ReplayShared.TrimPreRunFrames(frameData, maxPreFrame);
+    public ReplayMark? GetReplayMark(PlayerSlot slot)
+        => TryGetFrameData(slot, out var frameData) ? ReplayShared.CreateMark(frameData) : null;
 
-        frameData.NewStageTicks.Clear();
-        frameData.StageTimerStartTicks.Clear();
+    public ReplayRewindResult TryRewind(PlayerSlot slot, ReplayMark mark)
+    {
+        if (!TryGetFrameData(slot, out var frameData) || !ReplayShared.CanRewind(frameData, mark))
+        {
+            return ReplayRewindResult.Lost;
+        }
 
-        frameData.TimerStartFrame = frameData.Frames.Count;
+        // The deferred half of a stage finish reads NewStageTicks next frame and can't be flushed early.
+        if (frameData.StageFinishPending)
+        {
+            return ReplayRewindResult.Busy;
+        }
+
+        // A run finished after the mark still gets its replay, from the frames about to be dropped, and the run
+        // that continues from the mark records under a new AttemptId.
+        StartNewAttempt(frameData);
+        ReplayShared.TryRewindFrames(frameData, mark);
+
+        return ReplayRewindResult.Rewound;
     }
 
     public void OnPlayerStageTimerStart(IPlayerController controller,
@@ -1657,6 +1691,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             && _timerModule.GetStageTimerInfo(slot) is not { Status: not ETimerStatus.Stopped })
         {
             ReplayShared.TrimIdleFrames(frameData, maxPreFrame);
+            frameData.Lineage = _nextLineage++;
         }
     }
 

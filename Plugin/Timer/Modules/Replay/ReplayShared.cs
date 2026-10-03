@@ -419,6 +419,45 @@ internal static class ReplayShared
     }
 
     /// <summary>
+    /// Capture the current end of the recording for <see cref="TryRewindFrames"/>. The stage lists are copied because
+    /// re-entering a stage overwrites its StageTimerStartTicks entry in place.
+    /// </summary>
+    public static ReplayMark CreateMark(PlayerFrameData frameData)
+        => new (frameData.Lineage,
+                frameData.Frames.Count,
+                [.. frameData.NewStageTicks],
+                [.. frameData.StageTimerStartTicks]);
+
+    /// <summary>
+    /// Whether the recording still holds every frame up to <paramref name="mark"/>: same lineage, and not already
+    /// shorter than it.
+    /// </summary>
+    public static bool CanRewind(PlayerFrameData frameData, ReplayMark mark)
+        => mark.Lineage == frameData.Lineage && mark.FrameCount <= frameData.Frames.Count;
+
+    /// <summary>
+    /// Drop every frame recorded after <paramref name="mark"/> and restore the stage bookkeeping from then.
+    /// False, leaving the recording untouched, when <see cref="CanRewind"/> is false.
+    /// </summary>
+    public static bool TryRewindFrames(PlayerFrameData frameData, ReplayMark mark)
+    {
+        if (!CanRewind(frameData, mark))
+        {
+            return false;
+        }
+
+        frameData.Frames.RemoveRange(mark.FrameCount, frameData.Frames.Count - mark.FrameCount);
+
+        frameData.NewStageTicks.Clear();
+        frameData.NewStageTicks.AddRange(mark.NewStageTicks);
+
+        frameData.StageTimerStartTicks.Clear();
+        frameData.StageTimerStartTicks.AddRange(mark.StageTimerStartTicks);
+
+        return true;
+    }
+
+    /// <summary>
     /// Ensure the replay directory structure exists (style and stage subdirectories).
     /// Creates style_0 through style_{MAX_STYLE-1} directories, each with a stage subdirectory.
     /// </summary>

@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
@@ -25,6 +26,7 @@ using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Player;
+using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
 using Source2Surf.Timer.Shared.Models.Timer;
@@ -48,9 +50,13 @@ internal sealed partial class PracticeManager : IModule,
 
     private readonly InterfaceBridge            _bridge;
     private readonly ITimerModule               _timerModule;
+    private readonly IStyleModule               _styleModule;
     private readonly IPlayerManager             _playerManager;
     private readonly ICommandManager            _commandManager;
     private readonly ILogger<PracticeManager>   _logger;
+
+    // Resolved in OnPostInit: the recorder takes IPracticeModule in its constructor.
+    private IReplayRewind _replayRewind = null!;
 
     private readonly EPracticeFlags[]   _state  = new EPracticeFlags[PlayerSlot.MaxPlayerCount];
     private readonly List<SavedLoc>?[]  _locs   = new List<SavedLoc>?[PlayerSlot.MaxPlayerCount];
@@ -58,16 +64,21 @@ internal sealed partial class PracticeManager : IModule,
 
     public PracticeManager(InterfaceBridge          bridge,
                            ITimerModule             timerModule,
+                           IStyleModule             styleModule,
                            IPlayerManager           playerManager,
                            ICommandManager          commandManager,
                            ILogger<PracticeManager> logger)
     {
         _bridge         = bridge;
         _timerModule    = timerModule;
+        _styleModule    = styleModule;
         _playerManager  = playerManager;
         _commandManager = commandManager;
         _logger         = logger;
     }
+
+    public void OnPostInit(ServiceProvider provider)
+        => _replayRewind = provider.GetRequiredService<IReplayRewind>();
 
     public bool Init()
     {
@@ -126,6 +137,11 @@ internal sealed partial class PracticeManager : IModule,
 
         var segmented = IsSegmentedStyle(timerSnapshot?.State.Style ?? 0);
 
+        // Teleporting back to a segmented loc rewinds the replay too, so note where it stands. Only mid-run: with no
+        // timer running there is no replay to keep in step.
+        var midRun = timerSnapshot?.State.Status == ETimerStatus.Running
+                     || stageTimerSnapshot?.State.Status == ETimerStatus.Running;
+
         var loc = new SavedLoc
         {
             SteamId    = client.SteamId,
@@ -134,6 +150,7 @@ internal sealed partial class PracticeManager : IModule,
             Physics    = CapturePhysics(pawn),
             Timer      = timerSnapshot,
             StageTimer = stageTimerSnapshot,
+            Replay     = segmented && midRun ? _replayRewind.GetReplayMark(slot) : null,
         };
 
         locs.Add(loc);
@@ -198,6 +215,30 @@ internal sealed partial class PracticeManager : IModule,
         }
 
         var forcePractice = !loc.Segmented || loc.SteamId != client.SteamId;
+
+        // A segmented loc saved mid-run rewinds the replay along with the player, so the replay holds only the run
+        // that was kept. Once those frames are gone (a restart since, or rewound past) the run can't be replayed, so
+        // it carries on as practice.
+        if (!forcePractice && loc.Replay is { } mark)
+        {
+            switch (loc.ReplayLost ? ReplayRewindResult.Lost : _replayRewind.TryRewind(slot, mark))
+            {
+                case ReplayRewindResult.Rewound:
+                    MarkReplaysLostAfter(locs, mark);
+
+                    break;
+                case ReplayRewindResult.Busy:
+                    controller.PrintToChat("Saving a stage replay, try again in a moment.");
+
+                    return false;
+                default:
+                    loc.ReplayLost = true;
+                    forcePractice  = true;
+                    controller.PrintToChat("This location's replay is gone, so the run continues as practice.");
+
+                    break;
+            }
+        }
 
         // Everything below happens before the teleport, because the teleport fires zone touches
         // (an End zone at the destination finishes the run). Those must see a run that is
@@ -306,8 +347,20 @@ internal sealed partial class PracticeManager : IModule,
         _state[controller.PlayerSlot] = EPracticeFlags.None;
     }
 
-    private static bool IsSegmentedStyle(int style)
-        => false;
+    private bool IsSegmentedStyle(int style)
+        => _styleModule.GetStyleSetting(style).Segmented;
+
+    // A rewind drops every frame after the mark, so marks taken later in that recording point at frames that are gone.
+    private static void MarkReplaysLostAfter(List<SavedLoc> locs, ReplayMark mark)
+    {
+        foreach (var loc in locs)
+        {
+            if (loc.Replay is { } later && later.Lineage == mark.Lineage && later.FrameCount > mark.FrameCount)
+            {
+                loc.ReplayLost = true;
+            }
+        }
+    }
 
     // The duck and ladder fields are declared on CCSPlayer_MovementServices, not the pawn;
     // asking the pawn for them throws "Invalid NetVar".
