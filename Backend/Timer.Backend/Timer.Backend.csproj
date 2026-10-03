@@ -9,9 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Timer.RequestManager/Timer.Shared still expose ModSharp types in their public metadata.
-         Keep the runtime dependency explicit until the SQL read store is extracted completely. -->
-    <PackageReference Include="ModSharp.Sharp.Shared" Version="2.1.136" />
+    <PackageReference Include="ModSharp.Sharp.Shared" Version="*" />
     <PackageReference Include="MagicOnion.Server" Version="7.11.0" />
     <ProjectReference Include="..\Timer.Backend.Contracts\Timer.Backend.Contracts.csproj" />
     <ProjectReference Include="..\Timer.Backend.Rpc.Contracts\Timer.Backend.Rpc.Contracts.csproj" />
