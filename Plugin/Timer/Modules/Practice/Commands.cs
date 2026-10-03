@@ -45,7 +45,8 @@ internal sealed partial class PracticeManager
         _commandManager.AddClientChatCommand("pl",       OnCommandPrevLoc);
 
         _commandManager.AddClientChatCommand("locs",     OnCommandListLocs);
-        _commandManager.AddClientChatCommand("clearloc", OnCommandClearLocs);
+        _commandManager.AddClientChatCommand("clearloc",  OnCommandClearLocs);
+        _commandManager.AddClientChatCommand("clearlocs", OnCommandClearLocs);
 
         // Console commands too, so a key can be bound to them (bind mouse4 saveloc); the HUD's locations panel shows
         // the key bound to each.
@@ -53,6 +54,7 @@ internal sealed partial class PracticeManager
         AddConsoleCommand("loc",     "Teleport to your current saved location", c => TeleportToLoc(c));
         AddConsoleCommand("prevloc", "Teleport to your previous saved location", c => TeleportPrev(c));
         AddConsoleCommand("nextloc", "Teleport to your next saved location", c => TeleportNext(c));
+        AddConsoleCommand("clearloc", "Clear all your saved locations (run twice to confirm)", c => RequestClearLocs(c));
     }
 
     private readonly List<(string Name, Func<IGameClient?, StringCommand, ECommandAction> Callback)> _consoleCommands = [];
@@ -229,7 +231,7 @@ internal sealed partial class PracticeManager
     {
         if (_bridge.ClientManager.GetGameClient(slot) is { } client)
         {
-            ClearLocs(client);
+            RequestClearLocs(client);
         }
 
         return ECommandAction.Handled;

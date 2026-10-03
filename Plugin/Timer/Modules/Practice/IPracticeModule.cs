@@ -75,4 +75,19 @@ internal interface IPracticeModule
 
     /// <summary>Drop the entire location stack for the player.</summary>
     void ClearLocs(IGameClient client);
+
+    /// <summary>
+    /// Two-step <see cref="ClearLocs"/>: the first call asks for confirmation, and a second one within a few seconds
+    /// clears every saved location. Returns true when they were cleared.
+    /// </summary>
+    bool RequestClearLocs(IGameClient client);
+
+    /// <summary>Whether a <see cref="RequestClearLocs"/> is waiting for its confirming second call.</summary>
+    bool IsClearPending(PlayerSlot slot);
+
+    /// <summary>
+    /// Whether the player's current style is segmented, where saving and teleporting back keep the run
+    /// record-eligible instead of turning it into practice.
+    /// </summary>
+    bool IsOnSegmentedStyle(PlayerSlot slot);
 }

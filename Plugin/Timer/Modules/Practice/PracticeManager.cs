@@ -48,6 +48,8 @@ internal sealed partial class PracticeManager : IModule,
 {
     private const int MaxLocsPerPlayer = 64;
 
+    private const float ClearConfirmSeconds = 5f;
+
     private readonly InterfaceBridge            _bridge;
     private readonly ITimerModule               _timerModule;
     private readonly IStyleModule               _styleModule;
@@ -61,6 +63,9 @@ internal sealed partial class PracticeManager : IModule,
     private readonly EPracticeFlags[]   _state  = new EPracticeFlags[PlayerSlot.MaxPlayerCount];
     private readonly List<SavedLoc>?[]  _locs   = new List<SavedLoc>?[PlayerSlot.MaxPlayerCount];
     private readonly int[]              _cursor = new int[PlayerSlot.MaxPlayerCount];
+
+    // CurTime until which a RequestClearLocs waits for its confirming second call.
+    private readonly float[] _clearConfirmUntil = new float[PlayerSlot.MaxPlayerCount];
 
     public PracticeManager(InterfaceBridge          bridge,
                            ITimerModule             timerModule,
@@ -161,6 +166,9 @@ internal sealed partial class PracticeManager : IModule,
         }
 
         _cursor[slot] = locs.Count - 1;
+
+        // A pending clear-all was armed for the old list; don't let its confirming call take this new loc too.
+        _clearConfirmUntil[slot] = 0;
 
         _state[slot] |= segmented ? EPracticeFlags.Segmented : EPracticeFlags.Practice;
 
@@ -323,23 +331,56 @@ internal sealed partial class PracticeManager : IModule,
         var slot = client.Slot;
 
         _locs[slot]?.Clear();
-        _cursor[slot] = 0;
+        _cursor[slot]            = 0;
+        _clearConfirmUntil[slot] = 0;
 
         client.GetPlayerController()?.PrintToChat("Cleared all saved locations.");
     }
 
+    public bool RequestClearLocs(IGameClient client)
+    {
+        var slot = client.Slot;
+
+        if (_locs[slot] is not { Count: > 0 } locs)
+        {
+            client.GetPlayerController()?.PrintToChat("No saved locations.");
+            return false;
+        }
+
+        if (IsClearPending(slot))
+        {
+            ClearLocs(client);
+            return true;
+        }
+
+        _clearConfirmUntil[slot] = _bridge.GlobalVars.CurTime + ClearConfirmSeconds;
+
+        client.GetPlayerController()
+              ?.PrintToChat($"Clear all {locs.Count} saved locations? Clear again within {ClearConfirmSeconds:0} seconds to confirm.");
+
+        return false;
+    }
+
+    public bool IsClearPending(PlayerSlot slot)
+        => _bridge.GlobalVars.CurTime < _clearConfirmUntil[slot];
+
+    public bool IsOnSegmentedStyle(PlayerSlot slot)
+        => _timerModule.GetTimerInfo(slot) is { } timerInfo && IsSegmentedStyle(timerInfo.Style);
+
     public void OnClientPutInServer(PlayerSlot slot)
     {
-        _state[slot]  = EPracticeFlags.None;
-        _locs[slot]   = null;
-        _cursor[slot] = 0;
+        _state[slot]             = EPracticeFlags.None;
+        _locs[slot]              = null;
+        _cursor[slot]            = 0;
+        _clearConfirmUntil[slot] = 0;
     }
 
     public void OnClientDisconnected(PlayerSlot slot)
     {
-        _state[slot]  = EPracticeFlags.None;
-        _locs[slot]   = null;
-        _cursor[slot] = 0;
+        _state[slot]             = EPracticeFlags.None;
+        _locs[slot]              = null;
+        _cursor[slot]            = 0;
+        _clearConfirmUntil[slot] = 0;
     }
 
     public void OnPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
