@@ -41,6 +41,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     // ReSharper disable InconsistentNaming
 
     private readonly IConVar timer_slopefix;
+    private readonly IConVar timer_uphill;
     private readonly IConVar timer_telehop;
     private readonly IConVar timer_edgebug;
     private readonly IConVar timer_triggerjump;
@@ -51,6 +52,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     // ReSharper restore InconsistentNaming
 
     private static bool  _slopefixEnabled;
+    private static bool  _uphillEnabled;
     private static bool  _telehopEnabled;
     private static bool  _edgebugEnabled;
     private static bool  _triggerJumpEnabled;
@@ -75,6 +77,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         timer_slopefix = bridge.ConVarManager.CreateConVar("timer_slopefix",
                                                            true,
                                                            "Keep the speed a downhill slope gives when landing on it without colliding with it first")
+            !;
+
+        timer_uphill = bridge.ConVarManager.CreateConVar("timer_uphill",
+                                                         true,
+                                                         "Land players on an uphill slope without the collision that takes away their speed depending on where in the tick they reach it")
             !;
 
         timer_telehop = bridge.ConVarManager.CreateConVar("timer_telehop",
@@ -106,6 +113,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         RefreshConVars();
 
         _bridge.ConVarManager.InstallChangeHook(timer_slopefix, OnConVarChanged);
+        _bridge.ConVarManager.InstallChangeHook(timer_uphill, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_edgebug, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_triggerjump, OnConVarChanged);
@@ -128,6 +136,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.HookManager.PlayerPostThink.RemoveForward(OnPlayerPostThink);
 
         _bridge.ConVarManager.RemoveChangeHook(timer_slopefix, OnConVarChanged);
+        _bridge.ConVarManager.RemoveChangeHook(timer_uphill, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_edgebug, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_triggerjump, OnConVarChanged);
@@ -157,9 +166,10 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
     private void RefreshConVars()
     {
-        _slopefixEnabled = timer_slopefix.GetBool();
-        _telehopEnabled  = timer_telehop.GetBool();
-        _edgebugEnabled     = timer_edgebug.GetBool();
+        _slopefixEnabled           = timer_slopefix.GetBool();
+        _uphillEnabled             = timer_uphill.GetBool();
+        _telehopEnabled            = timer_telehop.GetBool();
+        _edgebugEnabled            = timer_edgebug.GetBool();
         _triggerJumpEnabled        = timer_triggerjump.GetBool();
         _keepTeleportAnglesEnabled = timer_teleport_keep_angles.GetBool();
         _standableNormal           = sv_standable_normal.GetFloat();
@@ -169,6 +179,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     {
         Array.Fill(_moveTick, 0);
         Array.Fill(_isFakeClient, false);
+        Array.Fill(_moved, false);
         Array.Fill(_collided, false);
         Array.Fill(_speedLossTick, int.MinValue);
         Array.Fill(_teleportTick, int.MinValue);
@@ -183,6 +194,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
         _moveTick[slot]++;
         _isFakeClient[slot] = client.IsFakeClient;
+        _moved[slot]        = false;
         _collided[slot]     = false;
 
         return new ();

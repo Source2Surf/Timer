@@ -75,6 +75,7 @@ internal unsafe partial class MovementFixModule
     private static int CBaseEntity_m_pCollision_offset;
     private static int CBaseEntity_m_hGroundEntity_offset;
     private static int CBaseEntity_m_flWaterLevel_offset;
+    private static int CBaseEntity_m_vecBaseVelocity_offset;
     private static int CCollisionProperty_m_collisionAttribute_offset;
     private static int VPhysicsCollisionAttribute_t_m_nInteractsWith_offset;
     private static int VPhysicsCollisionAttribute_t_m_nHierarchyId_offset;
@@ -102,6 +103,7 @@ internal unsafe partial class MovementFixModule
         CBaseEntity_m_pCollision_offset            = schema.GetNetVarOffset("CBaseEntity", "m_pCollision");
         CBaseEntity_m_hGroundEntity_offset         = schema.GetNetVarOffset("CBaseEntity", "m_hGroundEntity");
         CBaseEntity_m_flWaterLevel_offset          = schema.GetNetVarOffset("CBaseEntity", "m_flWaterLevel");
+        CBaseEntity_m_vecBaseVelocity_offset       = schema.GetNetVarOffset("CBaseEntity", "m_vecBaseVelocity");
 
         CCollisionProperty_m_collisionAttribute_offset
             = schema.GetNetVarOffset("CCollisionProperty", "m_collisionAttribute");
@@ -137,7 +139,7 @@ internal unsafe partial class MovementFixModule
 
         if (!_canTrace)
         {
-            _logger.LogWarning("Failed to find TraceShape, g_pPhysicsQuery or CTraceFilterPlayerMovementCS, slopefix and the edgebug fix are disabled");
+            _logger.LogWarning("Failed to find TraceShape, g_pPhysicsQuery or CTraceFilterPlayerMovementCS, slopefix and the uphill and edgebug fixes are disabled");
         }
 
         var getAbsOrigin   = _bridge.ModSharp.GetNativeFunctionPointer("Entity.GetAbsOrigin");
@@ -517,22 +519,28 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
-        var velocity = mv->Velocity;
-        var collided = ConsumeCollision(slot, velocity, out var expectedVelocity);
+        var step = TakeStepMove(slot, mv->Velocity);
 
         CCSPlayer_MovementServices_CategorizePosition(service, mv, stayOnGround);
 
         var landed = IsOnGround(pawn);
 
-        if (collided || landed)
+        if (step.Collided || landed)
         {
-            RecordSpeedLoss(slot, expectedVelocity);
+            RecordSpeedLoss(slot, step.ExpectedVelocity);
         }
 
-        if (landed)
+        if (!landed)
         {
-            RecordLanding(slot, mv->AbsOrigin, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
-            ApplySlopeFix(service, pawn, slot, mv, velocity);
+            return;
+        }
+
+        RecordLanding(slot, mv->AbsOrigin, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
+
+        // TryPlayerMove already clipped it.
+        if (step.Moved && !step.Collided)
+        {
+            ApplySlopeFix(service, pawn, slot, mv, step.MoveVelocity);
         }
     }
 
@@ -553,13 +561,14 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
-        ApplyEdgebugFix(service, pawn, slot, mv);
+        // These only move the start of the move, never the velocity.
+        ApplyPreMoveFixes(service, pawn, slot, mv);
 
         var velocity = mv->Velocity;
 
         CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
 
-        RecordCollision(slot, velocity, mv->Velocity);
+        RecordStepMove(slot, velocity, mv->Velocity);
     }
 
     [UnmanagedCallersOnly]

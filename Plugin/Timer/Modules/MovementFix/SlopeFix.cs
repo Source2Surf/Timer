@@ -27,7 +27,8 @@ namespace Source2Surf.Timer.Modules;
 // downhill slope without colliding with it first loses the speed the slope would have given.
 internal unsafe partial class MovementFixModule
 {
-    private static void ApplySlopeFix(nint service, nint pawn, int slot, MoveData* mv, Vector landingVelocity)
+    // moveVelocity is what this step's TryPlayerMove moved with, rngfix's pre-collision velocity.
+    private static void ApplySlopeFix(nint service, nint pawn, int slot, MoveData* mv, Vector moveVelocity)
     {
         if (!_slopefixEnabled || !_canTrace || _isFakeClient[slot] || GetMoveType(pawn) != MoveType.Walk
             || IsInWater(pawn))
@@ -35,8 +36,13 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
+        if (moveVelocity.Z > 0.0f)
+        {
+            return;
+        }
+
         // CS2's TryPlayerMove stops falling players this slow on standable planes.
-        if (landingVelocity.Length2DSqr() < 1.0f)
+        if (moveVelocity.Length2DSqr() < 1.0f)
         {
             return;
         }
@@ -48,41 +54,25 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
-        var ray    = CreatePlayerHull(service);
-        var origin = mv->AbsOrigin;
-        var ground = origin;
-        ground.Z -= LandHeight;
-
+        var ray   = CreatePlayerHull(service);
         var trace = stackalloc CGameTrace[1];
-        TracePlayerBBox(&origin, &ground, &ray, filter, trace);
 
-        if (trace->StartInSolid || trace->Fraction >= 1.0f)
+        if (!FindGround(mv->AbsOrigin, &ray, filter, trace, out var normal) || normal.Z >= 1.0f)
         {
             return;
         }
 
-        var normal = trace->PlaneNormal;
+        var clipped = ClipVelocity(moveVelocity, normal);
 
-        if (normal.Z >= 1.0f || normal.Z < _standableNormal)
+        // Never slower, unlike rngfix's downhill branch.
+        if (clipped.Length2DSqr() < moveVelocity.Length2DSqr())
         {
             return;
         }
 
-        // ClipVelocity, overbounce 1.
-        var clipped = landingVelocity - normal * landingVelocity.Dot(normal);
-        var adjust  = clipped.Dot(normal);
+        // The game adds the base velocity back on its own.
+        var baseVelocity = *(Vector*) (pawn + CBaseEntity_m_vecBaseVelocity_offset);
 
-        if (adjust < 0.0f)
-        {
-            clipped -= normal * adjust;
-        }
-
-        // Never slower.
-        if (clipped.Length2DSqr() < landingVelocity.Length2DSqr())
-        {
-            return;
-        }
-
-        mv->Velocity = new (clipped.X, clipped.Y, mv->Velocity.Z);
+        mv->Velocity = new (clipped.X - baseVelocity.X, clipped.Y - baseVelocity.Y, mv->Velocity.Z);
     }
 }

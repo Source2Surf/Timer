@@ -27,11 +27,6 @@ namespace Source2Surf.Timer.Modules;
 // the velocity towards the destination during the teleport, so it goes back onto the pawn right before.
 internal unsafe partial class MovementFixModule
 {
-    // The airborne TryPlayerMove of the current step clipped the velocity.
-    private static readonly bool[]   _collided                = new bool[PlayerSlot.MaxPlayerCount];
-    private static readonly Vector[] _velocityBeforeCollision = new Vector[PlayerSlot.MaxPlayerCount];
-    private static readonly Vector[] _velocityAfterCollision  = new Vector[PlayerSlot.MaxPlayerCount];
-
     private static readonly int[]    _speedLossTick    = new int[PlayerSlot.MaxPlayerCount];
     private static readonly Vector[] _expectedVelocity = new Vector[PlayerSlot.MaxPlayerCount];
 
@@ -43,36 +38,6 @@ internal unsafe partial class MovementFixModule
                                                   Vector Origin,
                                                   Vector Velocity,
                                                   bool   Restored);
-
-    private static void RecordCollision(int slot, Vector before, Vector after)
-    {
-        // Every clip changes the velocity by at least 1/32.
-        if (_collided[slot] || (after - before).LengthSqr() < 1e-4f)
-        {
-            return;
-        }
-
-        _collided[slot]                = true;
-        _velocityBeforeCollision[slot] = before;
-        _velocityAfterCollision[slot]  = after;
-    }
-
-    // What changed after TryPlayerMove (the second half of gravity, the base velocity) still applies to the expected
-    // velocity.
-    private static bool ConsumeCollision(int slot, Vector velocity, out Vector expected)
-    {
-        if (!_collided[slot])
-        {
-            expected = velocity;
-
-            return false;
-        }
-
-        _collided[slot] = false;
-        expected        = _velocityBeforeCollision[slot] + (velocity - _velocityAfterCollision[slot]);
-
-        return true;
-    }
 
     private static void RecordSpeedLoss(int slot, Vector expected)
     {
