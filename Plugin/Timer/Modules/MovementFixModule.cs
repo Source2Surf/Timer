@@ -43,6 +43,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private readonly IConVar timer_slopefix;
     private readonly IConVar timer_telehop;
     private readonly IConVar timer_edgebug;
+    private readonly IConVar timer_triggerjump;
 
     private readonly IConVar sv_standable_normal;
 
@@ -51,6 +52,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private static bool  _slopefixEnabled;
     private static bool  _telehopEnabled;
     private static bool  _edgebugEnabled;
+    private static bool  _triggerJumpEnabled;
     private static float _standableNormal;
 
     // CGlobalVars*, set once a map is loaded.
@@ -83,6 +85,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
                                                           "Land players on the edge of a block instead of letting them slide off it depending on where in the tick they hit it")
             !;
 
+        timer_triggerjump = bridge.ConVarManager.CreateConVar("timer_triggerjump",
+                                                              true,
+                                                              "Fire trigger_teleports lying in the gap between a landing player and the ground")
+            !;
+
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
     }
 
@@ -94,11 +101,13 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.InstallChangeHook(timer_slopefix, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_edgebug, OnConVarChanged);
+        _bridge.ConVarManager.InstallChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(sv_standable_normal, OnConVarChanged);
 
         InstallHooks();
 
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
+        _bridge.HookManager.PlayerPostThink.InstallForward(OnPlayerPostThink);
         _bridge.ModSharp.InstallGameListener(this);
 
         return true;
@@ -108,13 +117,20 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     {
         _bridge.ModSharp.RemoveGameListener(this);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
+        _bridge.HookManager.PlayerPostThink.RemoveForward(OnPlayerPostThink);
 
         _bridge.ConVarManager.RemoveChangeHook(timer_slopefix, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_edgebug, OnConVarChanged);
+        _bridge.ConVarManager.RemoveChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(sv_standable_normal, OnConVarChanged);
 
         // InlineHookManager shuts down first and removes the detours.
+        if (_triggerFilterVtable != null)
+        {
+            FreeTriggerFilterVtable();
+        }
+
         _globals = nint.Zero;
     }
 
@@ -134,8 +150,9 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     {
         _slopefixEnabled = timer_slopefix.GetBool();
         _telehopEnabled  = timer_telehop.GetBool();
-        _edgebugEnabled  = timer_edgebug.GetBool();
-        _standableNormal = sv_standable_normal.GetFloat();
+        _edgebugEnabled     = timer_edgebug.GetBool();
+        _triggerJumpEnabled = timer_triggerjump.GetBool();
+        _standableNormal    = sv_standable_normal.GetFloat();
     }
 
     private static void ResetPlayerState()
@@ -145,6 +162,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         Array.Fill(_collided, false);
         Array.Fill(_speedLossTick, int.MinValue);
         Array.Fill(_teleportTick, int.MinValue);
+        Array.Fill(_landTick, int.MinValue);
     }
 
     private static HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      @params,

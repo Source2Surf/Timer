@@ -43,6 +43,10 @@ internal unsafe partial class MovementFixModule
     private static delegate* unmanaged[SuppressGCTransition]<nint, TraceShapeRay*, Vector*, Vector*, CTraceFilter*, CGameTrace*, bool>
         CGamePhysicsQueryInterface_TraceShape;
 
+    // For filters calling back into managed code, which needs the GC transition.
+    private static delegate* unmanaged<nint, TraceShapeRay*, Vector*, Vector*, CTraceFilter*, CGameTrace*, bool>
+        CGamePhysicsQueryInterface_TraceShape_ManagedFilter;
+
     // ModSharp's natives, which handle GetAbsVelocity returning by value on Linux.
     private static delegate* unmanaged<nint, Vector*>       CBaseEntity_GetAbsOrigin;
     private static delegate* unmanaged<nint, Vector*>       CBaseEntity_GetAbsVelocity;
@@ -51,6 +55,9 @@ internal unsafe partial class MovementFixModule
     private static nint g_pPhysicsQuery;
     private static nint CTraceFilterPlayerMovementCS_vtable;
     private static nint CCSPlayerPawn_vtable;
+    private static nint CTriggerTeleport_vtable;
+
+    private static int CBaseTrigger_PassesTriggerFilters_index;
 
     private static int CPlayerPawnComponent_m_pChainEntity_offset;
     private static int CBaseEntity_m_lifeState_offset;
@@ -63,6 +70,8 @@ internal unsafe partial class MovementFixModule
     private static int VPhysicsCollisionAttribute_t_m_nHierarchyId_offset;
     private static int CBasePlayerPawn_m_hController_offset;
     private static int CCSPlayer_MovementServices_m_bDucked_offset;
+    private static int CBaseTrigger_m_hTouchingEntities_offset;
+    private static int CBaseTrigger_m_bDisabled_offset;
 
     private const int CGlobalVars_frametime_offset = 0x34;
 
@@ -70,6 +79,7 @@ internal unsafe partial class MovementFixModule
 
     private static bool _canTrace;
     private static bool _canSetVelocity;
+    private static bool _canTriggerJump;
 
     private void InstallHooks()
     {
@@ -93,6 +103,8 @@ internal unsafe partial class MovementFixModule
 
         CBasePlayerPawn_m_hController_offset        = schema.GetNetVarOffset("CBasePlayerPawn", "m_hController");
         CCSPlayer_MovementServices_m_bDucked_offset = schema.GetNetVarOffset("CCSPlayer_MovementServices", "m_bDucked");
+        CBaseTrigger_m_hTouchingEntities_offset     = schema.GetNetVarOffset("CBaseTrigger", "m_hTouchingEntities");
+        CBaseTrigger_m_bDisabled_offset             = schema.GetNetVarOffset("CBaseTrigger", "m_bDisabled");
 
         // All of these come from ModSharp's own gamedata.
         var gameData = _bridge.ModSharp.GetGameData();
@@ -105,6 +117,9 @@ internal unsafe partial class MovementFixModule
         CGamePhysicsQueryInterface_TraceShape
             = (delegate* unmanaged[SuppressGCTransition]<nint, TraceShapeRay*, Vector*, Vector*, CTraceFilter*, CGameTrace*, bool>)
             traceShape;
+
+        CGamePhysicsQueryInterface_TraceShape_ManagedFilter
+            = (delegate* unmanaged<nint, TraceShapeRay*, Vector*, Vector*, CTraceFilter*, CGameTrace*, bool>) traceShape;
 
         _canTrace = traceShape != nint.Zero && g_pPhysicsQuery != nint.Zero && CTraceFilterPlayerMovementCS_vtable != nint.Zero;
 
@@ -154,6 +169,24 @@ internal unsafe partial class MovementFixModule
                  out trampoline))
         {
             CTriggerTeleport_Teleport = (delegate* unmanaged<nint, nint, nint>) trampoline;
+        }
+
+        gameData.GetVFuncIndex("CBaseTrigger::PassesTriggerFilters", out CBaseTrigger_PassesTriggerFilters_index);
+        server.TryGetVirtualTableByName("CTriggerTeleport", out CTriggerTeleport_vtable);
+
+        _canTriggerJump = _canTrace
+                          && _canSetVelocity
+                          && CTriggerTeleport_Teleport != null
+                          && CTriggerTeleport_vtable != nint.Zero
+                          && CBaseTrigger_PassesTriggerFilters_index > 0;
+
+        if (_canTriggerJump)
+        {
+            CreateTriggerFilterVtable();
+        }
+        else
+        {
+            _logger.LogWarning("The trigger jump fix is disabled, a native it needs is missing");
         }
     }
 
@@ -416,6 +449,7 @@ internal unsafe partial class MovementFixModule
 
         if (landed)
         {
+            RecordLanding(slot, mv->AbsOrigin, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
             ApplySlopeFix(service, pawn, slot, mv, velocity);
         }
     }
@@ -448,15 +482,5 @@ internal unsafe partial class MovementFixModule
 
     [UnmanagedCallersOnly]
     private static nint hk_CTriggerTeleport_Teleport(nint trigger, nint other)
-    {
-        var pending = BeforeTriggerTeleport(other);
-        var result  = CTriggerTeleport_Teleport(trigger, other);
-
-        if (pending.Pawn != nint.Zero)
-        {
-            AfterTriggerTeleport(pending);
-        }
-
-        return result;
-    }
+        => RunTriggerTeleport(trigger, other, out _);
 }

@@ -85,6 +85,17 @@ internal unsafe partial class MovementFixModule
         _expectedVelocity[slot] = expected;
     }
 
+    // Shared by the teleport detour and the trigger jump fix.
+    private static nint RunTriggerTeleport(nint trigger, nint other, out bool teleported)
+    {
+        var pending = BeforeTriggerTeleport(other);
+        var result  = CTriggerTeleport_Teleport(trigger, other);
+
+        teleported = pending.Pawn != nint.Zero && AfterTriggerTeleport(pending);
+
+        return result;
+    }
+
     private static PendingTelehop BeforeTriggerTeleport(nint other)
     {
         if (!_canSetVelocity || other == nint.Zero || *(nint*) other != CCSPlayerPawn_vtable)
@@ -120,13 +131,13 @@ internal unsafe partial class MovementFixModule
         return new (other, slot, tick, *CBaseEntity_GetAbsOrigin(other), velocity, restore);
     }
 
-    private static void AfterTriggerTeleport(in PendingTelehop pending)
+    private static bool AfterTriggerTeleport(in PendingTelehop pending)
     {
         if (*CBaseEntity_GetAbsOrigin(pending.Pawn) != pending.Origin)
         {
             _teleportTick[pending.Slot] = pending.Tick;
 
-            return;
+            return true;
         }
 
         // The destination didn't exist.
@@ -135,5 +146,7 @@ internal unsafe partial class MovementFixModule
             var velocity = pending.Velocity;
             CBaseEntity_SetAbsVelocity(pending.Pawn, &velocity);
         }
+
+        return false;
     }
 }
