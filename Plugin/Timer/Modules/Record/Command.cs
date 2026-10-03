@@ -48,7 +48,7 @@ internal partial class RecordModule
 
         var (style, track) = GetStyleTrack(slot);
 
-        var stage = command.TryGet<byte>(1) is { } s ? (int)s : 0;
+        var stage = command.TryGetArg<byte>(1, out var s) ? s : 0;
 
         if (stage < 1)
         {
@@ -95,7 +95,7 @@ internal partial class RecordModule
 
         var (style, _) = GetStyleTrack(slot);
 
-        var bonus = command.TryGet<byte>(1) is { } b ? (int)b : 1;
+        var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
         if (bonus < 1)
         {
@@ -150,7 +150,7 @@ internal partial class RecordModule
 
         var (style, _) = GetStyleTrack(slot);
 
-        var bonus = command.TryGet<byte>(1) is { } b ? (int)b : 1;
+        var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
         if (bonus < 1)
         {
@@ -197,7 +197,7 @@ internal partial class RecordModule
 
         var (style, _) = GetStyleTrack(slot);
 
-        var bonus = command.TryGet<byte>(1) is { } b ? (int)b : 1;
+        var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
         if (bonus < 1 || bonus >= TimerConstants.MAX_TRACK)
         {
@@ -248,7 +248,7 @@ internal partial class RecordModule
 
         var (style, track) = GetStyleTrack(slot);
 
-        var stage = command.TryGet<byte>(1) is { } s ? (int)s : 0;
+        var stage = command.TryGetArg<byte>(1, out var s) ? s : 0;
 
         if (stage < 1)
         {

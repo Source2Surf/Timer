@@ -72,21 +72,21 @@ internal sealed partial class PracticeManager
             return ECommandAction.Handled;
         }
 
-        if (command.TryGet<int>(1) is { } n)
-        {
-            if (n < 1)
-            {
-                controller.PrintToChat("Usage: !tele <n>  (1-based loc index)");
-
-                return ECommandAction.Handled;
-            }
-
-            TeleportToLoc(client, n - 1);
-        }
-        else
+        if (command.ArgCount < 1)
         {
             TeleportToLoc(client);
+
+            return ECommandAction.Handled;
         }
+
+        if (!command.TryGetArg<int>(1, out var n) || n < 1)
+        {
+            controller.PrintToChat("Usage: !tele <n>  (1-based loc index)");
+
+            return ECommandAction.Handled;
+        }
+
+        TeleportToLoc(client, n - 1);
 
         return ECommandAction.Handled;
     }

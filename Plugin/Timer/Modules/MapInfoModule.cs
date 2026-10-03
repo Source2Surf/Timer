@@ -244,7 +244,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             return ECommandAction.Handled;
         }
 
-        if (command.TryGet<byte>(1) is { } tier and > 0)
+        if (command.TryGetArg<byte>(1, out var tier) && tier > 0)
         {
             // Persisting the placeholder would overwrite the map's real Stages/PlayCount
             // with zeros — refuse until the profile load has completed.
