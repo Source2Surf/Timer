@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Source2Surf.Timer.Native;
@@ -147,9 +148,9 @@ internal unsafe partial class MovementFixModule
         mv->AbsOrigin = rewound;
     }
 
-    // rngfix's ClipVelocity: overbounce 1, no adjust step.
+    // CS2's ClipVelocity with the overbounce of 1 TryPlayerMove uses on walkable planes.
     private static Vector ClipVelocity(Vector velocity, Vector normal)
-        => velocity - normal * velocity.Dot(normal);
+        => velocity + normal * (MathF.Max(-velocity.Dot(normal), 0.0f) + 0.03125f);
 
     // Standable ground within LandHeight, with TracePlayerBBoxForGround's quadrant fallback.
     private static bool FindGround(Vector         point,
