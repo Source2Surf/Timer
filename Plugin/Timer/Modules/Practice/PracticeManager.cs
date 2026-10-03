@@ -333,8 +333,12 @@ internal sealed partial class PracticeManager : IModule,
     private static void ApplyPhysics(IPlayerPawn pawn, PhysicsSnapshot p)
     {
         pawn.SetMoveType(p.MoveType);
+
+        // Go through the game's SetGravityScale, as ModSharp's own gravity triggers and inputs do,
+        // rather than writing m_flGravityScale alone (CBaseEntity also has m_flActualGravityScale).
+        pawn.SetGravityScale(p.GravityScale);
+
         pawn.Flags        = p.Flags;
-        pawn.GravityScale = p.GravityScale;
         pawn.BaseVelocity = p.BaseVelocity;
 
         if (pawn.GetMovementService()?.AsPlayerMovementService() is { } movement)
