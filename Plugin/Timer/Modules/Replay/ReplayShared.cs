@@ -156,6 +156,7 @@ internal static class ReplayShared
                 headerBytes.CopyTo(output, 0);
                 output[headerBytes.Length] = (byte)HeaderFrameSeparator;
                 using var compressor = new Compressor();
+                compressor.SetParameter(ZSTD_cParameter.ZSTD_c_checksumFlag, 1);
                 var written = compressor.Wrap(payload.AsSpan(0, payloadSize),
                                               output.AsSpan(prefixSize, compressedCapacity));
 
@@ -570,6 +571,8 @@ internal static class ReplayShared
 
                 compressionStream.SetParameter(ZSTD_cParameter.ZSTD_c_nbWorkers,
                                                Math.Max(compressionWorkers, 0));
+                // 4 bytes per file; a damaged file then fails to load instead of playing wrong frames.
+                compressionStream.SetParameter(ZSTD_cParameter.ZSTD_c_checksumFlag, 1);
 
                 await storage.SerializeAsync(compressionStream);
             }

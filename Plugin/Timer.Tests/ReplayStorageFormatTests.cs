@@ -198,6 +198,69 @@ public sealed class ReplayStorageFormatTests
     }
 
     [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task DamagedFilesNeverLoadWrongFrames(int workers)
+    {
+        var frames = Enumerable.Range(0, 256)
+                               .Select(i => CompactFrame() with
+                               {
+                                   Origin = new Vector(i * 3.5f, -i * 1.25f, i % 7),
+                                   Angles = new Vector2D(i % 89, (i * 13) % 360 - 180),
+                                   Velocity = new Vector(i * 2f, 250 - i, i % 5),
+                               })
+                               .ToList();
+
+        byte[] bytes;
+        if (workers < 0)
+        {
+            bytes = ReplayShared.SerializeReplay(Header(frames.Count), frames);
+        }
+        else
+        {
+            var path = TempPath();
+            try
+            {
+                Assert.True(await ReplayShared.WriteReplayToFileAsync(Header(frames.Count), path, frames, 3, workers, NullLogger.Instance));
+                bytes = File.ReadAllBytes(path);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        var body = Array.IndexOf(bytes, (byte)ReplayShared.HeaderFrameSeparator) + 1;
+        // Frame header descriptor: bit 2 is Content_Checksum_flag.
+        Assert.NotEqual(0, bytes[body + 4] & 0x04);
+        var expected = Decode(bytes).Content.Frames;
+
+        var damagedPath = TempPath();
+        try
+        {
+            using var decompressor = new Decompressor();
+            for (var i = body; i < bytes.Length; i++)
+            {
+                var damaged = (byte[])bytes.Clone();
+                damaged[i] ^= (byte)(1 << (i % 8));
+
+                // A flip that leaves the decoded frames intact (e.g. a larger window size) may still load.
+                if (ReplayShared.DeserializeReplay(damaged, 2, 3, 4, NullLogger.Instance) is { } loaded)
+                    Assert.Equal(expected, loaded.Content.Frames);
+
+                File.WriteAllBytes(damagedPath, damaged);
+                if (ReplayShared.LoadReplayFromPath(damagedPath, 2, 3, 4, decompressor, NullLogger.Instance) is { } fromDisk)
+                    Assert.Equal(expected, fromDisk.Content.Frames);
+            }
+        }
+        finally
+        {
+            File.Delete(damagedPath);
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void PreservesExistingSpatialQuantizationWithoutMutatingInput(bool fullWidth)
