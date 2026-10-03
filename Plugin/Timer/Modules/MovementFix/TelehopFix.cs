@@ -15,10 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-using System;
 using Sharp.Shared.Enums;
-using Sharp.Shared.GameEntities;
-using Sharp.Shared.HookParams;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 
@@ -30,9 +27,6 @@ namespace Source2Surf.Timer.Modules;
 // the velocity towards the destination during the teleport, so it goes back onto the pawn right before.
 internal unsafe partial class MovementFixModule
 {
-    // Counts user commands; ProcessMove runs once per sub-tick step.
-    private static readonly int[] _moveTick = new int[PlayerSlot.MaxPlayerCount];
-
     // The airborne TryPlayerMove of the current step clipped the velocity.
     private static readonly bool[]   _collided                = new bool[PlayerSlot.MaxPlayerCount];
     private static readonly Vector[] _velocityBeforeCollision = new Vector[PlayerSlot.MaxPlayerCount];
@@ -43,31 +37,12 @@ internal unsafe partial class MovementFixModule
 
     private static readonly int[] _teleportTick = new int[PlayerSlot.MaxPlayerCount];
 
-    private readonly record struct PendingTelehop(IPlayerPawn? Pawn,
-                                                  int          Slot,
-                                                  int          Tick,
-                                                  Vector       Origin,
-                                                  Vector       Velocity,
-                                                  bool         Restored);
-
-    private static void ResetTelehopState()
-    {
-        Array.Fill(_moveTick, 0);
-        Array.Fill(_collided, false);
-        Array.Fill(_speedLossTick, int.MinValue);
-        Array.Fill(_teleportTick, int.MinValue);
-    }
-
-    private static HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      @params,
-                                                                          HookReturnValue<EmptyHookReturn> ret)
-    {
-        int slot = @params.Client.Slot;
-
-        _moveTick[slot]++;
-        _collided[slot] = false;
-
-        return new ();
-    }
+    private readonly record struct PendingTelehop(nint   Pawn,
+                                                  int    Slot,
+                                                  int    Tick,
+                                                  Vector Origin,
+                                                  Vector Velocity,
+                                                  bool   Restored);
 
     private static void RecordCollision(int slot, Vector before, Vector after)
     {
@@ -110,46 +85,55 @@ internal unsafe partial class MovementFixModule
         _expectedVelocity[slot] = expected;
     }
 
-    private PendingTelehop BeforeTriggerTeleport(nint other)
+    private static PendingTelehop BeforeTriggerTeleport(nint other)
     {
-        if (_bridge.EntityManager.MakeEntityFromPointer<IBaseEntity>(other).AsPlayerPawn() is not { IsAlive: true } pawn
-            || pawn.GetController() is not { IsFakeClient: false } controller)
+        if (!_canSetVelocity || other == nint.Zero || *(nint*) other != CCSPlayerPawn_vtable)
         {
             return default;
         }
 
-        int slot = controller.PlayerSlot;
+        var slot = GetPlayerSlot(other);
+
+        if (slot < 0 || _isFakeClient[slot] || !IsAlive(other))
+        {
+            return default;
+        }
+
         var tick = _moveTick[slot];
 
         // Not again in the same tick, and not right after another teleport (rngfix's teleport hub guard).
-        var restore = timer_telehop.GetBool()
-                      && pawn.ActualMoveType == MoveType.Walk
+        var restore = _telehopEnabled
+                      && GetMoveType(other) == MoveType.Walk
+                      && !IsInWater(other)
                       && _speedLossTick[slot] == tick
-                      && _teleportTick[slot] != tick
-                      && _teleportTick[slot] != tick - 1;
+                      && _teleportTick[slot]  != tick
+                      && _teleportTick[slot]  != tick - 1;
 
-        var velocity = pawn.GetAbsVelocity();
+        var velocity = *CBaseEntity_GetAbsVelocity(other);
 
         if (restore)
         {
-            pawn.SetAbsVelocity(_expectedVelocity[slot]);
+            var expected = _expectedVelocity[slot];
+            CBaseEntity_SetAbsVelocity(other, &expected);
         }
 
-        return new (pawn, slot, tick, pawn.GetAbsOrigin(), velocity, restore);
+        return new (other, slot, tick, *CBaseEntity_GetAbsOrigin(other), velocity, restore);
     }
 
     private static void AfterTriggerTeleport(in PendingTelehop pending)
     {
-        var pawn = pending.Pawn!;
-
-        if (pawn.GetAbsOrigin() != pending.Origin)
+        if (*CBaseEntity_GetAbsOrigin(pending.Pawn) != pending.Origin)
         {
             _teleportTick[pending.Slot] = pending.Tick;
+
+            return;
         }
-        else if (pending.Restored)
+
+        // The destination didn't exist.
+        if (pending.Restored)
         {
-            // The destination didn't exist.
-            pawn.SetAbsVelocity(pending.Velocity);
+            var velocity = pending.Velocity;
+            CBaseEntity_SetAbsVelocity(pending.Pawn, &velocity);
         }
     }
 }

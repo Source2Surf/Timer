@@ -16,8 +16,8 @@
  */
 
 using Sharp.Shared.Enums;
-using Sharp.Shared.GameEntities;
 using Sharp.Shared.Types;
+using Source2Surf.Timer.Native;
 
 // ReSharper disable CheckNamespace
 namespace Source2Surf.Timer.Modules;
@@ -27,9 +27,10 @@ namespace Source2Surf.Timer.Modules;
 // downhill slope without colliding with it first loses the speed the slope would have given.
 internal unsafe partial class MovementFixModule
 {
-    private void OnLanded(nint service, nint pawnPtr, MoveData* mv, Vector landingVelocity)
+    private static void ApplySlopeFix(nint service, nint pawn, int slot, MoveData* mv, Vector landingVelocity)
     {
-        if (!timer_slopefix.GetBool())
+        if (!_slopefixEnabled || !_canTrace || _isFakeClient[slot] || GetMoveType(pawn) != MoveType.Walk
+            || IsInWater(pawn))
         {
             return;
         }
@@ -40,36 +41,29 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
-        var pawn = _bridge.EntityManager.MakeEntityFromPointer<IPlayerPawn>(pawnPtr);
+        var filter = stackalloc CTraceFilter[1];
 
-        if (pawn.ActualMoveType != MoveType.Walk || pawn.GetController() is not { IsFakeClient: false })
+        if (!InitPlayerMovementFilter(filter, pawn))
         {
             return;
         }
 
-        var hull = new TraceShapeHull
-        {
-            Mins = new (-16, -16, 0),
-            Maxs = new (16, 16, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset) ? 54 : 72),
-        };
-
+        var ray    = CreatePlayerHull(service);
         var origin = mv->AbsOrigin;
         var ground = origin;
-        ground.Z -= 2.0f;
+        ground.Z -= LandHeight;
 
-        var attribute = RnQueryShapeAttr.PlayerMovement(pawn.GetCollisionProperty()!.CollisionAttribute.InteractsWith);
-        attribute.SetEntityToIgnore(pawn, 0);
+        var trace = stackalloc CGameTrace[1];
+        TracePlayerBBox(&origin, &ground, &ray, filter, trace);
 
-        var trace = _bridge.PhysicsQueryManager.TraceShapePlayerMovement(new (hull), origin, ground, attribute);
-
-        if (trace.StartInSolid || trace.Fraction >= 1.0f)
+        if (trace->StartInSolid || trace->Fraction >= 1.0f)
         {
             return;
         }
 
-        var normal = trace.PlaneNormal;
+        var normal = trace->PlaneNormal;
 
-        if (normal.Z >= 1.0f || normal.Z < sv_standable_normal.GetFloat())
+        if (normal.Z >= 1.0f || normal.Z < _standableNormal)
         {
             return;
         }

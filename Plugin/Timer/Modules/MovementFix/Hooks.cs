@@ -15,20 +15,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Iced.Intel;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared;
+using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Native;
 
 // ReSharper disable CheckNamespace
 namespace Source2Surf.Timer.Modules;
 // ReSharper restore CheckNamespace
 
-// The native detours the movement fixes share. A hook that can't be found only disables the fixes that need it.
+// The native detours the movement fixes share, and raw entity access. A native that can't be found only disables the
+// fixes that need it.
 internal unsafe partial class MovementFixModule
 {
     // ReSharper disable InconsistentNaming
@@ -37,21 +40,97 @@ internal unsafe partial class MovementFixModule
     private static delegate* unmanaged<nint, MoveData*, nint, nint, nint, void> CCSPlayer_MovementServices_TryPlayerMove;
     private static delegate* unmanaged<nint, nint, nint>                        CTriggerTeleport_Teleport;
 
+    private static delegate* unmanaged[SuppressGCTransition]<nint, TraceShapeRay*, Vector*, Vector*, CTraceFilter*, CGameTrace*, bool>
+        CGamePhysicsQueryInterface_TraceShape;
+
+    // ModSharp's natives, which handle GetAbsVelocity returning by value on Linux.
+    private static delegate* unmanaged<nint, Vector*>       CBaseEntity_GetAbsOrigin;
+    private static delegate* unmanaged<nint, Vector*>       CBaseEntity_GetAbsVelocity;
+    private static delegate* unmanaged<nint, Vector*, void> CBaseEntity_SetAbsVelocity;
+
+    private static nint g_pPhysicsQuery;
+    private static nint CTraceFilterPlayerMovementCS_vtable;
+    private static nint CCSPlayerPawn_vtable;
+
     private static int CPlayerPawnComponent_m_pChainEntity_offset;
+    private static int CBaseEntity_m_lifeState_offset;
+    private static int CBaseEntity_m_nActualMoveType_offset;
+    private static int CBaseEntity_m_pCollision_offset;
     private static int CBaseEntity_m_hGroundEntity_offset;
+    private static int CBaseEntity_m_flWaterLevel_offset;
+    private static int CCollisionProperty_m_collisionAttribute_offset;
+    private static int VPhysicsCollisionAttribute_t_m_nInteractsWith_offset;
+    private static int VPhysicsCollisionAttribute_t_m_nHierarchyId_offset;
     private static int CBasePlayerPawn_m_hController_offset;
     private static int CCSPlayer_MovementServices_m_bDucked_offset;
 
+    private const int CGlobalVars_frametime_offset = 0x34;
+
     // ReSharper restore InconsistentNaming
+
+    private static bool _canTrace;
+    private static bool _canSetVelocity;
 
     private void InstallHooks()
     {
         var schema = _bridge.SchemaManager;
 
-        CPlayerPawnComponent_m_pChainEntity_offset  = schema.GetNetVarOffset("CPlayerPawnComponent", "__m_pChainEntity");
-        CBaseEntity_m_hGroundEntity_offset          = schema.GetNetVarOffset("CBaseEntity", "m_hGroundEntity");
+        CPlayerPawnComponent_m_pChainEntity_offset = schema.GetNetVarOffset("CPlayerPawnComponent", "__m_pChainEntity");
+        CBaseEntity_m_lifeState_offset             = schema.GetNetVarOffset("CBaseEntity", "m_lifeState");
+        CBaseEntity_m_nActualMoveType_offset       = schema.GetNetVarOffset("CBaseEntity", "m_nActualMoveType");
+        CBaseEntity_m_pCollision_offset            = schema.GetNetVarOffset("CBaseEntity", "m_pCollision");
+        CBaseEntity_m_hGroundEntity_offset         = schema.GetNetVarOffset("CBaseEntity", "m_hGroundEntity");
+        CBaseEntity_m_flWaterLevel_offset          = schema.GetNetVarOffset("CBaseEntity", "m_flWaterLevel");
+
+        CCollisionProperty_m_collisionAttribute_offset
+            = schema.GetNetVarOffset("CCollisionProperty", "m_collisionAttribute");
+
+        VPhysicsCollisionAttribute_t_m_nInteractsWith_offset
+            = schema.GetNetVarOffset("VPhysicsCollisionAttribute_t", "m_nInteractsWith");
+
+        VPhysicsCollisionAttribute_t_m_nHierarchyId_offset
+            = schema.GetNetVarOffset("VPhysicsCollisionAttribute_t", "m_nHierarchyId");
+
         CBasePlayerPawn_m_hController_offset        = schema.GetNetVarOffset("CBasePlayerPawn", "m_hController");
         CCSPlayer_MovementServices_m_bDucked_offset = schema.GetNetVarOffset("CCSPlayer_MovementServices", "m_bDucked");
+
+        // All of these come from ModSharp's own gamedata.
+        var gameData = _bridge.ModSharp.GetGameData();
+        var server   = _bridge.Modules.Server;
+
+        gameData.GetAddress("CGamePhysicsQueryInterface::TraceShape", out var traceShape);
+        gameData.GetAddress("g_pPhysicsQuery", out g_pPhysicsQuery);
+        server.TryGetVirtualTableByName("CTraceFilterPlayerMovementCS", out CTraceFilterPlayerMovementCS_vtable);
+
+        CGamePhysicsQueryInterface_TraceShape
+            = (delegate* unmanaged[SuppressGCTransition]<nint, TraceShapeRay*, Vector*, Vector*, CTraceFilter*, CGameTrace*, bool>)
+            traceShape;
+
+        _canTrace = traceShape != nint.Zero && g_pPhysicsQuery != nint.Zero && CTraceFilterPlayerMovementCS_vtable != nint.Zero;
+
+        if (!_canTrace)
+        {
+            _logger.LogWarning("Failed to find TraceShape, g_pPhysicsQuery or CTraceFilterPlayerMovementCS, slopefix and the edgebug fix are disabled");
+        }
+
+        var getAbsOrigin   = _bridge.ModSharp.GetNativeFunctionPointer("Entity.GetAbsOrigin");
+        var getAbsVelocity = _bridge.ModSharp.GetNativeFunctionPointer("Entity.GetAbsVelocity");
+        var setAbsVelocity = _bridge.ModSharp.GetNativeFunctionPointer("Entity.SetAbsVelocity");
+        server.TryGetVirtualTableByName("CCSPlayerPawn", out CCSPlayerPawn_vtable);
+
+        CBaseEntity_GetAbsOrigin   = (delegate* unmanaged<nint, Vector*>) getAbsOrigin;
+        CBaseEntity_GetAbsVelocity = (delegate* unmanaged<nint, Vector*>) getAbsVelocity;
+        CBaseEntity_SetAbsVelocity = (delegate* unmanaged<nint, Vector*, void>) setAbsVelocity;
+
+        _canSetVelocity = getAbsOrigin   != nint.Zero
+                          && getAbsVelocity != nint.Zero
+                          && setAbsVelocity != nint.Zero
+                          && CCSPlayerPawn_vtable != nint.Zero;
+
+        if (!_canSetVelocity)
+        {
+            _logger.LogWarning("Failed to find the CBaseEntity velocity accessors or the CCSPlayerPawn vtable, the telehop fix is disabled");
+        }
 
         if (Hook("CCSPlayer_MovementServices::CategorizePosition",
                  FindCategorizePosition(),
@@ -213,10 +292,27 @@ internal unsafe partial class MovementFixModule
         return found;
     }
 
-    private static bool IsOnGround(nint pawn)
-        => *(uint*) (pawn + CBaseEntity_m_hGroundEntity_offset) != uint.MaxValue;
+#region Raw entity access
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsOnGround(nint entity)
+        => *(uint*) (entity + CBaseEntity_m_hGroundEntity_offset) != uint.MaxValue;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsAlive(nint entity)
+        => *(LifeState*) (entity + CBaseEntity_m_lifeState_offset) == LifeState.Alive;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static MoveType GetMoveType(nint entity)
+        => *(MoveType*) (entity + CBaseEntity_m_nActualMoveType_offset);
+
+    // Where CS2 switches to WaterMove, (int) (level * 4 + 1) >= 3, like rngfix stopping at waist deep.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsInWater(nint entity)
+        => *(float*) (entity + CBaseEntity_m_flWaterLevel_offset) >= 0.5f;
 
     // The controller's entity index is its slot + 1.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetPlayerSlot(nint pawn)
     {
         var handle = *(uint*) (pawn + CBasePlayerPawn_m_hController_offset);
@@ -230,6 +326,67 @@ internal unsafe partial class MovementFixModule
 
         return slot < PlayerSlot.MaxPlayerCount ? slot : -1;
     }
+
+    // CEntityIdentity::GetRefEHandle.
+    private static uint GetRefHandle(nint entity)
+    {
+        var identity = *(nint*) (entity + 0x10);
+
+        if (identity == nint.Zero)
+        {
+            return uint.MaxValue;
+        }
+
+        var handle = *(uint*) (identity + 0x10);
+        var flags  = *(uint*) (identity + 0x30);
+
+        var index = handle != uint.MaxValue ? handle & 0x7FFF : 0x7FFF;
+
+        // Debug builds check arithmetic, and the serial wraps on purpose.
+        var serial = unchecked(((handle >> 15) - (flags & 0x1)) << 15);
+
+        return index | serial;
+    }
+
+    private static TraceShapeRay CreatePlayerHull(nint service)
+        => new (new TraceShapeHull
+        {
+            Mins = new (-16, -16, 0),
+            Maxs = new (16, 16, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset) ? 54 : 72),
+        });
+
+    // The game's CTraceFilterPlayerMovementCS, ignoring the player.
+    private static bool InitPlayerMovementFilter(CTraceFilter* filter, nint pawn)
+    {
+        var collision = *(nint*) (pawn + CBaseEntity_m_pCollision_offset);
+
+        if (collision == nint.Zero)
+        {
+            return false;
+        }
+
+        var attribute = collision + CCollisionProperty_m_collisionAttribute_offset;
+
+        *filter = default;
+
+        filter->QueryAttribute = RnQueryShapeAttr.PlayerMovement(
+            *(InteractionLayers*) (attribute + VPhysicsCollisionAttribute_t_m_nInteractsWith_offset));
+
+        filter->QueryAttribute.m_nEntityIdsToIgnore[0] = GetRefHandle(pawn);
+        filter->QueryAttribute.m_nHierarchyIds[0]
+            = *(ushort*) (attribute + VPhysicsCollisionAttribute_t_m_nHierarchyId_offset);
+
+        filter->Vtable             = (CTraceFilterVirtualTableDescriptor*) CTraceFilterPlayerMovementCS_vtable;
+        filter->m_bIterateEntities = true;
+
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void TracePlayerBBox(Vector* start, Vector* end, TraceShapeRay* ray, CTraceFilter* filter, CGameTrace* trace)
+        => CGamePhysicsQueryInterface_TraceShape(g_pPhysicsQuery, ray, start, end, filter, trace);
+
+#endregion
 
     [UnmanagedCallersOnly]
     private static void hk_CCSPlayer_MovementServices_CategorizePosition(nint service, MoveData* mv, bool stayOnGround)
@@ -257,19 +414,9 @@ internal unsafe partial class MovementFixModule
             RecordSpeedLoss(slot, expectedVelocity);
         }
 
-        if (!landed || _instance is not { } module)
+        if (landed)
         {
-            return;
-        }
-
-        // An exception escaping an unmanaged callback takes the server down with it.
-        try
-        {
-            module.OnLanded(service, pawn, mv, velocity);
-        }
-        catch (Exception e)
-        {
-            module._logger.LogError(e, "Error while applying slopefix");
+            ApplySlopeFix(service, pawn, slot, mv, velocity);
         }
     }
 
@@ -290,6 +437,8 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
+        ApplyEdgebugFix(service, pawn, slot, mv);
+
         var velocity = mv->Velocity;
 
         CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
@@ -300,33 +449,12 @@ internal unsafe partial class MovementFixModule
     [UnmanagedCallersOnly]
     private static nint hk_CTriggerTeleport_Teleport(nint trigger, nint other)
     {
-        var module  = _instance;
-        var pending = default(PendingTelehop);
+        var pending = BeforeTriggerTeleport(other);
+        var result  = CTriggerTeleport_Teleport(trigger, other);
 
-        if (module is not null)
+        if (pending.Pawn != nint.Zero)
         {
-            try
-            {
-                pending = module.BeforeTriggerTeleport(other);
-            }
-            catch (Exception e)
-            {
-                module._logger.LogError(e, "Error while applying telehop fix");
-            }
-        }
-
-        var result = CTriggerTeleport_Teleport(trigger, other);
-
-        if (module is not null && pending.Pawn is not null)
-        {
-            try
-            {
-                AfterTriggerTeleport(pending);
-            }
-            catch (Exception e)
-            {
-                module._logger.LogError(e, "Error while applying telehop fix");
-            }
+            AfterTriggerTeleport(pending);
         }
 
         return result;
