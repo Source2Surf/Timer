@@ -15,9 +15,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
+using System.Collections.Generic;
 using Cysharp.Text;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
+using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
@@ -43,6 +46,42 @@ internal sealed partial class PracticeManager
 
         _commandManager.AddClientChatCommand("locs",     OnCommandListLocs);
         _commandManager.AddClientChatCommand("clearloc", OnCommandClearLocs);
+
+        // Console commands too, so a key can be bound to them (bind mouse4 saveloc); the HUD's locations panel shows
+        // the key bound to each.
+        AddConsoleCommand("saveloc", "Save your current location", c => SaveLoc(c));
+        AddConsoleCommand("loc",     "Teleport to your current saved location", c => TeleportToLoc(c));
+        AddConsoleCommand("prevloc", "Teleport to your previous saved location", c => TeleportPrev(c));
+        AddConsoleCommand("nextloc", "Teleport to your next saved location", c => TeleportNext(c));
+    }
+
+    private readonly List<(string Name, Func<IGameClient?, StringCommand, ECommandAction> Callback)> _consoleCommands = [];
+
+    private void AddConsoleCommand(string name, string description, Action<IGameClient> action)
+    {
+        ECommandAction Callback(IGameClient? client, StringCommand command)
+        {
+            if (client is not null)
+            {
+                action(client);
+            }
+
+            return ECommandAction.Handled;
+        }
+
+        _bridge.ConVarManager.CreateConsoleCommand(name, Callback, description);
+        _consoleCommands.Add((name, Callback));
+    }
+
+    // The plugin reloads on every map change, so its command callbacks are handed back.
+    private void ReleaseConsoleCommands()
+    {
+        foreach (var (name, callback) in _consoleCommands)
+        {
+            _bridge.ConVarManager.ReleaseConsoleCommandCallback(name, callback);
+        }
+
+        _consoleCommands.Clear();
     }
 
     private ECommandAction OnCommandSaveLoc(PlayerSlot slot, StringCommand command)

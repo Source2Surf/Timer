@@ -209,6 +209,11 @@ internal sealed class HudPlayer
     // The texts this player reads, in their language where there's a translation.
     public HudTr Tr;
 
+    // The saved-locations panel, which walk + inspect shows and hides; for this visit only.
+    public bool LocsShown;
+    public bool LocsWasShown; // on the last refresh
+    public bool LocsRecheck;  // flipped each time it shows, so its key caps look their keys up again
+
     // Holds the view still while they drag. It's switched off after a drag rather than removed, and reused: a
     // camera removed while it holds the view never tells the client it let go, which leaves them looking through it.
     public ICustomPlayerCamera? Camera;

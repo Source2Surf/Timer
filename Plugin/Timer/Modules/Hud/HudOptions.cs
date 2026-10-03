@@ -285,6 +285,7 @@ internal enum HudTarget
     Info,
     Splits,
     Keys,
+    Locs,
 }
 
 /// <summary>
@@ -319,6 +320,7 @@ internal static class HudTargets
         new ("InfoPanel", "InfoPos", (-46, -47), (10, 6), true, HudTexts.TargetInfo, "info"),
         new ("SplitsPanel", "SplitsPos", (-40, -34), (20, 19), true, HudTexts.TargetSplits, "splits"),
         new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, HudTexts.TargetKeys, "keys"),
+        new ("LocsPanel", "LocsPos", (-42, 0), (13, 18), true, HudTexts.TargetLocs, "locs"),
     ];
 
     /// <summary>
@@ -332,6 +334,7 @@ internal static class HudTargets
         ["InfoPanel"]   = HudTarget.Info,
         ["SplitsPanel"] = HudTarget.Splits,
         ["KeysPanel"]   = HudTarget.Keys,
+        ["LocsPanel"]   = HudTarget.Locs,
     };
 
     public static HudTargetDef Def(HudTarget target)

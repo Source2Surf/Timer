@@ -235,6 +235,18 @@ internal static class HudTexts
     public static readonly HudText TargetInfo   = new ("ui.target.records", "records");
     public static readonly HudText TargetSplits = new ("ui.target.splits", "splits");
     public static readonly HudText TargetKeys   = new ("ui.target.keys", "keys");
+    public static readonly HudText TargetLocs   = new ("ui.target.locs", "locations");
+
+    public static readonly HudText LocsTitle      = new ("ui.locs.title", "Locations");
+    public static readonly HudText LocsTitleCount = new ("ui.locs.title_count", "Locations · {0}");
+    public static readonly HudText LocsSave       = new ("ui.locs.save", "Save");
+    public static readonly HudText LocsTeleport   = new ("ui.locs.teleport", "Teleport");
+    public static readonly HudText LocsTeleportTo = new ("ui.locs.teleport_to", "Teleport #{0}");
+    public static readonly HudText LocsPrev       = new ("ui.locs.prev", "Previous");
+    public static readonly HudText LocsNext       = new ("ui.locs.next", "Next");
+    public static readonly HudText LocsHide       = new ("ui.locs.hide", "Hide");
+    public static readonly HudText LocsNote       = new ("ui.locs.note", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys.");
+    public static readonly HudText LocsNoteFirst  = new ("ui.locs.note_first", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys. Saving puts your run in practice.");
 
     public static readonly HudText MenuTitle      = new ("ui.menu.title", "HUD settings");
     public static readonly HudText MenuMove       = new ("ui.menu.move", "Move");

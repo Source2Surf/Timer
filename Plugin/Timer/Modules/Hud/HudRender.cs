@@ -55,9 +55,9 @@ internal partial class HudModule
 
         // The client looks a whole value up in the game's own strings and shows what it finds instead: "Normal" became
         // 普通, "Style" became SET STYLE (valve_english.txt). A zero-width space in front keeps every value as it is,
-        // except editkey, which names the command whose bound key {g:csgo_key:editkey} shows.
+        // except editkey / editkey2, which name the commands whose bound keys {g:csgo_key:editkey} shows.
         private static string AsShown(string variable, string value)
-            => value.Length == 0 || variable == "editkey" ? value : ZString.Concat('​', value);
+            => value.Length == 0 || variable.StartsWith("editkey", StringComparison.Ordinal) ? value : ZString.Concat('\u200B', value);
 
         // Fixed labels, in the player's language.
         public void Labels((string Id, HudText Text)[] labels)
@@ -216,7 +216,71 @@ internal partial class HudModule
         {
             UpdateKeys(w, p, s);
         }
+
+        UpdateLocs(w, p, s);
     }
+
+    // ------------------------------------------------------------------ saved locations
+
+    /// <summary>
+    ///     The saved-locations panel: the practice actions with the key the player bound to each. Shown with walk +
+    ///     inspect, or while the menu is open so it can be dragged; only on the player's own run.
+    /// </summary>
+    private void UpdateLocs(HudWriter w, HudPlayer p, HudSource s)
+    {
+        var shown = (p.LocsShown || p.MenuOpen) && s.Replay is null && s.Slot == p.Slot;
+        w.Class("LocsPanel", "Hidden", !shown);
+
+        // The client only looks a key up when a label's text changes, so each time the panel shows, its key caps get a
+        // new (invisible) nonce: a key bound while it was hidden shows up.
+        if (shown && !p.LocsWasShown)
+        {
+            p.LocsRecheck = !p.LocsRecheck;
+        }
+
+        p.LocsWasShown = shown;
+
+        if (!shown || _bridge.ClientManager.GetGameClient(p.Slot) is not { } client)
+        {
+            return;
+        }
+
+        var tr    = p.Tr;
+        var count = _practiceModule.GetLocCount(p.Slot);
+
+        w.Text("LocsTitle", "text", count > 0 ? tr.Format(HudTexts.LocsTitleCount, count) : tr[HudTexts.LocsTitle]);
+        w.Text("LocsSave", "text", tr[HudTexts.LocsSave]);
+        w.Text("LocsTele", "text", count > 0 ? tr.Format(HudTexts.LocsTeleportTo, _practiceModule.GetCurrentLoc(client) + 1) : tr[HudTexts.LocsTeleport]);
+        w.Class("LocsTele", "dim", count == 0);
+        w.Text("LocsPrev", "text", tr[HudTexts.LocsPrev]);
+        w.Class("LocsPrev", "dim", count < 2);
+        w.Text("LocsNext", "text", tr[HudTexts.LocsNext]);
+        w.Class("LocsNext", "dim", count < 2);
+        w.Text("LocsHide", "text", tr[HudTexts.LocsHide]);
+
+        // How to bind, and how to see a new bind; before the first save, also what saving does.
+        w.Text("LocsNote", "text", tr[count == 0 ? HudTexts.LocsNoteFirst : HudTexts.LocsNote]);
+
+        // The command each key cap shows the key of (the practice module's console commands); the client fills in the
+        // bound key, or NOT BOUND.
+        w.Text("LocsKeySave", "editkey", "%saveloc%");
+        w.Text("LocsKeyTele", "editkey", "%loc%");
+        w.Text("LocsKeyPrev", "editkey", "%prevloc%");
+        w.Text("LocsKeyNext", "editkey", "%nextloc%");
+        w.Text("LocsKeyHide", "editkey", "%sprint%");
+        w.Text("LocsKeyHide", "editkey2", "%lookatweapon%");
+
+        var nonce = p.LocsRecheck ? LocsNonce : "";
+
+        foreach (var cap in LocsCaps)
+        {
+            w.Text(cap, "nonce", nonce);
+        }
+    }
+
+    private static readonly string[] LocsCaps = ["LocsKeySave", "LocsKeyTele", "LocsKeyPrev", "LocsKeyNext", "LocsKeyHide"];
+
+    private const string LocsNonce = "\u200B"; // invisible; any change makes the client redo the label
 
     // ------------------------------------------------------------------ menu
 
@@ -237,6 +301,16 @@ internal partial class HudModule
         {
             w.Text("DragToastWhat", "target", p.Tr.Format(HudTexts.DragMoving, p.Tr[HudTargets.Def(drag.Target).Name]));
             w.Labels(HudLabels.DragToast);
+
+            // CJK text comes from a fallback font whose taller line box centres it about a pixel below the key caps'
+            // text; lift it back (hud.css .DragToast .lift-1).
+            var cjk = HudFormat.HasCjk(p.Tr[HudTexts.DragPlace]);
+            w.Class("DragToastWhat", "lift-1", cjk);
+
+            foreach (var (id, _) in HudLabels.DragToast)
+            {
+                w.Class(id, "lift-1", cjk);
+            }
         }
 
         // {g:csgo_key:editkey} shows each player the key they bound to the command.

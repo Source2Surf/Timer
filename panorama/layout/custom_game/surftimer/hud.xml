@@ -13,7 +13,7 @@
 		every class it uses once on a new entity.
 		Fixed labels have an id and {s:text}, which the plugin sets to the player's text (HudLabels in HudText.cs),
 		so they read in the player's language.
-		Draggable panels (Menu, RunPanel, CSpeedPanel, InfoPanel, SplitsPanel, KeysPanel) get placed / editing /
+		Draggable panels (Menu, RunPanel, CSpeedPanel, InfoPanel, SplitsPanel, KeysPanel, LocsPanel) get placed / editing /
 		dragging / smooth, and once placed are centre-aligned and offset with mx-N / my-N on the panel plus
 		fx-N / fy-N on their full-screen *Pos wrapper (timer_positions.css).
 	-->
@@ -136,6 +136,25 @@
 							<Panel id="KeyGap" class="KeyGap" />
 							<Label id="KeyJump" class="Cap Wide" text="{s:text}" />
 						</Panel>
+					</Panel>
+				</Button>
+			</Panel>
+
+			<!-- Saved locations (practice): the actions with the keys the player bound to them. Each cap's editkey names a
+			     command ("%saveloc%") and {g:csgo_key:editkey} shows its key, or NOT BOUND; the game's {s:bind_<command>}
+			     stays empty in a custom HUD. The key is only looked up again when the label's text changes, so the plugin
+			     changes the invisible {s:nonce} each time the panel shows, to pick up a key bound since. Walk + inspect shows and hides it; it also shows while the menu is open, to
+			     drag it. -->
+			<Panel id="LocsPos" class="DragPos" hittest="false">
+				<Button id="LocsPanel" class="LocsPanel Hidden">
+					<Panel id="LocsBody" class="PanelBody LocsBody">
+						<Label id="LocsTitle" class="LocsTitle" text="{s:text}" />
+						<Panel class="LocsRow"><Label id="LocsKeySave" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsSave" class="LocsAct" text="{s:text}" /></Panel>
+						<Panel class="LocsRow"><Label id="LocsKeyTele" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsTele" class="LocsAct" text="{s:text}" /></Panel>
+						<Panel class="LocsRow"><Label id="LocsKeyPrev" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsPrev" class="LocsAct" text="{s:text}" /></Panel>
+						<Panel class="LocsRow"><Label id="LocsKeyNext" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsNext" class="LocsAct" text="{s:text}" /></Panel>
+						<Panel class="LocsRow"><Label id="LocsKeyHide" class="LocsCap" text="{g:csgo_key:editkey} + {g:csgo_key:editkey2}{s:nonce}" /><Label id="LocsHide" class="LocsAct" text="{s:text}" /></Panel>
+						<Label id="LocsNote" class="LocsNote" text="{s:text}" />
 					</Panel>
 				</Button>
 			</Panel>

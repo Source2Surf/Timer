@@ -83,6 +83,7 @@ internal sealed partial class PracticeManager : IModule,
     {
         _playerManager.UnregisterListener(this);
         _timerModule.UnregisterListener(this);
+        ReleaseConsoleCommands();
     }
 
     public bool IsInPractice(IGameClient client)

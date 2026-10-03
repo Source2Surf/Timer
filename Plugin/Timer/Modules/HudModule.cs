@@ -528,6 +528,14 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
             return;
         }
 
+        // Walk + inspect shows or hides the saved-locations panel; inspecting on its own doesn't.
+        if ((param.KeyButtons & UserCommandButtons.Speed) != 0
+            && (param.KeyButtons & param.ChangedButtons & UserCommandButtons.LookAtWeapon) != 0)
+        {
+            p.LocsShown = !p.LocsShown;
+            RefreshNow(p);
+        }
+
         if (p.Drag is not { } drag)
         {
             return;

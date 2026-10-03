@@ -101,6 +101,27 @@ Its overall stats (completions, records and total time played) come from
 `IRequestManager.GetPlayerSummary`. The default body answers null, so a provider
 without it shows the card without that section.
 
+### Saved locations
+
+Walk + inspect (SHIFT + F by default) shows or hides the saved-locations panel.
+It lists the practice actions and the key the player bound to each, which the
+game fills in from their own binds. It doesn't take the cursor, so players keep
+playing with it up, and it can be dragged from `!hud` like the other panels.
+
+The actions are console commands, so players can bind keys to them:
+
+```
+bind mouse4 saveloc
+bind mouse5 loc
+bind <key> prevloc
+bind <key> nextloc
+```
+
+The chat commands (`!sl`, `!loc`, `!pl`, `!nl`) still work.
+
+The game only looks a key up when the panel shows, so after binding a key, hide
+and show the panel to see it.
+
 ### Localization
 
 All of the HUD's text can be translated per player: the timer, records and splits,

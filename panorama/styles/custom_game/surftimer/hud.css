@@ -34,7 +34,8 @@
 .CSpeedPanel,
 .InfoPanel,
 .SplitsPanel,
-.KeysPanel {
+.KeysPanel,
+.LocsPanel {
     width: fit-children;
     height: fit-children;
     border: 2px solid #5ab4ff00;
@@ -365,6 +366,66 @@
     height: 1px;
 }
 
+/* ---- Saved locations ---- */
+
+/* The timer's text on a light dark background, so it reads on bright maps; key caps like the keys panel's. */
+.LocsPanel {
+    horizontal-align: left;
+    vertical-align: center;
+    margin-left: 48px;
+    padding: 12px 16px 14px 16px;
+    background-color: #0a0e1380;
+}
+
+.LocsPanel Label {
+    font-family: timerFont;
+    font-weight: bold;
+    color: white;
+    text-shadow: textShadow;
+}
+
+.LocsTitle {
+    font-size: 18px;
+    margin-bottom: 2px;
+}
+
+.LocsRow {
+    width: fit-children;
+    height: fit-children;
+    margin-top: 6px;
+    flow-children: right;
+}
+
+.LocsPanel .LocsCap {
+    min-width: 64px;
+    vertical-align: center;
+    padding: 4px 7px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-align: center;
+    color: #ffffffd9;
+    background-color: #0d121880;
+    border: 1px solid #ffffff66;
+    border-radius: 4px;
+}
+
+.LocsPanel .LocsAct {
+    vertical-align: center;
+    margin-left: 10px;
+    font-size: 18px;
+}
+
+.LocsPanel .LocsAct.dim {
+    color: #ffffff73;
+}
+
+.LocsPanel .LocsNote {
+    width: 260px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: #ffffffb3;
+}
+
 /* ---- Dragging (menu and every HUD panel) ---- */
 
 /* Full-screen, so its fine x/y offset adds to the panel's coarse one (timer_positions.css). A panel near a screen
@@ -384,7 +445,8 @@
 .CSpeedPanel.placed,
 .InfoPanel.placed,
 .SplitsPanel.placed,
-.KeysPanel.placed {
+.KeysPanel.placed,
+.LocsPanel.placed {
     horizontal-align: center;
     vertical-align: center;
     margin: 0px;
@@ -410,7 +472,8 @@
 .CSpeedPanel.smooth,
 .InfoPanel.smooth,
 .SplitsPanel.smooth,
-.KeysPanel.smooth {
+.KeysPanel.smooth,
+.LocsPanel.smooth {
     transition-property: background-color, border-color, box-shadow, position;
     transition-duration: .1s, .1s, .1s, .12s;
     transition-timing-function: ease, ease, ease, linear;
@@ -423,7 +486,8 @@
 .CSpeedPanel.editing,
 .InfoPanel.editing,
 .SplitsPanel.editing,
-.KeysPanel.editing {
+.KeysPanel.editing,
+.LocsPanel.editing {
     border-color: #5ab4ff59;
     background-color: #0a0e1359;
 }
@@ -432,7 +496,8 @@
 .CSpeedPanel.editing:hover,
 .InfoPanel.editing:hover,
 .SplitsPanel.editing:hover,
-.KeysPanel.editing:hover {
+.KeysPanel.editing:hover,
+.LocsPanel.editing:hover {
     border-color: #5ab4ffd9;
     background-color: #0a0e1380;
 }
@@ -442,7 +507,8 @@
 .CSpeedPanel.editing.dragging,
 .InfoPanel.editing.dragging,
 .SplitsPanel.editing.dragging,
-.KeysPanel.editing.dragging {
+.KeysPanel.editing.dragging,
+.LocsPanel.editing.dragging {
     background-color: #0a0e13b8;
     border-color: accentColor;
     box-shadow: #5ab4ff59 0px 0px 14px 2px;
@@ -501,16 +567,22 @@
 }
 
 .DragToast .ToastWhat {
-    margin-right: 14px;
     font-size: 12px;
     letter-spacing: 1px;
     text-transform: uppercase;
     color: accentColor;
 }
 
+/* Chinese, Japanese and Korean labels sit about a pixel below the key caps' text (a fallback font's taller line
+   box); the plugin sets lift-1 on them for those languages. */
+.DragToast .lift-1 {
+    margin-bottom: 1px;
+}
+
+/* The gap goes before each pair, so nothing trails after the last one and the text sits centred in the bar. */
 .ToastPair {
     vertical-align: center;
-    margin-right: 14px;
+    margin-left: 14px;
     flow-children: right;
 }
 

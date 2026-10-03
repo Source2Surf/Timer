@@ -535,6 +535,50 @@
     "en-us": "keys",
     "zh-cn": "按键"
   },
+  "ui.target.locs": {
+    "en-us": "locations",
+    "zh-cn": "存点"
+  },
+  "ui.locs.title": {
+    "en-us": "Locations",
+    "zh-cn": "存点"
+  },
+  "ui.locs.title_count": {
+    "en-us": "Locations · {0}",
+    "zh-cn": "存点 · {0}"
+  },
+  "ui.locs.save": {
+    "en-us": "Save",
+    "zh-cn": "保存"
+  },
+  "ui.locs.teleport": {
+    "en-us": "Teleport",
+    "zh-cn": "读点"
+  },
+  "ui.locs.teleport_to": {
+    "en-us": "Teleport #{0}",
+    "zh-cn": "读点 #{0}"
+  },
+  "ui.locs.prev": {
+    "en-us": "Previous",
+    "zh-cn": "上一个"
+  },
+  "ui.locs.next": {
+    "en-us": "Next",
+    "zh-cn": "下一个"
+  },
+  "ui.locs.hide": {
+    "en-us": "Hide",
+    "zh-cn": "隐藏"
+  },
+  "ui.locs.note": {
+    "en-us": "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys.",
+    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc（还有 loc、prevloc、nextloc）。隐藏再显示此面板即可更新按键。"
+  },
+  "ui.locs.note_first": {
+    "en-us": "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys. Saving puts your run in practice.",
+    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc（还有 loc、prevloc、nextloc）。隐藏再显示此面板即可更新按键。存点会让本次计时进入练习模式。"
+  },
   "ui.menu.title": {
     "en-us": "HUD settings",
     "zh-cn": "HUD 设置"

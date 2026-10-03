@@ -502,6 +502,8 @@ public sealed class HudLayoutContractTests
             "CSpeed", "Sr", "Pb", "SplitsBody", "SplitsEmpty", "KeyW", "KeyA", "KeyS", "KeyD", "KeyLeft", "KeyRight",
             "KeyDuck", "KeyGap", "KeyJump", "GuideX", "GuideY", "DragToast", "DragToastWhat", "MoveKeyPlace",
             "MoveKeyCancel", "MoveKeyReset", "MoveKeyFree", "MenuReset", "MenuClose",
+            "LocsTitle", "LocsSave", "LocsTele", "LocsPrev", "LocsNext", "LocsHide", "LocsNote",
+            "LocsKeySave", "LocsKeyTele", "LocsKeyPrev", "LocsKeyNext", "LocsKeyHide",
         ];
 
         foreach (var id in others)
@@ -704,7 +706,7 @@ public sealed class HudLocaleTests
         // Anything else a label shows comes from the plugin, or reads the same in every language.
         string[] same = ["W", "A", "S", "D", "−5s", "+5s"];
         var literal = Regex.Matches(xml, "<Label[^>]* text=\"([^\"]*)\"")
-                           .Select(m => Regex.Replace(m.Groups[1].Value, @"{[sg]:[a-z_:]+}", ""))
+                           .Select(m => Regex.Replace(m.Groups[1].Value, @"{[sg]:[a-z0-9_:]+}", ""))
                            .Where(t => t.Any(char.IsLetter) && !same.Contains(t));
 
         Assert.Empty(literal);
