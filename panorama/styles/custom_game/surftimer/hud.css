@@ -419,6 +419,16 @@
     color: #ffffff73;
 }
 
+/* Clear all, waiting for its second press. */
+.LocsPanel .LocsAct.warn {
+    color: #ff8b80;
+}
+
+.LocsPanel .LocsCap.warn {
+    border-color: #ff6b5ecc;
+    color: #ffb1a9;
+}
+
 .LocsPanel .LocsNote {
     width: 260px;
     margin-top: 8px;

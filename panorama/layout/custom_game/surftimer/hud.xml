@@ -153,6 +153,7 @@
 						<Panel class="LocsRow"><Label id="LocsKeyTele" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsTele" class="LocsAct" text="{s:text}" /></Panel>
 						<Panel class="LocsRow"><Label id="LocsKeyPrev" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsPrev" class="LocsAct" text="{s:text}" /></Panel>
 						<Panel class="LocsRow"><Label id="LocsKeyNext" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsNext" class="LocsAct" text="{s:text}" /></Panel>
+						<Panel class="LocsRow"><Label id="LocsKeyClear" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsClear" class="LocsAct" text="{s:text}" /></Panel>
 						<Panel class="LocsRow"><Label id="LocsKeyHide" class="LocsCap" text="{g:csgo_key:editkey} + {g:csgo_key:editkey2}{s:nonce}" /><Label id="LocsHide" class="LocsAct" text="{s:text}" /></Panel>
 						<Label id="LocsNote" class="LocsNote" text="{s:text}" />
 					</Panel>

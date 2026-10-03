@@ -571,13 +571,25 @@
     "en-us": "Hide",
     "zh-cn": "隐藏"
   },
+  "ui.locs.clear": {
+    "en-us": "Clear all",
+    "zh-cn": "清除全部"
+  },
+  "ui.locs.clear_ask": {
+    "en-us": "Press again to clear all {0}",
+    "zh-cn": "再按一次清除全部 {0} 个存点"
+  },
   "ui.locs.note": {
-    "en-us": "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys.",
-    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc（还有 loc、prevloc、nextloc）。隐藏再显示此面板即可更新按键。"
+    "en-us": "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys.",
+    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc（还有 loc、prevloc、nextloc、clearloc）。隐藏再显示此面板即可更新按键。"
   },
   "ui.locs.note_first": {
-    "en-us": "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys. Saving puts your run in practice.",
-    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc（还有 loc、prevloc、nextloc）。隐藏再显示此面板即可更新按键。存点会让本次计时进入练习模式。"
+    "en-us": "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys. Saving puts your run in practice.",
+    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc（还有 loc、prevloc、nextloc、clearloc）。隐藏再显示此面板即可更新按键。存点会让本次计时进入练习模式。"
+  },
+  "ui.locs.note_first_segmented": {
+    "en-us": "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys. On this segmented style, saving keeps your run record-eligible.",
+    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc（还有 loc、prevloc、nextloc、clearloc）。隐藏再显示此面板即可更新按键。当前为分段模式，存点后本次计时仍可创造纪录。"
   },
   "ui.menu.title": {
     "en-us": "HUD settings",

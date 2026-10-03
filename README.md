@@ -115,7 +115,11 @@ bind mouse4 saveloc
 bind mouse5 loc
 bind <key> prevloc
 bind <key> nextloc
+bind <key> clearloc
 ```
+
+`clearloc` (and `!clearloc`) asks first: the panel shows "Press again to clear all"
+for a few seconds, and a second press clears every saved location.
 
 The chat commands (`!sl`, `!loc`, `!pl`, `!nl`) still work.
 

@@ -503,7 +503,7 @@ public sealed class HudLayoutContractTests
             "KeyDuck", "KeyGap", "KeyJump", "GuideX", "GuideY", "DragToast", "DragToastWhat", "MoveKeyPlace",
             "MoveKeyCancel", "MoveKeyReset", "MoveKeyFree", "MenuReset", "MenuClose",
             "LocsTitle", "LocsSave", "LocsTele", "LocsPrev", "LocsNext", "LocsHide", "LocsNote",
-            "LocsKeySave", "LocsKeyTele", "LocsKeyPrev", "LocsKeyNext", "LocsKeyHide",
+            "LocsKeySave", "LocsKeyTele", "LocsKeyPrev", "LocsKeyNext", "LocsKeyHide", "LocsClear", "LocsKeyClear",
         ];
 
         foreach (var id in others)

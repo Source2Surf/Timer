@@ -245,8 +245,11 @@ internal static class HudTexts
     public static readonly HudText LocsPrev       = new ("ui.locs.prev", "Previous");
     public static readonly HudText LocsNext       = new ("ui.locs.next", "Next");
     public static readonly HudText LocsHide       = new ("ui.locs.hide", "Hide");
-    public static readonly HudText LocsNote       = new ("ui.locs.note", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys.");
-    public static readonly HudText LocsNoteFirst  = new ("ui.locs.note_first", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc). Hide and show this panel to update the keys. Saving puts your run in practice.");
+    public static readonly HudText LocsClear      = new ("ui.locs.clear", "Clear all");
+    public static readonly HudText LocsClearAsk   = new ("ui.locs.clear_ask", "Press again to clear all {0}");
+    public static readonly HudText LocsNote       = new ("ui.locs.note", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys.");
+    public static readonly HudText LocsNoteFirst  = new ("ui.locs.note_first", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys. Saving puts your run in practice.");
+    public static readonly HudText LocsNoteFirstSegmented = new ("ui.locs.note_first_segmented", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys. On this segmented style, saving keeps your run record-eligible.");
 
     public static readonly HudText MenuTitle      = new ("ui.menu.title", "HUD settings");
     public static readonly HudText MenuMove       = new ("ui.menu.move", "Move");

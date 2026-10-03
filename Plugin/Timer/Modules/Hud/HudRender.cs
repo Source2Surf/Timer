@@ -258,8 +258,19 @@ internal partial class HudModule
         w.Class("LocsNext", "dim", count < 2);
         w.Text("LocsHide", "text", tr[HudTexts.LocsHide]);
 
-        // How to bind, and how to see a new bind; before the first save, also what saving does.
-        w.Text("LocsNote", "text", tr[count == 0 ? HudTexts.LocsNoteFirst : HudTexts.LocsNote]);
+        // Clear all takes a second press within a few seconds; the practice module keeps the clock, and this panel
+        // drops the prompt once it says the request has lapsed.
+        var asking = count > 0 && _practiceModule.IsClearPending(p.Slot);
+        w.Text("LocsClear", "text", asking ? tr.Format(HudTexts.LocsClearAsk, count) : tr[HudTexts.LocsClear]);
+        w.Class("LocsClear", "dim", count == 0);
+        w.Class("LocsClear", "warn", asking);
+        w.Class("LocsKeyClear", "warn", asking);
+
+        // How to bind, and how to see a new bind; before the first save, also what saving does on this style.
+        var note = count > 0 ? HudTexts.LocsNote
+            : _practiceModule.IsOnSegmentedStyle(p.Slot) ? HudTexts.LocsNoteFirstSegmented
+                                                         : HudTexts.LocsNoteFirst;
+        w.Text("LocsNote", "text", tr[note]);
 
         // The command each key cap shows the key of (the practice module's console commands); the client fills in the
         // bound key, or NOT BOUND.
@@ -267,6 +278,7 @@ internal partial class HudModule
         w.Text("LocsKeyTele", "editkey", "%loc%");
         w.Text("LocsKeyPrev", "editkey", "%prevloc%");
         w.Text("LocsKeyNext", "editkey", "%nextloc%");
+        w.Text("LocsKeyClear", "editkey", "%clearloc%");
         w.Text("LocsKeyHide", "editkey", "%sprint%");
         w.Text("LocsKeyHide", "editkey2", "%lookatweapon%");
 
@@ -278,7 +290,7 @@ internal partial class HudModule
         }
     }
 
-    private static readonly string[] LocsCaps = ["LocsKeySave", "LocsKeyTele", "LocsKeyPrev", "LocsKeyNext", "LocsKeyHide"];
+    private static readonly string[] LocsCaps = ["LocsKeySave", "LocsKeyTele", "LocsKeyPrev", "LocsKeyNext", "LocsKeyClear", "LocsKeyHide"];
 
     private const string LocsNonce = "\u200B"; // invisible; any change makes the client redo the label
 
