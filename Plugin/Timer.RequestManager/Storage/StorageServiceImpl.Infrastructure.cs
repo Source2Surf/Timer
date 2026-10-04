@@ -89,7 +89,7 @@ internal sealed partial class StorageServiceImpl
 
         if (itemMaps.Count > 0)
         {
-            _logger.LogWarning("Workshop item {workshopId} is stored as map {old}, but {map} has its own row; using {map}.",
+            _logger.LogWarning("Workshop item {workshopId} is stored as map {old}, but {map} has its own row; using that row.",
                                workshopId, itemMaps[0].File, mapKey);
 
             return named;
