@@ -25,14 +25,14 @@ internal sealed partial class StorageServiceImpl
     /// score request commits atomically with the run and best-run projection.
     /// </summary>
     internal async Task EnqueueScoreRecalcAsync(ulong mapId, int style, ushort track, double styleFactor,
-                                                DateTime? nowUtc = null)
+                                                DateTime? nowUtc = null, bool repairTotals = false)
     {
         var now = nowUtc ?? DateTime.UtcNow;
 
         await WithRecordTransactionAsync(async () =>
         {
             await LockMapAsync(mapId);
-            await EnqueueScoreRecalcInCurrentRecordTransactionAsync(mapId, style, track, styleFactor, now);
+            await EnqueueScoreRecalcInCurrentRecordTransactionAsync(mapId, style, track, styleFactor, now, repairTotals);
         });
 
         // The database transaction is authoritative; this is only a low-latency hint.
@@ -44,7 +44,8 @@ internal sealed partial class StorageServiceImpl
     /// <see cref="LockMapAsync"/> in the active ReadCommitted transaction first.
     /// </summary>
     private async Task EnqueueScoreRecalcInCurrentRecordTransactionAsync(ulong mapId, int style, ushort track,
-                                                                          double styleFactor, DateTime nowUtc)
+                                                                          double styleFactor, DateTime nowUtc,
+                                                                          bool repairTotals = false)
     {
         if (_db.Ado.Transaction is null)
         {
@@ -52,7 +53,7 @@ internal sealed partial class StorageServiceImpl
         }
 
         var availableAtUtc = nowUtc.Add(ScoreRecalcDebounceDelay);
-        var merge = CachedShape("score-queue-merge", ScoreQueueMergeSql,
+        var merge = CachedShape(repairTotals ? "score-queue-merge-repair" : "score-queue-merge", () => ScoreQueueMergeSql(repairTotals),
                                 Sentinel.MapId, Sentinel.Style, Sentinel.Track, Sentinel.Factor, Sentinel.Now, Sentinel.Later);
 
         // The surrounding map lock serializes all foreground enqueues for this key. Keep the
@@ -81,6 +82,7 @@ internal sealed partial class StorageServiceImpl
             Track = track,
             RequestedGeneration = 1,
             ProcessedGeneration = 0,
+            RepairGeneration = repairTotals ? 1 : 0,
             StyleFactor = styleFactor,
             AvailableAtUtc = availableAtUtc,
             AttemptCount = 0,
@@ -91,7 +93,7 @@ internal sealed partial class StorageServiceImpl
     }
 
     // Generated once; arguments are bound in Sentinel order: map, style, track, factor, now, available at.
-    private KeyValuePair<string, List<SugarParameter>> ScoreQueueMergeSql()
+    private KeyValuePair<string, List<SugarParameter>> ScoreQueueMergeSql(bool repairTotals)
     {
         var mapId = Sentinel.MapId;
         var style = Sentinel.Style;
@@ -106,27 +108,34 @@ internal sealed partial class StorageServiceImpl
 
         // (field, value) keeps this SET order (new Entity { } would not); NULLs stay on ==, which
         // writes a literal NULL where PostgreSQL rejects a text-typed null parameter.
-        return _db.Updateable<ScoreRecalcOutboxEntity>()
-                  .SetColumns(x => x.AvailableAtUtc,
-                              x => x.DeadLetteredAtUtc == null
-                                   && x.RequestedGeneration > x.ProcessedGeneration
-                                   && x.AvailableAtUtc <= availableAtUtc
-                                       ? x.AvailableAtUtc
-                                       : availableAtUtc)
-                  .SetColumns(x => x.PendingSinceUtc,
-                              x => x.RequestedGeneration <= x.ProcessedGeneration
-                                       ? nowUtc : SqlFunc.IsNull(x.PendingSinceUtc, x.CreatedAtUtc))
-                  .SetColumns(x => x.RequestedGeneration, x => x.RequestedGeneration + 1)
-                  .SetColumns(x => x.StyleFactor, x => styleFactor)
-                  .SetColumns(x => x.AttemptCount, x => 0)
-                  .SetColumns(x => x.LastError == noError)
-                  .SetColumns(x => x.LeaseOwner, x => x.DeadLetteredAtUtc != null ? noLeaseOwner : x.LeaseOwner)
-                  .SetColumns(x => x.LeaseUntilUtc, x => x.DeadLetteredAtUtc != null ? noLeaseUntilUtc : x.LeaseUntilUtc)
-                  .SetColumns(x => x.DeadLetteredAtUtc == noDeadLetteredAtUtc)
-                  .SetColumns(x => x.UpdatedAtUtc, x => nowUtc)
-                  .Where(x => x.MapId == mapId && x.Style == style && x.Track == track
-                              && x.RequestedGeneration < long.MaxValue)
-                  .ToSql();
+        var update = _db.Updateable<ScoreRecalcOutboxEntity>()
+                        .SetColumns(x => x.AvailableAtUtc,
+                                    x => x.DeadLetteredAtUtc == null
+                                         && x.RequestedGeneration > x.ProcessedGeneration
+                                         && x.AvailableAtUtc <= availableAtUtc
+                                             ? x.AvailableAtUtc
+                                             : availableAtUtc)
+                        .SetColumns(x => x.PendingSinceUtc,
+                                    x => x.RequestedGeneration <= x.ProcessedGeneration
+                                             ? nowUtc : SqlFunc.IsNull(x.PendingSinceUtc, x.CreatedAtUtc));
+
+        // Before the increment, like the columns above: the generation this request creates.
+        if (repairTotals)
+        {
+            update = update.SetColumns(x => x.RepairGeneration, x => x.RequestedGeneration + 1);
+        }
+
+        return update.SetColumns(x => x.RequestedGeneration, x => x.RequestedGeneration + 1)
+                     .SetColumns(x => x.StyleFactor, x => styleFactor)
+                     .SetColumns(x => x.AttemptCount, x => 0)
+                     .SetColumns(x => x.LastError == noError)
+                     .SetColumns(x => x.LeaseOwner, x => x.DeadLetteredAtUtc != null ? noLeaseOwner : x.LeaseOwner)
+                     .SetColumns(x => x.LeaseUntilUtc, x => x.DeadLetteredAtUtc != null ? noLeaseUntilUtc : x.LeaseUntilUtc)
+                     .SetColumns(x => x.DeadLetteredAtUtc == noDeadLetteredAtUtc)
+                     .SetColumns(x => x.UpdatedAtUtc, x => nowUtc)
+                     .Where(x => x.MapId == mapId && x.Style == style && x.Track == track
+                                 && x.RequestedGeneration < long.MaxValue)
+                     .ToSql();
     }
 
     /// <summary>
@@ -286,6 +295,7 @@ internal sealed partial class StorageServiceImpl
                 request.Style,
                 request.Track,
                 request.StyleFactor,
+                request.RepairGeneration > request.ProcessedGeneration,
                 () => IsScoreRecalcGenerationPendingAsync(request),
                 () => CompleteScoreRecalcOutboxAsync(request, completedAtUtc()));
             if (!recalculated)

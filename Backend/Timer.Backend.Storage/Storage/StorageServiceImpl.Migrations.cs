@@ -61,6 +61,7 @@ internal sealed partial class StorageServiceImpl
         EnsureScoreRecalcOutboxIndexes();
         EnsureRunSubmissionInboxIndex();
         EnsureTrackScoreCoveringIndex();
+        EnsureReadIndexes();
         foreach (var tableName in new[] { "surf_run_submissions", "surf_score_recalc_outbox" })
         {
             if (!_db.DbMaintenance.IsAnyTable(tableName, false))

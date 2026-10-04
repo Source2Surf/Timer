@@ -73,6 +73,30 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
+    public async Task SeededMapIsMarkedSoARestartDoesNotSeedItAgain()
+    {
+        var storage = CreateStorage();
+        var map = await storage.GetMapInfo("surf_marked");
+        await AddRun(storage, map.MapId, 80);
+        await AddRun(storage, map.MapId, 20, stage: 1);
+        await storage.GetMapRecords("surf_marked");
+        await storage.GetMapStageRecords("surf_marked");
+        Assert.Equal(3, (await storage.Db.Queryable<MapEntity>().Where(x => x.MapId == map.MapId).FirstAsync()).BestRunsSeeded);
+
+        var restarted = CreateStorage();
+        var seeds = 0;
+        restarted.Db.Aop.OnLogExecuting = (sql, _) =>
+        {
+            // The seed ranks each player's runs; the per-board load also uses ROW_NUMBER, by board.
+            if (Regex.IsMatch(sql, @"PARTITION BY[^)]*SteamId", RegexOptions.IgnoreCase)) seeds++;
+        };
+        Assert.Single(await restarted.GetMapRecords("surf_marked"));
+        Assert.Single(await restarted.GetMapRecords("surf_marked", 0, 0));
+        Assert.Single(await restarted.GetMapStageRecords("surf_marked"));
+        Assert.Equal(0, seeds);
+    }
+
+    [Fact]
     public async Task ScopedSeedRepairsPartialBestTable()
     {
         var storage = CreateStorage();

@@ -130,6 +130,9 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
         Assert.True(db.DbMaintenance.IsAnyIndex("idx_score_recalc_outbox_unique"));
         Assert.True(db.DbMaintenance.IsAnyIndex("idx_score_recalc_outbox_pending"));
         Assert.True(db.DbMaintenance.IsAnyIndex("idx_player_track_scores_map_style_track"));
+        Assert.True(db.DbMaintenance.IsAnyIndex("idx_player_best_runs_board"));
+        Assert.False(db.DbMaintenance.IsAnyIndex("idx_player_best_runs_rank"));
+        Assert.True(db.DbMaintenance.IsAnyIndex("idx_surf_players_points"));
         var finalScoreIndexes = DescribeIndexes(db, "surf_player_track_scores");
         Assert.All(originalScoreIndexes, index =>
             Assert.Contains(index, finalScoreIndexes, StringComparer.OrdinalIgnoreCase));

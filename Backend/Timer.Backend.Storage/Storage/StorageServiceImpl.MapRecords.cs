@@ -13,6 +13,7 @@ namespace Timer.Backend.Storage;
 
 internal sealed partial class StorageServiceImpl
 {
+    // Every board of the map, each capped at limit: the plugin caches boards one by one.
     public Task<IReadOnlyList<RunRecord>> GetMapRecords(string mapName, int limit = IRequestManager.DefaultRecordLimit)
         => QueryBestRecordsByMapAsync(mapName,
                                       limit,
@@ -20,7 +21,8 @@ internal sealed partial class StorageServiceImpl
                                       style: null,
                                       track: null,
                                       stage: null,
-                                      orderByStageThenTime: false);
+                                      orderByStageThenTime: false,
+                                      limitPerBoard: true);
 
     public Task<IReadOnlyList<RunRecord>> GetMapStageRecords(string mapName, int limit = IRequestManager.DefaultRecordLimit)
         => QueryBestRecordsByMapAsync(mapName,
@@ -29,7 +31,8 @@ internal sealed partial class StorageServiceImpl
                                       style: null,
                                       track: null,
                                       stage: null,
-                                      orderByStageThenTime: true);
+                                      orderByStageThenTime: true,
+                                      limitPerBoard: true);
 
     public Task<IReadOnlyList<RunRecord>> GetMapRecords(string mapName,
                                                         int    style,
@@ -95,7 +98,8 @@ internal sealed partial class StorageServiceImpl
                                                                              ushort?   track,
                                                                              ushort?   stage,
                                                                              bool      orderByStageThenTime,
-                                                                             bool      ensureBestRunsSeeded = true)
+                                                                             bool      ensureBestRunsSeeded = true,
+                                                                             bool      limitPerBoard = false)
     {
         var mapId = await ResolveMapIdByNameAsync(mapName);
 
@@ -114,9 +118,11 @@ internal sealed partial class StorageServiceImpl
         }
 
         var normalizedLimit = NormalizeLimit(limit);
-        var shape = $"board:{runType}:{style.HasValue}:{track.HasValue}:{stage.HasValue}:{orderByStageThenTime}:{normalizedLimit}";
+        var shape = $"board:{runType}:{style.HasValue}:{track.HasValue}:{stage.HasValue}:{orderByStageThenTime}:{limitPerBoard}:{normalizedLimit}";
         var read  = CachedShape(shape,
-                                () => BoardSql(runType, style.HasValue, track.HasValue, stage.HasValue, orderByStageThenTime, normalizedLimit),
+                                () => limitPerBoard
+                                          ? BoardsSql(runType, style.HasValue, track.HasValue, stage.HasValue, orderByStageThenTime, normalizedLimit)
+                                          : BoardSql(runType, style.HasValue, track.HasValue, stage.HasValue, orderByStageThenTime, normalizedLimit),
                                 BoardArguments(Sentinel.MapId, style.HasValue ? Sentinel.Style : null,
                                                track.HasValue ? Sentinel.Track : null, stage.HasValue ? Sentinel.Stage : null));
 
@@ -180,12 +186,78 @@ internal sealed partial class StorageServiceImpl
         return SelectBoard(query).Take(limit).ToSql();
     }
 
+    // The top rows of each board: ranked within (Style, Track, Stage) on the board index, then joined.
+    private KeyValuePair<string, List<SugarParameter>> BoardsSql(RunType runType, bool byStyle, bool byTrack, bool byStage,
+                                                                  bool orderByStageThenTime, int limit)
+    {
+        var mapId = Sentinel.MapId;
+        var style = Sentinel.Style;
+        var track = Sentinel.Track;
+        var stage = Sentinel.Stage;
+        var bests = QueryBestRuns().Where(x => x.MapId == mapId && x.RunType == runType);
+
+        if (byStyle)
+        {
+            bests = bests.Where(x => x.Style == style);
+        }
+
+        if (byTrack)
+        {
+            bests = bests.Where(x => x.Track == track);
+        }
+
+        if (byStage)
+        {
+            bests = bests.Where(x => x.Stage == stage);
+        }
+        else if (runType == RunType.Main)
+        {
+            bests = bests.Where(x => x.Stage == 0);
+        }
+        else
+        {
+            bests = bests.Where(x => x.Stage > 0);
+        }
+
+        var ranked = bests.Select(x => new RankedBestRow
+                          {
+                              RunId     = x.RunId,
+                              Stage     = x.Stage,
+                              BestTime  = x.BestTime,
+                              BoardRank = SqlFunc.RowNumber($"{x.BestTime} ASC, {x.RunId} ASC", $"{x.Style}, {x.Track}, {x.Stage}"),
+                          })
+                          .MergeTable()
+                          .Where(x => x.BoardRank <= limit);
+
+        var query = _db.Queryable(ranked)
+                       .InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
+                       .LeftJoin<PlayerEntity>((best, run, player) => player.SteamId == run.SteamId);
+
+        if (orderByStageThenTime)
+        {
+            query = query.OrderBy((best, run, player) => best.Stage);
+        }
+
+        query = query.OrderBy((best, run, player) => best.BestTime)
+                     .OrderBy((best, run, player) => best.RunId);
+
+        return SelectBoard(query).ToSql();
+    }
+
+    private sealed class RankedBestRow
+    {
+        public ulong  RunId     { get; set; }
+        public ushort Stage     { get; set; }
+        public float  BestTime  { get; set; }
+        public long   BoardRank { get; set; }
+    }
+
     // Best runs with their run and player, so a board's names come in the same query.
     private ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> QueryBoard()
         => QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
                           .LeftJoin<PlayerEntity>((best, run, player) => player.SteamId == run.SteamId);
 
-    private static ISugarQueryable<BoardRow> SelectBoard(ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> query)
+    private static ISugarQueryable<BoardRow> SelectBoard<TBest>(ISugarQueryable<TBest, RunEntity, PlayerEntity> query)
         => query.Select((best, run, player) => new BoardRow
         {
             Id                       = SqlFunc.ToInt64(run.Id),

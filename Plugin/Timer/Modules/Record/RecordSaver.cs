@@ -255,6 +255,7 @@ internal sealed class RecordSaver
         }
 
         var acknowledged = RemoteRunSubmissionMapper.ToAcknowledgedRun(request, response, playerName, mapId);
+        var boardMissing = false;
         await _bridge.ModSharp.InvokeFrameActionAsync(() =>
         {
             if (!_mapCache.IsCurrent(mapLoad))
@@ -273,6 +274,7 @@ internal sealed class RecordSaver
 
             var currentRecords = _mapCache.GetRecords(recordRequest.Style, recordRequest.Track);
             var currentWrRecord = currentRecords.Count > 0 ? currentRecords[0] : null;
+            boardMissing = currentRecords.Count == 0;
             var currentClient = _bridge.ClientManager.GetGameClient(steamId);
             var currentPbRecord = currentClient is null
                 ? null
@@ -305,7 +307,12 @@ internal sealed class RecordSaver
             }
         }, ct).ConfigureAwait(false);
 
-        await RefreshMapRecord(mapName, recordRequest.Style, recordRequest.Track, mapLoad).ConfigureAwait(false);
+        // A finish that is no record leaves the board as it was. It also means the board has records,
+        // so an empty one here was never loaded (a failed map-start read) and is fetched now.
+        if (acknowledged.RecordType >= EAttemptResult.NewPersonalRecord || boardMissing)
+        {
+            await RefreshMapRecord(mapName, recordRequest.Style, recordRequest.Track, mapLoad).ConfigureAwait(false);
+        }
     }
 
     private async Task SaveRemoteStageRecordAsync(SteamID                    steamId,
@@ -348,6 +355,7 @@ internal sealed class RecordSaver
         }
 
         var acknowledged = RemoteRunSubmissionMapper.ToAcknowledgedRun(request, response, playerName, mapId);
+        var boardMissing = false;
         await _bridge.ModSharp.InvokeFrameActionAsync(() =>
         {
             if (!_mapCache.IsCurrent(mapLoad))
@@ -368,6 +376,7 @@ internal sealed class RecordSaver
                                                                  recordRequest.Track,
                                                                  recordRequest.Stage);
             var currentWrRecord = currentStageRecords is { Count: > 0 } ? currentStageRecords[0] : null;
+            boardMissing = currentStageRecords is not { Count: > 0 };
             var currentClient = _bridge.ClientManager.GetGameClient(steamId);
             var currentPbRecord = currentClient is null
                 ? null
@@ -395,11 +404,14 @@ internal sealed class RecordSaver
             }
         }, ct).ConfigureAwait(false);
 
-        await RefreshMapStageRecord(mapName,
-                                    recordRequest.Style,
-                                    recordRequest.Track,
-                                    recordRequest.Stage,
-                                    mapLoad).ConfigureAwait(false);
+        if (acknowledged.RecordType >= EAttemptResult.NewPersonalRecord || boardMissing)
+        {
+            await RefreshMapStageRecord(mapName,
+                                        recordRequest.Style,
+                                        recordRequest.Track,
+                                        recordRequest.Stage,
+                                        mapLoad).ConfigureAwait(false);
+        }
     }
 
     private void LogRemoteSubmissionPending(Guid submissionId, string runKind)

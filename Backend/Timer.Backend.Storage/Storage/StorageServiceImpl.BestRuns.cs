@@ -35,6 +35,12 @@ internal sealed partial class StorageServiceImpl
                 return;
             }
 
+            if (await IsMapSeededAsync(mapId, runType))
+            {
+                _bestRunMapSeededCache.TryAdd(seedKey, 0);
+                return;
+            }
+
             await WithRecordTransactionAsync(async () =>
             {
                 await LockMapAsync(mapId);
@@ -53,6 +59,13 @@ internal sealed partial class StorageServiceImpl
 
                 var rows = await QuerySeedBestRows(baseQuery).ToListAsync(OperationCancellation);
                 await UpsertSeedBestRowsAsync(mapId, runType, rows);
+
+                // In the seed's transaction, under the map lock: the flags read here are current.
+                var seeded = await _db.Queryable<MapEntity>().Where(x => x.MapId == mapId)
+                                      .Select(x => x.BestRunsSeeded).FirstAsync(OperationCancellation);
+                var marked = seeded | SeededFlag(runType);
+                await _db.Updateable<MapEntity>().SetColumns(x => x.BestRunsSeeded == marked)
+                         .Where(x => x.MapId == mapId).ExecuteCommandAsync(OperationCancellation);
             });
             _bestRunMapSeededCache.TryAdd(seedKey, 0);
         }
@@ -86,6 +99,12 @@ internal sealed partial class StorageServiceImpl
                 return;
             }
 
+            if (await IsMapSeededAsync(mapId, runType))
+            {
+                _bestRunMapSeededCache.TryAdd((mapId, runType), 0);
+                return;
+            }
+
             await WithRecordTransactionAsync(async () =>
             {
                 await LockMapAsync(mapId);
@@ -105,6 +124,16 @@ internal sealed partial class StorageServiceImpl
         {
             gate.Release();
         }
+    }
+
+    private static int SeededFlag(RunType runType) => runType == RunType.Main ? 1 : 2;
+
+    private async Task<bool> IsMapSeededAsync(ulong mapId, RunType runType)
+    {
+        var seeded = await _db.Queryable<MapEntity>().Where(x => x.MapId == mapId)
+                              .Select(x => x.BestRunsSeeded).FirstAsync(OperationCancellation);
+
+        return (seeded & SeededFlag(runType)) != 0;
     }
 
     private static ISugarQueryable<SeedBestRunRow> QuerySeedBestRows(ISugarQueryable<RunEntity> query)

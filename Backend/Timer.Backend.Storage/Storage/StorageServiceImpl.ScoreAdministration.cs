@@ -320,7 +320,7 @@ internal sealed partial class StorageServiceImpl
             }
 
             await EnqueueScoreRecalcInCurrentRecordTransactionAsync(
-                mapId, board.Style, board.Track, styleFactor, nowUtc);
+                mapId, board.Style, board.Track, styleFactor, nowUtc, repairTotals: true);
             boardsQueued++;
             if (board.IsDeadLettered)
             {

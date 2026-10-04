@@ -120,6 +120,7 @@ internal sealed partial class StorageServiceImpl
         MigratePlayerJoinDates();
         RepairInvalidStoredPlayTimes();
         EnsureTrackScoreCoveringIndex();
+        EnsureReadIndexes();
         EnsureScoreRecalcOutboxIndexes();
         EnsureRunSubmissionInboxIndex();
         if (startScoreRecalcWorker) StartScoreRecalcWorker();
@@ -156,6 +157,49 @@ internal sealed partial class StorageServiceImpl
         catch (Exception e)
         {
             _logger.LogError(e, "Failed to ensure covering index {Index} on {Table}", indexName, tableName);
+        }
+    }
+
+    // InitTables creates declared indexes only with a new table. Existing databases get the board-order
+    // and points indexes here; the board index replaces the older rank index without RunId.
+    private void EnsureReadIndexes()
+    {
+        EnsureIndex("surf_player_best_runs", BestRunsBoardIndex,
+                    [nameof(PlayerBestRunEntity.MapId), nameof(PlayerBestRunEntity.RunType), nameof(PlayerBestRunEntity.Style),
+                     nameof(PlayerBestRunEntity.Track), nameof(PlayerBestRunEntity.Stage), nameof(PlayerBestRunEntity.BestTime),
+                     nameof(PlayerBestRunEntity.RunId), nameof(PlayerBestRunEntity.SteamId)],
+                    replaces: "idx_player_best_runs_rank");
+        EnsureIndex("surf_players", PlayersPointsIndex, [nameof(PlayerEntity.Points)]);
+    }
+
+    internal const string BestRunsBoardIndex = "idx_player_best_runs_board";
+    internal const string PlayersPointsIndex = "idx_surf_players_points";
+
+    private void EnsureIndex(string tableName, string indexName, string[] columns, string? replaces = null)
+    {
+        try
+        {
+            if (!_db.DbMaintenance.IsAnyTable(tableName, false))
+            {
+                return;
+            }
+
+            if (!_db.DbMaintenance.IsAnyIndex(indexName))
+            {
+                _db.DbMaintenance.CreateIndex(tableName, columns, indexName, false);
+                _logger.LogInformation("Created index {Index} on {Table}", indexName, tableName);
+            }
+
+            if (replaces is not null && _db.DbMaintenance.IsAnyIndex(replaces))
+            {
+                _db.DbMaintenance.DropIndex(replaces, tableName);
+                _logger.LogInformation("Dropped index {Index} on {Table}, replaced by {Replacement}", replaces, tableName, indexName);
+            }
+        }
+        catch (Exception e)
+        {
+            // Read performance only: queries stay correct without it.
+            _logger.LogError(e, "Failed to ensure index {Index} on {Table}", indexName, tableName);
         }
     }
 

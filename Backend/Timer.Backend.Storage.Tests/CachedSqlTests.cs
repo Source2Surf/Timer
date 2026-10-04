@@ -139,7 +139,9 @@ public sealed class CachedSqlTests
         Assert.Equal((7f, 1), await store.GetPlayerMapStatsAsync(q, a));
         Assert.Equal((0f, 0), await store.GetPlayerMapStatsAsync(p, b));
 
-        foreach (var (player, points) in new[] { (p, 4_000_000_000u), (q, 3_999_999_999u) })
+        // Random per run, so players left in a reused test database never tie with these two.
+        var top = 3_000_000_000u + (uint)Random.Shared.Next(1_000_000_000);
+        foreach (var (player, points) in new[] { (p, top), (q, top - 1) })
         {
             var id = unchecked((long)player.AsPrimitive());
             await store.Db.Updateable<PlayerEntity>().SetColumns(x => x.Points == points).Where(x => x.SteamId == id).ExecuteCommandAsync();
@@ -149,6 +151,21 @@ public sealed class CachedSqlTests
         var (rankQ, totalQ) = await store.GetPlayerPointsRank(q);
         Assert.Equal(rankP + 1, rankQ);
         Assert.Equal(totalP, totalQ);
+
+        // Map-start loads cap each board, so a long map's later boards are never cut off.
+        var e = $"surf_cached_{Guid.NewGuid():N}";
+        foreach (var (player, offset) in new[] { (p, 0f), (q, 1f) })
+        {
+            for (var s = 1; s <= 3; s++)
+                await store.AddPlayerStageRecord(player, e, new RecordRequest { Stage = s, Time = 10 * s + offset });
+            await store.AddPlayerRecord(player, e, new RecordRequest { Track = 1, Time = 30 + offset });
+            await store.AddPlayerRecord(player, e, new RecordRequest { Time = 60 + offset });
+        }
+
+        Assert.Equal([(1, 10f), (2, 20f), (3, 30f)], (await store.GetMapStageRecords(e, 1)).Select(x => (x.Stage, x.Time)));
+        Assert.Equal([(1, 10f)], (await store.GetMapStageRecords(a, 1)).Select(x => (x.Stage, x.Time)));
+        Assert.Equal([(1, 30f), (0, 60f)], (await store.GetMapRecords(e, 1)).Select(x => (x.Track, x.Time)));
+        Assert.Equal(6, (await store.GetMapStageRecords(e, 5)).Count);
 
         // Each record merges into its board's score queue through the one cached update.
         var c = $"surf_cached_{Guid.NewGuid():N}";
@@ -166,6 +183,53 @@ public sealed class CachedSqlTests
         Assert.Equal((2L, 0.5), (queueD.RequestedGeneration, queueD.StyleFactor));
         Assert.Equal(first.AvailableAtUtc, queueC.AvailableAtUtc);
         Assert.Equal(first.PendingSinceUtc, queueC.PendingSinceUtc);
+
+        // A recalc re-totals only players whose board score changed; recalc-scores asks for a repair of every one.
+        await Drain(store);
+        await AssertTotalsMatchScores(store, p, q);
+        var mapC = (await store.GetMapInfo(c)).MapId;
+        var mapD = (await store.GetMapInfo(d)).MapId;
+        foreach (var player in new[] { p, q })
+        {
+            var id = unchecked((long)player.AsPrimitive());
+            await store.Db.Updateable<PlayerEntity>().SetColumns(x => x.Points == 7u).Where(x => x.SteamId == id).ExecuteCommandAsync();
+        }
+
+        await store.EnqueueScoreRecalcAsync(mapC, 0, 0, 2);
+        await Drain(store);
+        Assert.Equal(7u, (await Profile(store, p)).Points);
+
+        await store.EnqueueScoreRecalcAsync(mapC, 0, 0, 2, repairTotals: true);
+        await store.EnqueueScoreRecalcAsync(mapD, 1, 2, 0.5, repairTotals: true);
+        Assert.True((await Queue(store, c, 0, 0)) is { RepairGeneration: > 0 } queuedC && queuedC.RepairGeneration == queuedC.RequestedGeneration);
+        Assert.True((await Queue(store, d, 1, 2)) is { RepairGeneration: > 0 } queuedD && queuedD.RepairGeneration == queuedD.RequestedGeneration);
+        await Drain(store);
+        await AssertTotalsMatchScores(store, p, q);
+    }
+
+    private static async Task Drain(StorageServiceImpl store)
+    {
+        while (await store.ProcessScoreRecalcOutboxBatchAsync(DateTime.UtcNow.AddMinutes(10), $"cached-{Guid.NewGuid():N}") > 0)
+        {
+        }
+    }
+
+    private static Task<PlayerEntity> Profile(StorageServiceImpl store, SteamID player)
+    {
+        var id = unchecked((long)player.AsPrimitive());
+
+        return store.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == id).FirstAsync();
+    }
+
+    private static async Task AssertTotalsMatchScores(StorageServiceImpl store, params SteamID[] players)
+    {
+        foreach (var player in players)
+        {
+            var id = unchecked((long)player.AsPrimitive());
+            var scores = await store.Db.Queryable<PlayerTrackScoreEntity>().Where(x => x.SteamId == id).ToListAsync();
+            Assert.NotEmpty(scores);
+            Assert.Equal(scores.Sum(x => (long)x.Points), (long)(await Profile(store, player)).Points);
+        }
     }
 
     private static async Task<ScoreRecalcOutboxEntity> Queue(StorageServiceImpl store, string map, int style, ushort track)

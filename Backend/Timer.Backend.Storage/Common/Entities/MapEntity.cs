@@ -38,4 +38,9 @@ internal sealed class MapEntity
     /// </summary>
     [SugarColumn(DefaultValue = "0")]
     public ulong WorkshopId { get; set; }
+
+    // Flags: 1 = main runs, 2 = stage runs are in the best-run projection, which every write
+    // then maintains. Lets a restarted backend skip re-seeding the map.
+    [SugarColumn(DefaultValue = "0")]
+    public int BestRunsSeeded { get; set; }
 }

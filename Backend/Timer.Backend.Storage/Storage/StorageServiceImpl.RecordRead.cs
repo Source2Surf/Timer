@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
@@ -181,67 +182,83 @@ internal sealed partial class StorageServiceImpl
 
     private async Task<(int rank, int total)> GetPlayerPointsRankByDbIdAsync(long steamIdValue)
     {
-        // No row and zero points both come back as 0.
-        var pointsRead = CachedShape("player-points", () =>
+        // One statement, so the player's points and the players ahead come from the same snapshot.
+        // The ahead count runs on the points index and reads only those players.
+        var read = CachedShape("player-rank", () =>
         {
-            var steamId = Sentinel.SteamId;
-
-            return _db.Queryable<PlayerEntity>().Where(x => x.SteamId == steamId).Select(x => x.Points).Take(1).ToSql();
-        }, Sentinel.SteamId);
-
-        uint playerPoints;
-
-        await using (var reader = await ReadAsync(pointsRead, steamIdValue))
-        {
-            playerPoints = await reader.ReadAsync(OperationCancellation) ? (uint)reader.GetInt64(0) : 0;
-        }
-
-        if (playerPoints == 0)
-        {
-            return (0, 0);
-        }
-
-        // Single query: COUNT(*) for total, SUM(CASE) for rank. The player's points were read in a
-        // separate statement, so a concurrent recalculation can commit in between. Count the
-        // player's own row in this same snapshot and never count them as ahead of themselves, so
-        // the result is always consistent (rank <= total) instead of e.g. "rank 6 of 5".
-        var rankRead = CachedShape("player-rank", () =>
-        {
-            var points  = Sentinel.Points;
             var steamId = Sentinel.SteamId;
 
             return _db.Queryable<PlayerEntity>()
-                      .Where(x => x.Points > 0)
-                      .Select(_ => new
+                      .Where(me => me.SteamId == steamId)
+                      .Select(me => new PlayerRankRow
                       {
-                          Total = SqlFunc.AggregateCount(_.Id),
-                          Ahead = SqlFunc.AggregateSum(SqlFunc.IIF(_.Points > points && _.SteamId != steamId, 1, 0)),
-                          Self  = SqlFunc.AggregateSum(SqlFunc.IIF(_.SteamId == steamId, 1, 0)),
+                          Points = me.Points,
+                          Ahead  = SqlFunc.Subqueryable<PlayerEntity>().Where(other => other.Points > me.Points).Count(),
                       })
                       .Take(1)
                       .ToSql();
-        }, Sentinel.Points, Sentinel.SteamId);
+        }, Sentinel.SteamId);
 
-        await using var stats = await ReadAsync(rankRead, playerPoints, steamIdValue);
+        long points, ahead;
 
-        if (!await stats.ReadAsync(OperationCancellation))
+        await using (var reader = await ReadAsync(read, steamIdValue))
+        {
+            if (!await reader.ReadAsync(OperationCancellation))
+            {
+                return (0, 0);
+            }
+
+            var o = read.Ordinals(reader, PlayerRankColumns);
+            points = reader.GetInt64(o[0]);
+            ahead  = reader.GetInt64(o[1]);
+        }
+
+        // No row and zero points both mean unranked.
+        if (points == 0)
         {
             return (0, 0);
         }
 
-        // SUM is DECIMAL on MySQL and NULL over no rows.
-        var ordinals = rankRead.Ordinals(stats, RankColumns);
-        var total    = stats.GetInt64(ordinals[0]);
-        var ahead    = stats.IsDBNull(ordinals[1]) ? 0 : Convert.ToInt64(stats.GetValue(ordinals[1]));
-        var self     = stats.IsDBNull(ordinals[2]) ? 0 : Convert.ToInt64(stats.GetValue(ordinals[2]));
+        // The cached total can be a few seconds old; never report a rank past it ("rank 6 of 5").
+        var rank = ahead + 1;
 
-        if (self == 0)
+        return ((int)rank, (int)Math.Max(rank, await GetRankedPlayerCountAsync()));
+    }
+
+    // Only changes when a recalculation gives a player their first points or takes their last,
+    // while counting it reads every ranked player.
+    private static readonly TimeSpan RankedPlayerCountLifetime = TimeSpan.FromSeconds(10);
+
+    private sealed record RankedPlayerCount(long Count, long ExpiresAtMs);
+
+    private static readonly string[] PlayerRankColumns = [nameof(PlayerRankRow.Points), nameof(PlayerRankRow.Ahead)];
+
+    // The projection the rank read's SQL is generated from; never materialized.
+    private sealed class PlayerRankRow
+    {
+        public uint Points { get; set; }
+        public int  Ahead  { get; set; }
+    }
+
+    private RankedPlayerCount? _rankedPlayerCount;
+
+    private async Task<long> GetRankedPlayerCountAsync()
+    {
+        var now = Environment.TickCount64;
+
+        if (Volatile.Read(ref _rankedPlayerCount) is { } cached && cached.ExpiresAtMs > now)
         {
-            // Dropped to zero points after the first read: report it like any unranked player.
-            return (0, 0);
+            return cached.Count;
         }
 
-        return ((int)ahead + 1, (int)total);
+        var read = CachedShape("ranked-player-count",
+                               () => _db.Queryable<PlayerEntity>().Where(x => x.Points > 0).Select(x => SqlFunc.AggregateCount(x.Id)).ToSql());
+
+        await using var reader = await ReadAsync(read);
+        var count = await reader.ReadAsync(OperationCancellation) ? reader.GetInt64(0) : 0;
+        Volatile.Write(ref _rankedPlayerCount, new RankedPlayerCount(count, now + (long)RankedPlayerCountLifetime.TotalMilliseconds));
+
+        return count;
     }
 
     public async Task<IReadOnlyList<RunCheckpoint>> GetRecordCheckpoints(long recordId)
@@ -305,8 +322,6 @@ internal sealed partial class StorageServiceImpl
 
         return result;
     }
-
-    private static readonly string[] RankColumns = ["Total", "Ahead", "Self"];
 
     private static readonly string[] CheckpointColumns =
     [

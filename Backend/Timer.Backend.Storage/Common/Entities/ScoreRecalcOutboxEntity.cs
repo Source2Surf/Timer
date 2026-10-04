@@ -30,6 +30,11 @@ internal sealed class ScoreRecalcOutboxEntity
 
     public long ProcessedGeneration { get; set; }
 
+    // The generation of the latest request that asked to repair every board player's total
+    // (recalc-scores). PB/WR requests leave it, so their recalc re-totals only changed players.
+    [SugarColumn(DefaultValue = "0")]
+    public long RepairGeneration { get; set; }
+
     public double StyleFactor { get; set; }
 
     /// <summary>

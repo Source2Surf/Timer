@@ -287,7 +287,10 @@ With `all`, a map that fails the check is skipped and named in the output
 Use `recalc-scores` after changing `WriteApi:StyleFactors` (or after repairing a
 score worker failure). It requeues all known score boards for its target using
 the factors from the configuration used to launch the command and reactivates
-compatible dead-lettered Outbox rows without waiting for a new PB/WR. A style
+compatible dead-lettered Outbox rows without waiting for a new PB/WR. Those
+boards also re-total every player on them, which repairs totals that older
+versions left stale; a PB/WR recalculation re-totals only the players whose
+score on the board changed. A style
 omitted from `StyleFactors` is deliberately left untouched and reported as
 skipped; configure that style explicitly with factor `0` and rerun the command
 when the desired policy is to remove its scores. The administrative commands

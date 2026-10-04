@@ -26,7 +26,8 @@ internal sealed partial class StorageServiceImpl
         if (steamId.HasValue)
         {
             var sid = unchecked((long)steamId.Value);
-            query = query.Where((r, run) => r.SteamId == sid);
+            // Saves require the run's owner, so this matches r.SteamId and can use the player's runs index.
+            query = query.Where((r, run) => run.SteamId == sid);
         }
 
         return await query.OrderBy((r, run) => run.Time)

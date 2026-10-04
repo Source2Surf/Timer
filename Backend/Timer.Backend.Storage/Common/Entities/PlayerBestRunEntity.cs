@@ -13,13 +13,15 @@ namespace Source2Surf.Timer.Common.Entities;
             nameof(Track), OrderByType.Asc,
             nameof(Stage), OrderByType.Asc,
             true)]
-[SugarIndex("idx_player_best_runs_rank",
+// Boards order by (BestTime, RunId); with RunId in the index they are read in order instead of sorted.
+[SugarIndex("idx_player_best_runs_board",
             nameof(MapId), OrderByType.Asc,
             nameof(RunType), OrderByType.Asc,
             nameof(Style), OrderByType.Asc,
             nameof(Track), OrderByType.Asc,
             nameof(Stage), OrderByType.Asc,
             nameof(BestTime), OrderByType.Asc,
+            nameof(RunId), OrderByType.Asc,
             nameof(SteamId), OrderByType.Asc)]
 internal sealed class PlayerBestRunEntity : BaseSteamIdSerialEntity
 {
