@@ -65,26 +65,26 @@ internal sealed partial class StorageServiceImpl
         // an explicit administrative requeue blocked until an unrelated lease expires. Set
         // AvailableAt and PendingSince before the generation increment because MySQL evaluates
         // single-table assignments left-to-right. Pending age survives new generations and retries.
+        // (field, value) keeps this SET order (new Entity { } would not); NULLs stay on ==, which
+        // writes a literal NULL where PostgreSQL rejects a text-typed null parameter.
         var updated = await _db.Updateable<ScoreRecalcOutboxEntity>()
-                               .SetColumns(x => x.AvailableAtUtc ==
-                                                (x.DeadLetteredAtUtc == null
-                                                 && x.RequestedGeneration > x.ProcessedGeneration
-                                                 && x.AvailableAtUtc <= availableAtUtc
+                               .SetColumns(x => x.AvailableAtUtc,
+                                           x => x.DeadLetteredAtUtc == null
+                                                && x.RequestedGeneration > x.ProcessedGeneration
+                                                && x.AvailableAtUtc <= availableAtUtc
                                                     ? x.AvailableAtUtc
-                                                    : availableAtUtc))
-                               .SetColumns(x => x.PendingSinceUtc ==
-                                                (x.RequestedGeneration <= x.ProcessedGeneration
-                                                    ? nowUtc : SqlFunc.IsNull(x.PendingSinceUtc, x.CreatedAtUtc)))
-                               .SetColumns(x => x.RequestedGeneration == x.RequestedGeneration + 1)
-                                .SetColumns(x => x.StyleFactor == styleFactor)
-                                .SetColumns(x => x.AttemptCount == 0)
-                                .SetColumns(x => x.LastError == noError)
-                                .SetColumns(x => x.LeaseOwner ==
-                                                 (x.DeadLetteredAtUtc != null ? noLeaseOwner : x.LeaseOwner))
-                                .SetColumns(x => x.LeaseUntilUtc ==
-                                                 (x.DeadLetteredAtUtc != null ? noLeaseUntilUtc : x.LeaseUntilUtc))
-                                .SetColumns(x => x.DeadLetteredAtUtc == noDeadLetteredAtUtc)
-                               .SetColumns(x => x.UpdatedAtUtc == nowUtc)
+                                                    : availableAtUtc)
+                               .SetColumns(x => x.PendingSinceUtc,
+                                           x => x.RequestedGeneration <= x.ProcessedGeneration
+                                                    ? nowUtc : SqlFunc.IsNull(x.PendingSinceUtc, x.CreatedAtUtc))
+                               .SetColumns(x => x.RequestedGeneration, x => x.RequestedGeneration + 1)
+                               .SetColumns(x => x.StyleFactor, x => styleFactor)
+                               .SetColumns(x => x.AttemptCount, x => 0)
+                               .SetColumns(x => x.LastError == noError)
+                               .SetColumns(x => x.LeaseOwner, x => x.DeadLetteredAtUtc != null ? noLeaseOwner : x.LeaseOwner)
+                               .SetColumns(x => x.LeaseUntilUtc, x => x.DeadLetteredAtUtc != null ? noLeaseUntilUtc : x.LeaseUntilUtc)
+                               .SetColumns(x => x.DeadLetteredAtUtc == noDeadLetteredAtUtc)
+                               .SetColumns(x => x.UpdatedAtUtc, x => nowUtc)
                                .Where(x => x.MapId == mapId && x.Style == style && x.Track == track
                                            && x.RequestedGeneration < long.MaxValue)
                                .ExecuteCommandAsync(OperationCancellation);

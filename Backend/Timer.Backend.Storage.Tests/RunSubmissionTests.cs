@@ -97,7 +97,7 @@ public sealed class RunSubmissionTests : IDisposable
     }
 
     [Fact]
-    public async Task InboxFinalizeFailureRollsBackRunSegmentsBestOutboxAndReservation()
+    public async Task InboxWriteFailureRollsBackRunSegmentsBestAndOutbox()
     {
         var map = await _storage.GetMapInfo($"surf_submission_rollback_{Guid.NewGuid():N}");
         const long steamId = 76561198000000003;
@@ -107,9 +107,9 @@ public sealed class RunSubmissionTests : IDisposable
         _storage.Db.Aop.OnLogExecuting = (sql, _) =>
         {
             if (sql.Contains("surf_run_submissions", StringComparison.OrdinalIgnoreCase)
-                && sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+                && sql.TrimStart().StartsWith("INSERT", StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("Injected inbox finalization failure");
+                throw new InvalidOperationException("Injected inbox write failure");
             }
         };
 
@@ -392,13 +392,13 @@ public sealed class RunSubmissionTests : IDisposable
         await EnsurePlayerAsync(steamId);
         var command = CreateCommand(map.MapName, steamId, Guid.NewGuid());
         using var cancellation = new CancellationTokenSource();
-        var finalized = false;
+        var inboxWritten = false;
         _storage.Db.Aop.OnLogExecuted = (sql, _) =>
         {
-            if (sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)
+            if (sql.TrimStart().StartsWith("INSERT", StringComparison.OrdinalIgnoreCase)
                 && sql.Contains("surf_run_submissions", StringComparison.OrdinalIgnoreCase))
             {
-                finalized = true;
+                inboxWritten = true;
                 cancellation.Cancel();
             }
         };
@@ -409,7 +409,7 @@ public sealed class RunSubmissionTests : IDisposable
         }
         finally { _storage.Db.Aop.OnLogExecuted = null; }
 
-        Assert.True(finalized);
+        Assert.True(inboxWritten);
         Assert.Equal(0, await _storage.Db.Queryable<RunEntity>().CountAsync(CancellationToken.None));
         Assert.Equal(0, await _storage.Db.Queryable<RunSegmentEntity>().CountAsync(CancellationToken.None));
         Assert.Equal(0, await _storage.Db.Queryable<PlayerBestRunEntity>().CountAsync(CancellationToken.None));

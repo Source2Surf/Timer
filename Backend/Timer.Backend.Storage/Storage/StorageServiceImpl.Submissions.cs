@@ -88,8 +88,8 @@ internal sealed partial class StorageServiceImpl
                 result = null;
                 wakeScoreRecalcWorker = false;
 
-                // Required ordering: map lock, second inbox check/reservation, then run/best
-                // mutation. The lock serializes same-map finishes and record removal.
+                // Required ordering: map lock, second inbox check, run/best mutation, then the
+                // inbox row. The lock serializes same-map finishes and record removal.
                 await LockMapAsync(map.MapId);
 
                 var inTransactionExisting = await FindSubmissionAsync(submission.SubmissionIdText);
@@ -99,22 +99,8 @@ internal sealed partial class StorageServiceImpl
                     return;
                 }
 
-                var receivedAtUtc = DateTime.UtcNow;
-                var inbox = new RunSubmissionEntity
-                {
-                    SubmissionId = submission.SubmissionIdText,
-                    PayloadHash = submission.PayloadHash,
-                    HashVersion = SubmissionHashVersion,
-                    ContractVersion = TimerBackendRunSubmissionCommand.CurrentContractVersion,
-                    RulesetVersion = submission.RulesetVersion,
-                    FinishedAtUtc = submission.FinishedAtUtc,
-                    ReceivedAtUtc = receivedAtUtc,
-                };
-                inbox.Id = unchecked((ulong)await _db.Insertable(inbox).ExecuteReturnBigIdentityAsync(OperationCancellation));
-
-                // A missing player is intentionally an explicit domain failure. Since this
-                // happens after inbox reservation but before the run, rollback removes the
-                // reservation too, allowing the player to be provisioned and retried later.
+                // A missing player is intentionally an explicit domain failure. Nothing is
+                // written yet, so the player can be provisioned and the run retried later.
                 if (!await _db.Queryable<PlayerEntity>().Where(x => x.SteamId == submission.SteamId).AnyAsync(OperationCancellation))
                 {
                     throw new TimerBackendPlayerNotFoundException(submission.SteamId);
@@ -134,24 +120,23 @@ internal sealed partial class StorageServiceImpl
                     _ => (TimerBackendRankState.Pending, 0),
                 };
 
-                inbox.RunId = run.Id;
-                inbox.AttemptResult = (int)write.AttemptResult;
-                inbox.RankState = (byte)rankState;
-                inbox.Rank = rank;
-
-                var updated = await _db.Updateable<RunSubmissionEntity>()
-                                       .SetColumns(x => x.RunId == inbox.RunId)
-                                       .SetColumns(x => x.AttemptResult == inbox.AttemptResult)
-                                       .SetColumns(x => x.RankState == inbox.RankState)
-                                       .SetColumns(x => x.Rank == inbox.Rank)
-                                       .Where(x => x.Id == inbox.Id
-                                                   && x.SubmissionId == submission.SubmissionIdText
-                                                   && x.RunId == 0)
-                                       .ExecuteCommandAsync(OperationCancellation);
-                if (updated != 1)
+                // Inserted complete, so it needs no second write; its unique key still
+                // arbitrates a retry racing this one on another map's lock.
+                var inbox = new RunSubmissionEntity
                 {
-                    throw new InvalidOperationException("Backend submission inbox reservation was not finalized.");
-                }
+                    SubmissionId = submission.SubmissionIdText,
+                    PayloadHash = submission.PayloadHash,
+                    HashVersion = SubmissionHashVersion,
+                    ContractVersion = TimerBackendRunSubmissionCommand.CurrentContractVersion,
+                    RulesetVersion = submission.RulesetVersion,
+                    RunId = run.Id,
+                    AttemptResult = (int)write.AttemptResult,
+                    RankState = (byte)rankState,
+                    Rank = rank,
+                    FinishedAtUtc = submission.FinishedAtUtc,
+                    ReceivedAtUtc = DateTime.UtcNow,
+                };
+                inbox.Id = unchecked((ulong)await _db.Insertable(inbox).ExecuteReturnBigIdentityAsync(OperationCancellation));
 
                 // The SQL column's timestamp precision can differ from DateTime.UtcNow
                 // (existing MySQL DATETIME columns commonly retain whole seconds). Read
@@ -234,9 +219,8 @@ internal sealed partial class StorageServiceImpl
     {
         if (row.RunId == 0)
         {
-            // A reservation is only valid within its uncommitted write transaction. In
-            // particular, never report a legacy/corrupt unfinished row as a successful
-            // GetSubmissionStatus response merely because the key exists.
+            // Rows are written complete, so RunId 0 is a legacy reservation or corrupt row.
+            // Never report it as a successful GetSubmissionStatus merely because the key exists.
             throw new InvalidOperationException("Backend submission inbox contains an unfinished reservation.");
         }
 
