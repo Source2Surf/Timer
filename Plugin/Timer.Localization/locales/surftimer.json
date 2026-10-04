@@ -1014,5 +1014,141 @@
   "mc.admin.no_vote": {
     "en-us": "No vote is running.",
     "zh-cn": "当前没有投票。"
+  },
+  "hud.vote.title": {
+    "en-us": "Vote for the next map",
+    "zh-cn": "投票选择下一张地图"
+  },
+  "hud.vote.title_rtv": {
+    "en-us": "Rock the vote",
+    "zh-cn": "换图投票"
+  },
+  "hud.vote.extend": {
+    "en-us": "Extend {0} minutes",
+    "zh-cn": "延长 {0} 分钟"
+  },
+  "hud.vote.up": {
+    "en-us": "Up",
+    "zh-cn": "上移"
+  },
+  "hud.vote.down": {
+    "en-us": "Down",
+    "zh-cn": "下移"
+  },
+  "hud.vote.vote": {
+    "en-us": "Vote",
+    "zh-cn": "投票"
+  },
+  "hud.vote.chat": {
+    "en-us": "or type !{0} ~ !{1} in chat",
+    "zh-cn": "或在聊天中输入 !{0} ~ !{1}"
+  },
+  "hud.vote.note": {
+    "en-us": "Bind keys in the console, like: bind f3 {0}",
+    "zh-cn": "在控制台绑定按键，例如：bind f3 {0}"
+  },
+  "hud.vote.note_up": {
+    "en-us": "{0}: move up",
+    "zh-cn": "{0}：上移"
+  },
+  "hud.vote.note_down": {
+    "en-us": "{0}: move down",
+    "zh-cn": "{0}：下移"
+  },
+  "hud.vote.note_vote": {
+    "en-us": "{0}: vote",
+    "zh-cn": "{0}：投票"
+  },
+  "hud.vote.note_next": {
+    "en-us": "New binds show from the next vote.",
+    "zh-cn": "新绑定从下一次投票起显示。"
+  },
+  "hud.tier": {
+    "en-us": "T{0}",
+    "zh-cn": "T{0}"
+  },
+  "hud.nominate.title": {
+    "en-us": "Nominate",
+    "zh-cn": "提名地图"
+  },
+  "hud.nominate.count": {
+    "en-us": "{0} maps",
+    "zh-cn": "{0} 张地图"
+  },
+  "hud.nominate.count_one": {
+    "en-us": "1 map",
+    "zh-cn": "1 张地图"
+  },
+  "hud.nominate.all": {
+    "en-us": "All",
+    "zh-cn": "全部"
+  },
+  "hud.nominate.unfinished": {
+    "en-us": "Unfinished only",
+    "zh-cn": "仅显示未完成"
+  },
+  "hud.nominate.search": {
+    "en-us": "Search: {0}",
+    "zh-cn": "搜索：{0}"
+  },
+  "hud.nominate.col_map": {
+    "en-us": "Map",
+    "zh-cn": "地图"
+  },
+  "hud.nominate.col_tier": {
+    "en-us": "Tier",
+    "zh-cn": "难度"
+  },
+  "hud.nominate.col_best": {
+    "en-us": "Your best",
+    "zh-cn": "个人最佳"
+  },
+  "hud.nominate.mine": {
+    "en-us": "YOURS",
+    "zh-cn": "你的提名"
+  },
+  "hud.nominate.nominated": {
+    "en-us": "NOMINATED",
+    "zh-cn": "已提名"
+  },
+  "hud.nominate.recent": {
+    "en-us": "RECENT",
+    "zh-cn": "最近玩过"
+  },
+  "hud.nominate.current": {
+    "en-us": "CURRENT",
+    "zh-cn": "当前地图"
+  },
+  "hud.nominate.hint": {
+    "en-us": "Click a map to nominate it. You can change your nomination until the vote starts.",
+    "zh-cn": "点击地图进行提名。投票开始前可以更改提名。"
+  },
+  "hud.nominate.empty": {
+    "en-us": "No maps match.",
+    "zh-cn": "没有符合条件的地图。"
+  },
+  "hud.nominate.already": {
+    "en-us": "{0} is already nominated.",
+    "zh-cn": "{0} 已被提名。"
+  },
+  "hud.nominate.full": {
+    "en-us": "The nomination list is full.",
+    "zh-cn": "提名名额已满。"
+  },
+  "hud.nominate.current_map": {
+    "en-us": "{0} is the current map.",
+    "zh-cn": "{0} 是当前地图。"
+  },
+  "hud.nominate.recent_map": {
+    "en-us": "{0} was played recently.",
+    "zh-cn": "{0} 最近玩过。"
+  },
+  "hud.nominate.not_found": {
+    "en-us": "{0} isn't on the map list.",
+    "zh-cn": "{0} 不在地图列表中。"
+  },
+  "hud.nominate.closed": {
+    "en-us": "Nominations are closed.",
+    "zh-cn": "提名已关闭。"
   }
 }

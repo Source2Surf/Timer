@@ -106,6 +106,27 @@ internal static class HudFormat
                               : 2;
 
     /// <summary>
+    ///     A countdown in whole seconds, rounded up: "0:14", "12:34", "75:00". Never negative.
+    /// </summary>
+    public static string Countdown(float seconds)
+        => Countdown(WholeSeconds(seconds));
+
+    public static string Countdown(int seconds)
+        => ZString.Format("{0}:{1:00}", seconds / 60, seconds % 60);
+
+    /// <summary>
+    ///     Seconds left as a countdown shows them: rounded up, never negative.
+    /// </summary>
+    public static int WholeSeconds(float seconds)
+        => float.IsFinite(seconds) && seconds > 0 ? (int) MathF.Min(MathF.Ceiling(seconds), int.MaxValue / 2f) : 0;
+
+    /// <summary>
+    ///     A vote option's share of the votes in tenths (0-10), for its bar's vb-N class.
+    /// </summary>
+    public static int ShareStep(int count, int total)
+        => total <= 0 || count <= 0 ? 0 : Math.Clamp((int) Math.Round(count * 10.0 / total, MidpointRounding.AwayFromZero), 0, 10);
+
+    /// <summary>
     ///     A count with thousands separators: "2,364".
     /// </summary>
     public static string Count(long n)

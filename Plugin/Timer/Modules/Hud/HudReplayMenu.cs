@@ -80,6 +80,7 @@ internal partial class HudModule
         if (open)
         {
             p.Profile.Open = false;
+            CloseNominateMenu(p);
         }
 
         // Opened while playing, it starts on the player's own track and style.

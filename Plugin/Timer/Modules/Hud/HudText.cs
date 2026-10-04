@@ -326,6 +326,42 @@ internal static class HudTexts
     public static readonly HudText TimeHere     = new ("ui.profile.time_here", "Time here");
     public static readonly HudText PersonalBest = new ("ui.profile.pb", "Personal best");
 
+    // ---- map chooser
+    public static readonly HudText VoteEndOfMap  = new ("hud.vote.title", "Vote for the next map");
+    public static readonly HudText VoteRtv       = new ("hud.vote.title_rtv", "Rock the vote");
+    public static readonly HudText VoteExtend    = new ("hud.vote.extend", "Extend {0} minutes");
+    public static readonly HudText VoteUp        = new ("hud.vote.up", "Up");
+    public static readonly HudText VoteDown      = new ("hud.vote.down", "Down");
+    public static readonly HudText VoteVote      = new ("hud.vote.vote", "Vote");
+    public static readonly HudText VoteChat      = new ("hud.vote.chat", "or type !{0} ~ !{1} in chat");
+    public static readonly HudText VoteNote      = new ("hud.vote.note", "Bind keys in the console, like: bind f3 {0}");
+    public static readonly HudText VoteNoteUp    = new ("hud.vote.note_up", "{0}: move up");
+    public static readonly HudText VoteNoteDown  = new ("hud.vote.note_down", "{0}: move down");
+    public static readonly HudText VoteNoteVote  = new ("hud.vote.note_vote", "{0}: vote");
+    public static readonly HudText VoteNoteNext  = new ("hud.vote.note_next", "New binds show from the next vote.");
+    public static readonly HudText TierN         = new ("hud.tier", "T{0}");
+    public static readonly HudText NomTitle      = new ("hud.nominate.title", "Nominate");
+    public static readonly HudText NomCount      = new ("hud.nominate.count", "{0} maps");
+    public static readonly HudText NomCountOne   = new ("hud.nominate.count_one", "1 map");
+    public static readonly HudText NomAll        = new ("hud.nominate.all", "All");
+    public static readonly HudText NomUnfinished = new ("hud.nominate.unfinished", "Unfinished only");
+    public static readonly HudText NomSearch     = new ("hud.nominate.search", "Search: {0}");
+    public static readonly HudText NomColMap     = new ("hud.nominate.col_map", "Map");
+    public static readonly HudText NomColTier    = new ("hud.nominate.col_tier", "Tier");
+    public static readonly HudText NomColBest    = new ("hud.nominate.col_best", "Your best");
+    public static readonly HudText NomMine       = new ("hud.nominate.mine", "YOURS");
+    public static readonly HudText NomNominated  = new ("hud.nominate.nominated", "NOMINATED");
+    public static readonly HudText NomRecent     = new ("hud.nominate.recent", "RECENT");
+    public static readonly HudText NomCurrent    = new ("hud.nominate.current", "CURRENT");
+    public static readonly HudText NomHint       = new ("hud.nominate.hint", "Click a map to nominate it. You can change your nomination until the vote starts.");
+    public static readonly HudText NomEmpty      = new ("hud.nominate.empty", "No maps match.");
+    public static readonly HudText NomAlready    = new ("hud.nominate.already", "{0} is already nominated.");
+    public static readonly HudText NomFull       = new ("hud.nominate.full", "The nomination list is full.");
+    public static readonly HudText NomCurrentMap = new ("hud.nominate.current_map", "{0} is the current map.");
+    public static readonly HudText NomRecentMap  = new ("hud.nominate.recent_map", "{0} was played recently.");
+    public static readonly HudText NomNotFound   = new ("hud.nominate.not_found", "{0} isn't on the map list.");
+    public static readonly HudText NomClosed     = new ("hud.nominate.closed", "Nominations are closed.");
+
     /// <summary>
     ///     All of them, for the test that checks the locale file.
     /// </summary>
@@ -435,6 +471,24 @@ internal static class HudLabels
         ("LPfClose", HudTexts.Close),
     ];
 
+    public static readonly (string Id, HudText Text)[] Vote =
+    [
+        ("LVoteUp", HudTexts.VoteUp),
+        ("LVoteDown", HudTexts.VoteDown),
+        ("LVoteVote", HudTexts.VoteVote),
+        ("VoteNoteNext", HudTexts.VoteNoteNext),
+    ];
+
+    public static readonly (string Id, HudText Text)[] Nominate =
+    [
+        ("LNomTitle", HudTexts.NomTitle),
+        ("LNomUnfinished", HudTexts.NomUnfinished),
+        ("LNomColMap", HudTexts.NomColMap),
+        ("LNomColTier", HudTexts.NomColTier),
+        ("LNomColBest", HudTexts.NomColBest),
+        ("LNomClose", HudTexts.Close),
+    ];
+
     public static readonly (string Id, HudText Text)[] Keys =
     [
         ("KeyDuck", HudTexts.KeyDuck),
@@ -442,6 +496,7 @@ internal static class HudLabels
     ];
 
     public static IEnumerable<(string Id, HudText Text)> All
-        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Append(("SplitsEmpty", HudTexts.SplitsEmpty))
+        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate)
+                .Append(("SplitsEmpty", HudTexts.SplitsEmpty))
                 .Append(("SsjEmpty", HudTexts.SsjEmpty));
 }

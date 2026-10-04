@@ -209,6 +209,124 @@
 			</Panel>
 		</Panel>
 
+		<!-- Map vote (Timer.MapChooser), on the right while a vote runs. No cursor: players vote with their keys or by
+		     typing the number in chat. Rows past the vote's options are Hidden. A row has no flow, so its share bar (vb-N)
+		     sits behind its text; McVoteN is a Button so it can be clicked when a menu already has the cursor. -->
+		<Panel id="VotePanel" class="VotePanel Hidden" hittest="false">
+			<Panel class="VoteHead">
+				<Label id="VoteTitle" class="VoteTitle" text="{s:text}" />
+				<Label id="VoteTime" class="VoteTime" text="{s:text}" />
+			</Panel>
+			<Button id="McVote0" class="VoteRow Hidden">
+				<Panel id="Vote0Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote0Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote0Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote0Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote0Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote0Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote1" class="VoteRow Hidden">
+				<Panel id="Vote1Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote1Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote1Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote1Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote1Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote1Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote2" class="VoteRow Hidden">
+				<Panel id="Vote2Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote2Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote2Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote2Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote2Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote2Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote3" class="VoteRow Hidden">
+				<Panel id="Vote3Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote3Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote3Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote3Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote3Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote3Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote4" class="VoteRow Hidden">
+				<Panel id="Vote4Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote4Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote4Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote4Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote4Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote4Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote5" class="VoteRow Hidden">
+				<Panel id="Vote5Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote5Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote5Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote5Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote5Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote5Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote6" class="VoteRow Hidden">
+				<Panel id="Vote6Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote6Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote6Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote6Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote6Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote6Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote7" class="VoteRow Hidden">
+				<Panel id="Vote7Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote7Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote7Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote7Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote7Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote7Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Button id="McVote8" class="VoteRow Hidden">
+				<Panel id="Vote8Bar" class="VoteBar" />
+				<Panel class="VoteLine">
+					<Label id="Vote8Num" class="VoteNum" text="{s:text}" />
+					<Label id="Vote8Map" class="VoteMap" text="{s:text}" />
+					<Label id="Vote8Tick" class="VoteTick Hidden" text="✓" />
+					<Label id="Vote8Tier" class="VoteTier" text="{s:text}" />
+					<Label id="Vote8Count" class="VoteCount" text="{s:text}" />
+				</Panel>
+			</Button>
+			<Panel class="VoteKeys">
+				<Label id="VoteKeyUp" class="VoteCap" text="{g:csgo_key:editkey}{s:nonce}" />
+				<Label class="VoteArrow" text="↑" />
+				<Label id="LVoteUp" class="VoteKeyText" text="{s:text}" />
+				<Label id="VoteKeyDown" class="VoteCap" text="{g:csgo_key:editkey}{s:nonce}" />
+				<Label class="VoteArrow" text="↓" />
+				<Label id="LVoteDown" class="VoteKeyText" text="{s:text}" />
+				<Label id="VoteKeySelect" class="VoteCap" text="{g:csgo_key:editkey}{s:nonce}" />
+				<Label id="LVoteVote" class="VoteKeyText" text="{s:text}" />
+			</Panel>
+			<Label id="VoteChat" class="VoteChat" text="{s:text}" />
+			<Panel class="VoteNotes">
+				<Label id="VoteNote" class="VoteNote" text="{s:text}" />
+				<Label id="VoteNoteUp" class="VoteNote" text="{s:text}" />
+				<Label id="VoteNoteDown" class="VoteNote" text="{s:text}" />
+				<Label id="VoteNoteVote" class="VoteNote" text="{s:text}" />
+				<Label id="VoteNoteNext" class="VoteNote" text="{s:text}" />
+			</Panel>
+		</Panel>
+
 		<!-- HUD settings, opened with !hud. Option rows are Buttons whose id is an option in HudOptions.cs and whose
 		     <id>Value label shows it; size steppers are <id>Down / <id>Up. -->
 		<Panel id="MenuPos" class="DragPos" hittest="false">
@@ -701,6 +819,100 @@
 			<Panel class="MenuFooter">
 				<Button id="PfClose" class="MenuButton MenuButton--primary PfClose">
 					<Label id="LPfClose" text="{s:text}" />
+				</Button>
+			</Panel>
+		</Panel>
+
+		<!-- Nominate menu (Timer.MapChooser), opened by !nominate. Cursor mode, in the replay menu's spot; the chooser keeps
+		     the state and the plugin mirrors it. 8 rows a page; a row past the end is blank. -->
+		<Panel id="NMenu" class="Menu NMenu Closed">
+			<Panel class="MenuHeader RMenuHeader">
+				<Label id="LNomTitle" class="MenuTitle" text="{s:text}" />
+				<Label id="NomCount" class="NomCount" text="{s:text}" />
+			</Panel>
+			<Panel class="NomChips">
+				<Button id="McTier0" class="NomChip"><Label id="NomTier0" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier1" class="NomChip"><Label id="NomTier1" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier2" class="NomChip"><Label id="NomTier2" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier3" class="NomChip"><Label id="NomTier3" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier4" class="NomChip"><Label id="NomTier4" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier5" class="NomChip"><Label id="NomTier5" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier6" class="NomChip"><Label id="NomTier6" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier7" class="NomChip"><Label id="NomTier7" class="NomChipLabel" text="{s:text}" /></Button>
+				<Button id="McTier8" class="NomChip"><Label id="NomTier8" class="NomChipLabel" text="{s:text}" /></Button>
+			</Panel>
+			<Button id="McUnfinished" class="NomToggle">
+				<Label id="NomCheck" class="NomCheck" text="✓" />
+				<Label id="LNomUnfinished" class="NomToggleLabel" text="{s:text}" />
+			</Button>
+			<Label id="NomSearch" class="NomSearch Hidden" text="{s:text}" />
+			<Panel class="NomHead">
+				<Label id="LNomColMap" class="NomColMap" text="{s:text}" />
+				<Label id="LNomColTier" class="NomColTier" text="{s:text}" />
+				<Label id="LNomColBest" class="NomColBest" text="{s:text}" />
+			</Panel>
+			<Panel class="RmList">
+				<Panel class="RmRows">
+					<Button id="McNom0" class="RmRow NomRow blank">
+						<Label id="Nom0Name" class="RmName" text="{s:text}" />
+						<Label id="Nom0Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom0Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom0Tag" class="NomTag" text="{s:text}" />
+					</Button>
+					<Button id="McNom1" class="RmRow NomRow blank">
+						<Label id="Nom1Name" class="RmName" text="{s:text}" />
+						<Label id="Nom1Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom1Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom1Tag" class="NomTag" text="{s:text}" />
+					</Button>
+					<Button id="McNom2" class="RmRow NomRow blank">
+						<Label id="Nom2Name" class="RmName" text="{s:text}" />
+						<Label id="Nom2Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom2Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom2Tag" class="NomTag" text="{s:text}" />
+					</Button>
+					<Button id="McNom3" class="RmRow NomRow blank">
+						<Label id="Nom3Name" class="RmName" text="{s:text}" />
+						<Label id="Nom3Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom3Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom3Tag" class="NomTag" text="{s:text}" />
+					</Button>
+					<Button id="McNom4" class="RmRow NomRow blank">
+						<Label id="Nom4Name" class="RmName" text="{s:text}" />
+						<Label id="Nom4Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom4Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom4Tag" class="NomTag" text="{s:text}" />
+					</Button>
+					<Button id="McNom5" class="RmRow NomRow blank">
+						<Label id="Nom5Name" class="RmName" text="{s:text}" />
+						<Label id="Nom5Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom5Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom5Tag" class="NomTag" text="{s:text}" />
+					</Button>
+					<Button id="McNom6" class="RmRow NomRow blank">
+						<Label id="Nom6Name" class="RmName" text="{s:text}" />
+						<Label id="Nom6Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom6Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom6Tag" class="NomTag" text="{s:text}" />
+					</Button>
+					<Button id="McNom7" class="RmRow NomRow blank">
+						<Label id="Nom7Name" class="RmName" text="{s:text}" />
+						<Label id="Nom7Tier" class="NomTier" text="{s:text}" />
+						<Label id="Nom7Pb" class="NomPb" text="{s:text}" />
+						<Label id="Nom7Tag" class="NomTag" text="{s:text}" />
+					</Button>
+				</Panel>
+				<Label id="NomEmpty" class="RmEmpty Hidden" text="{s:text}" />
+			</Panel>
+			<Panel class="RmPager">
+				<Button id="McNomPrev" class="Step"><Label text="‹" /></Button>
+				<Label id="NomPage" class="RmPage" text="{s:text}" />
+				<Button id="McNomNext" class="Step"><Label text="›" /></Button>
+			</Panel>
+			<Label id="NomNote" class="NomNote" text="{s:text}" />
+			<Panel class="MenuFooter">
+				<Button id="McNomClose" class="MenuButton MenuButton--primary NomClose">
+					<Label id="LNomClose" text="{s:text}" />
 				</Button>
 			</Panel>
 		</Panel>

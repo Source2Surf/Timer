@@ -85,6 +85,21 @@ internal sealed class HudReplayMenu
 ///     The profile card (!profile): whose it is, its picks, and what's been fetched for it. Version tells a late
 ///     answer for an earlier profile from one for this one.
 /// </summary>
+/// <summary>
+///     What the HUD last drew of the map chooser, which keeps the state itself.
+/// </summary>
+internal sealed class HudChooser
+{
+    public int           Version = -1; // the chooser's, when last drawn
+    public NominateMenu? Menu;         // the nominate menu as last read; null while closed
+    public int           Page;
+    public string?       Note;         // why the last nomination didn't go through
+    public bool          Dirty;        // a page turn or a note to draw
+    public bool          VoteShown;
+    public bool          VoteRecheck;  // flipped each time the vote panel shows, so its key caps look their keys up again
+    public int           VoteSecond  = -1; // the countdown as last drawn, so it's only formatted when it changes
+}
+
 internal sealed class HudProfile
 {
     public bool       Open;
@@ -167,6 +182,8 @@ internal sealed class HudPlayer
         SentText.Clear();
         SentClass.Clear();
         SentNumbered.Clear();
+        Chooser.Version     = -1;
+        Chooser.VoteSecond  = -1;
     }
 
     // ---- settings
@@ -203,8 +220,13 @@ internal sealed class HudPlayer
     public readonly HudReplayMenu Replays = new ();
     public readonly HudProfile    Profile = new ();
 
+    public readonly HudChooser Chooser = new ();
+
     // Any menu takes the mouse.
-    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open;
+    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null;
+
+    // HUD settings and the nominate menu also keep the player from moving.
+    public bool MovementLocked => MenuOpen || Chooser.Menu is not null;
 
     // The texts this player reads, in their language where there's a translation.
     public HudTr Tr;

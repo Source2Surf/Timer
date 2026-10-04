@@ -26,6 +26,7 @@ using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Command;
 using Source2Surf.Timer.Managers.Localization;
+using Source2Surf.Timer.Managers.MapChooser;
 using Source2Surf.Timer.Managers.Permission;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
@@ -176,6 +177,7 @@ public class Timer : IModSharpModule
         RefreshReplayProvider();
         RefreshPermissionProvider();
         RefreshLocalizationProvider();
+        RefreshMapChooser();
     }
 
     public void OnLibraryConnected(string moduleIdentity)
@@ -199,6 +201,10 @@ public class Timer : IModSharpModule
         else if (moduleIdentity.Equals(ILocalizationProvider.Identity, StringComparison.Ordinal))
         {
             RefreshLocalizationProvider();
+        }
+        else if (IsMapChooser(moduleIdentity))
+        {
+            RefreshMapChooser();
         }
     }
 
@@ -226,6 +232,10 @@ public class Timer : IModSharpModule
         {
             _serviceProvider.GetService<LocalizationProviderProxy>()?.UseFallback();
         }
+        else if (IsMapChooser(moduleIdentity))
+        {
+            _serviceProvider.GetService<MapChooserProxy>()?.UseFallback();
+        }
     }
 
     public void OnAllModulesLoaded()
@@ -241,6 +251,7 @@ public class Timer : IModSharpModule
         RefreshReplayProvider();
         RefreshPermissionProvider();
         RefreshLocalizationProvider();
+        RefreshMapChooser();
     }
 
     public void Shutdown()
@@ -394,4 +405,13 @@ public class Timer : IModSharpModule
     {
         _serviceProvider.GetService<LocalizationProviderProxy>()?.RefreshManager();
     }
+
+    private void RefreshMapChooser()
+    {
+        _serviceProvider.GetService<MapChooserProxy>()?.RefreshManager();
+    }
+
+    // ModSharp passes the module's assembly name here.
+    private static bool IsMapChooser(string module)
+        => module.Equals(IMapChooser.Identity, StringComparison.Ordinal) || module.Equals("Timer.MapChooser", StringComparison.OrdinalIgnoreCase);
 }

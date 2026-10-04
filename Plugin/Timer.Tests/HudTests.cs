@@ -28,6 +28,26 @@ public sealed class HudFormatTests
     public void FormatsTimesTheWayTheTimerDoes(float seconds, string expected)
         => Assert.Equal(expected, HudFormat.FormatTime(seconds));
 
+    [Theory]
+    [InlineData(13.2f, "0:14")]   // rounded up, so it shows 0:00 only at the end
+    [InlineData(0f, "0:00")]
+    [InlineData(-3f, "0:00")]
+    [InlineData(754f, "12:34")]
+    [InlineData(4500f, "75:00")]  // minutes don't roll into hours
+    [InlineData(float.NaN, "0:00")]
+    public void CountsDownInWholeSeconds(float seconds, string expected)
+        => Assert.Equal(expected, HudFormat.Countdown(seconds));
+
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(3, 0, 0)]
+    [InlineData(1, 3, 3)]  // 33%
+    [InlineData(2, 3, 7)]  // 67%
+    [InlineData(1, 2, 5)]
+    [InlineData(4, 4, 10)]
+    public void StepsAVoteShareInTenths(int count, int total, int step)
+        => Assert.Equal(step, HudFormat.ShareStep(count, total));
+
     [Fact]
     public void DifferencesAgreeWithTheTimesOnScreen()
     {
@@ -478,6 +498,25 @@ public sealed class HudLayoutContractTests
             {
                 Assert.Contains(panel, Ids);
             }
+        }
+    }
+
+    [Fact]
+    public void EveryMapChooserPanelExists()
+    {
+        var ids = HudModule.VoteRowIds.Concat(HudModule.VoteBarIds).Concat(HudModule.VoteNumIds).Concat(HudModule.VoteMapIds)
+                           .Concat(HudModule.VoteTickIds).Concat(HudModule.VoteTierIds).Concat(HudModule.VoteCountIds)
+                           .Concat(HudModule.NominateRowIds).Concat(HudModule.NominateNameIds).Concat(HudModule.NominateTierIds)
+                           .Concat(HudModule.NominatePbIds).Concat(HudModule.NominateTagIds)
+                           .Concat(HudModule.TierChipIds).Concat(HudModule.TierLabelIds)
+                           .Concat(["VotePanel", "VoteTitle", "VoteTime", "VoteKeyUp", "VoteKeyDown", "VoteKeySelect", "VoteChat",
+                                    "NMenu", "NomCount", "McUnfinished", "NomCheck", "NomSearch", "NomEmpty", "McNomPrev",
+                                    "NomPage", "McNomNext", "NomNote", "McNomClose", "VoteNote", "VoteNoteUp",
+                                    "VoteNoteDown", "VoteNoteVote", "VoteNoteNext"]);
+
+        foreach (var id in ids)
+        {
+            Assert.Contains(id, Ids);
         }
     }
 

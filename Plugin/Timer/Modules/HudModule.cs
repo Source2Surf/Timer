@@ -66,6 +66,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     private readonly ICentralReplay     _central;
     private readonly IPersonalBestReplays _personalBests;
     private readonly ILocalizationProvider _localization;
+    private readonly IMapChooser        _mapChooser;
     private readonly IRecordModule      _recordModule;
     private readonly IZoneModule        _zoneModule;
     private readonly IStyleModule       _styleModule;
@@ -99,6 +100,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
                      ICentralReplay     central,
                      IPersonalBestReplays personalBests,
                      ILocalizationProvider localization,
+                     IMapChooser        mapChooser,
                      IRecordModule      recordModule,
                      IZoneModule        zoneModule,
                      IStyleModule       styleModule,
@@ -117,6 +119,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _central        = central;
         _personalBests  = personalBests;
         _localization   = localization;
+        _mapChooser     = mapChooser;
         _recordModule   = recordModule;
         _zoneModule     = zoneModule;
         _styleModule    = styleModule;
@@ -383,6 +386,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         }
 
         var now = _bridge.GlobalVars.CurTime;
+        SyncRoundTime(gameRules, now);
 
         foreach (var p in _players)
         {
@@ -469,7 +473,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     private unsafe HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      param,
                                                                          HookReturnValue<EmptyHookReturn> ret)
     {
-        if (_players[param.Client.Slot] is not { MenuOpen: true } p)
+        if (_players[param.Client.Slot] is not { MovementLocked: true } p)
         {
             return new ();
         }
@@ -512,7 +516,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     // style's keys. Momentum and gravity still apply.
     private unsafe void OnPlayerProcessMovePre(IPlayerProcessMoveForwardParams param)
     {
-        if (param.Client.IsFakeClient || _players[param.Client.Slot] is not { MenuOpen: true })
+        if (param.Client.IsFakeClient || _players[param.Client.Slot] is not { MovementLocked: true })
         {
             return;
         }
@@ -634,6 +638,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         {
             p.Replays.Open = false;
             p.Profile.Open = false;
+            CloseNominateMenu(p);
         }
         else
         {
@@ -653,6 +658,10 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         if (buttonId.StartsWith("Rm", StringComparison.Ordinal))
         {
             ClickReplayMenu(p, buttonId);
+        }
+        else if (buttonId.StartsWith("Mc", StringComparison.Ordinal))
+        {
+            ClickMapChooser(p, buttonId);
         }
         else if (buttonId.StartsWith("Pf", StringComparison.Ordinal))
         {

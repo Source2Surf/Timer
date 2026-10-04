@@ -1177,7 +1177,8 @@
     color: mutedColor;
 }
 
-.MenuButton.PfClose {
+.MenuButton.PfClose,
+.MenuButton.NomClose {
     margin-left: 0px;
 }
 
@@ -1527,4 +1528,357 @@
 
 .Menu .RmWatchLabel.disabled {
     color: mutedColor;
+}
+
+/* ---- Map vote (Timer.MapChooser) ---- */
+
+/* On the right while a vote runs, on a light dark background like the locations panel. No cursor. */
+.VotePanel {
+    horizontal-align: right;
+    vertical-align: center;
+    margin-right: 48px;
+    width: 340px;
+    height: fit-children;
+    padding: 12px 14px 12px 14px;
+    flow-children: down;
+    border-radius: 6px;
+    background-color: #0a0e139e;
+}
+
+.VotePanel Label {
+    font-family: timerFont;
+    font-weight: bold;
+    color: white;
+    text-shadow: textShadow;
+}
+
+.VoteHead {
+    width: 100%;
+    height: fit-children;
+    margin-bottom: 6px;
+    flow-children: right;
+}
+
+.VotePanel .VoteTitle {
+    width: fill-parent-flow( 1 );
+    font-size: 16px;
+}
+
+.VotePanel .VoteTime {
+    font-size: 16px;
+    color: finishColor;
+}
+
+/* No flow: the bar sits behind the line. */
+.VoteRow {
+    width: 100%;
+    height: 30px;
+    margin-top: 3px;
+    border-radius: 4px;
+    border-left: 2px solid #00000000;
+}
+
+.VoteRow.cur {
+    background-color: #5ab4ff1f;
+    border-left: 2px solid accentColor;
+}
+
+.VoteBar {
+    width: 0%;
+    height: 100%;
+    border-radius: 4px;
+    background-color: #ffffff12;
+
+    transition-property: width;
+    transition-duration: .25s;
+}
+
+.VoteBar.mine {
+    background-color: #7ce27c2e;
+}
+
+.VoteBar.vb-0 { width: 0%; }
+.VoteBar.vb-1 { width: 10%; }
+.VoteBar.vb-2 { width: 20%; }
+.VoteBar.vb-3 { width: 30%; }
+.VoteBar.vb-4 { width: 40%; }
+.VoteBar.vb-5 { width: 50%; }
+.VoteBar.vb-6 { width: 60%; }
+.VoteBar.vb-7 { width: 70%; }
+.VoteBar.vb-8 { width: 80%; }
+.VoteBar.vb-9 { width: 90%; }
+.VoteBar.vb-10 { width: 100%; }
+
+.VoteLine {
+    width: 100%;
+    height: 100%;
+    padding: 0px 8px;
+    flow-children: right;
+}
+
+.VotePanel .VoteNum {
+    width: 18px;
+    vertical-align: center;
+    font-size: 13px;
+    color: #ffffff80;
+}
+
+.VotePanel .VoteMap {
+    max-width: 210px;
+    vertical-align: center;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.VotePanel .VoteMap.ext {
+    color: #cfe7ff;
+}
+
+.VotePanel .VoteTick {
+    vertical-align: center;
+    margin-left: 6px;
+    font-size: 14px;
+    color: gainColor;
+}
+
+.VotePanel .VoteTier {
+    width: fill-parent-flow( 1 );
+    vertical-align: center;
+    text-align: right;
+    font-size: 13px;
+    color: #ffffff99;
+}
+
+.VotePanel .VoteCount {
+    width: 30px;
+    vertical-align: center;
+    text-align: right;
+    font-size: 16px;
+}
+
+/* Wraps rather than clipping when the binds are long (MOUSE5, NOT BOUND). */
+.VoteKeys {
+    width: 100%;
+    height: fit-children;
+    margin-top: 10px;
+    flow-children: right-wrap;
+}
+
+.VotePanel .VoteCap {
+    min-width: 30px;
+    vertical-align: center;
+    margin-right: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-align: center;
+    color: #ffffffd9;
+    background-color: #0d121880;
+    border: 1px solid #ffffff66;
+    border-radius: 4px;
+}
+
+.VotePanel .VoteArrow {
+    vertical-align: center;
+    margin-left: 2px;
+    font-size: 14px;
+    color: #ffffffd9;
+}
+
+.VotePanel .VoteKeyText {
+    vertical-align: center;
+    margin: 0px 12px 0px 2px;
+    font-size: 13px;
+    color: #ffffffb3;
+}
+
+.VotePanel .VoteChat {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #ffffffb3;
+}
+
+/* The bind note, a line per command. */
+.VoteNotes {
+    width: 100%;
+    height: fit-children;
+    margin-top: 4px;
+    flow-children: down;
+}
+
+.VotePanel .VoteNote {
+    width: 100%;
+    margin-top: 1px;
+    font-size: 12px;
+    font-weight: normal;
+    color: #ffffff80;
+}
+
+/* ---- Nominate menu (Timer.MapChooser) ---- */
+
+/* The replay menu's spot and rows. Collapsed when closed, so its buttons can't take another menu's clicks. */
+.NMenu.Closed {
+    visibility: collapse;
+}
+
+.Menu .NomCount {
+    vertical-align: center;
+    font-size: 12px;
+    color: mutedColor;
+}
+
+.NomChips {
+    width: 100%;
+    height: fit-children;
+    padding: 0px 8px;
+    flow-children: right;
+}
+
+.NomChip {
+    min-width: 30px;
+    height: 26px;
+    margin-right: 4px;
+    padding: 0px 7px;
+    border-radius: 4px;
+    background-color: #ffffff0f;
+}
+
+.NomChip:hover {
+    background-color: #ffffff1c;
+}
+
+.NomChip.on {
+    background-color: #5ab4ff33;
+}
+
+.Menu .NomChipLabel {
+    horizontal-align: center;
+    vertical-align: center;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: mutedColor;
+}
+
+.Menu .NomChipLabel.on {
+    color: #cfe7ff;
+}
+
+.NomToggle {
+    height: 28px;
+    margin: 6px 8px 0px 8px;
+    flow-children: right;
+}
+
+.Menu .NomCheck {
+    width: 16px;
+    height: 16px;
+    vertical-align: center;
+    text-align: center;
+    font-size: 11px;
+    color: #00000000;
+    border: 1px solid #ffffff4d;
+    border-radius: 3px;
+}
+
+.Menu .NomCheck.on {
+    color: #0b1520;
+    background-color: accentColor;
+    border: 1px solid accentColor;
+}
+
+.Menu .NomToggleLabel {
+    vertical-align: center;
+    margin-left: 8px;
+    font-size: 14px;
+}
+
+.Menu .NomSearch {
+    margin: 4px 8px 0px 8px;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.NomHead {
+    width: 100%;
+    height: fit-children;
+    padding: 10px 18px 4px 18px;
+    flow-children: right;
+}
+
+.Menu .NomColMap,
+.Menu .NomColTier,
+.Menu .NomColBest {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: mutedColor;
+}
+
+.Menu .NomColMap {
+    width: fill-parent-flow( 1 );
+}
+
+.Menu .NomColTier {
+    width: 36px;
+}
+
+.Menu .NomColBest {
+    width: 84px;
+    margin-right: 84px;
+    text-align: right;
+}
+
+.Menu .NomTier {
+    width: 36px;
+    vertical-align: center;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.Menu .NomPb {
+    width: 84px;
+    vertical-align: center;
+    text-align: right;
+}
+
+.Menu .NomPb.none {
+    color: mutedColor;
+}
+
+.Menu .NomTag {
+    width: 84px;
+    vertical-align: center;
+    text-align: right;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: mutedColor;
+}
+
+.Menu .NomTag.mine {
+    color: goodColor;
+}
+
+.Menu .NomTag.nom {
+    color: accentColor;
+}
+
+/* Recently played, or the current map: can't be nominated. */
+.Menu .RmName.off,
+.Menu .NomTier.off,
+.Menu .NomPb.off {
+    opacity: .4;
+}
+
+.Menu .NomNote {
+    width: 100%;
+    height: 40px;
+    margin-top: 8px;
+    padding: 0px 8px;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.Menu .NomNote.warn {
+    color: #ffa94d;
 }

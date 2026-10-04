@@ -126,6 +126,19 @@ The chat commands (`!sl`, `!loc`, `!pl`, `!nl`) still work.
 The game only looks a key up when the panel shows, so after binding a key, hide
 and show the panel to see it.
 
+### Map chooser
+
+With the Timer.MapChooser module loaded, the HUD shows its vote and its nominate
+menu (through `IMapChooser`; without the module none of this appears):
+
+- **Vote**: a panel on the right while a vote runs, with each option's tier and
+  live count. It doesn't take the cursor, so players vote mid-run with the
+  chooser's keys (F3 / F4 to move, F to vote, shown with the player's own binds)
+  or by typing !1, !2 … in chat.
+- **!nominate**: a cursor menu like the replay menu, 8 maps a page, filtered by
+  tier or to maps the player hasn't finished, with their best time on each.
+- The game's round timer shows the time left on the map, extensions included.
+
 ### Localization
 
 All of the HUD's text can be translated per player: the timer, records and splits,
