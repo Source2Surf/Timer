@@ -45,10 +45,6 @@ internal partial class TimerModule
             return;
         }
 
-        var service = arg.Service;
-
-        service.Stamina = 0f;
-
         if (_timerInfo[client.Slot] is not { } timerInfo || _stageTimerInfo[client.Slot] is not { } stageTimer)
         {
             return;

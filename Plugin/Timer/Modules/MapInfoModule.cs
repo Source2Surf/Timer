@@ -108,6 +108,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         "sv_jump_precision_enable 0",
         "sv_staminajumpcost 0",
         "sv_staminalandcost 0",
+        "sv_staminamax 0",
         "sv_disable_radar 1",
         "sv_subtick_movement_view_angles 0",
         "mp_solid_enemies 0",
