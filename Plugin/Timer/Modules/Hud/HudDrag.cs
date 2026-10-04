@@ -78,7 +78,7 @@ internal partial class HudModule
 
         if (level)
         {
-            pawn.Teleport(angles: new Vector(0, view.Y, 0));
+            pawn.SnapViewAngles(new Vector(0, view.Y, 0));
         }
 
         if (!float.IsNaN(p.UnplaceAt[t]))
@@ -160,9 +160,10 @@ internal partial class HudModule
         // Hand back the view the drag froze and turned.
         UnfreezeView(p, drag);
 
+        // Teleport would also tilt the pawn by the pitch, which carries its eyes forward.
         if (_bridge.TryGetController(p.Slot, out var controller) && controller.GetPlayerPawn() is { IsAlive: true } pawn)
         {
-            pawn.Teleport(angles: drag.View);
+            pawn.SnapViewAngles(drag.View);
         }
 
         GetLayout(p)?.SetInputCaptureEnabled(p.Slot, p.AnyMenuOpen);

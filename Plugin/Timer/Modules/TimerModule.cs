@@ -716,7 +716,8 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         // Restore saved position and angles
         if (_pauseState[slot] is { } state)
         {
-            pawn.Teleport(state.Origin, state.Angles, new Vector());
+            pawn.Teleport(state.Origin, null, new Vector());
+            pawn.SnapViewAngles(state.Angles);
             _pauseState[slot] = null;
         }
 
