@@ -22,18 +22,18 @@ until the master SQL migration has been run.
 For an existing master SQL database, run the migration below before enabling
 `WriteApi:Enabled=true`. The backend defaults to ruleset v1 and a factor of
 1.0 for main style 0. In addition to its SQL provider, a canary plugin needs these
-remote-write settings in ModSharp's `{CS2}/game/sharp/configs/core.json`:
+remote-write settings in `{CS2}/game/sharp/configs/timer.jsonc`:
 
-```json
-{
-  "Timer": {
-    "ScoreWrite": { "Mode": "remote-write" },
-    "RunSubmissionSender": {
-      "Endpoint": "http://127.0.0.1:5082"
-    }
-  }
+```jsonc
+"score_write": {
+  "mode": "remote-write",
+  "endpoint": "http://127.0.0.1:5082"
 }
 ```
+
+The sender's other settings go there too, in snake_case
+(`rpc_deadline_milliseconds`, `batch_size`, ...). ModSharp's `core.json` is not
+read for them.
 
 An endpoint alone enables the sender in remote-write mode; no server ID, API
 key or TLS proxy is required. Submission IDs are globally unique GUIDs, so

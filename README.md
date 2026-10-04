@@ -255,17 +255,17 @@ Check `http://127.0.0.1:5081/health/ready` for HTTP 200.
 
 ### Remote score writes
 
-Set Backend's `TimerBackend:WriteApi:Enabled=true`, then merge into the game's
-**`sharp/configs/core.json`**:
+Set Backend's `TimerBackend:WriteApi:Enabled=true`, then set `score_write` in the
+game's **`sharp/configs/timer.jsonc`**:
 
-```json
-{
-  "Timer": {
-    "ScoreWrite": { "Mode": "remote-write" },
-    "RunSubmissionSender": { "Endpoint": "http://127.0.0.1:5082" }
-  }
+```jsonc
+"score_write": {
+  "mode": "remote-write",
+  "endpoint": "http://127.0.0.1:5082"
 }
 ```
+
+The `Timer` block in `sharp/configs/core.json` is no longer read; move it here.
 
 Start Backend before the game server. **RequestManager and its SQL credentials
 are still required.** Defaults accept ruleset 1 and style 0; configure

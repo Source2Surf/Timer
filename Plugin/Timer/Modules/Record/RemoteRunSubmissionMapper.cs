@@ -30,7 +30,7 @@ namespace Source2Surf.Timer.Modules.Record;
 /// </summary>
 internal sealed class RemoteRunSubmissionOptions
 {
-    internal const string SectionName = "Timer:ScoreWrite";
+    internal const string SectionName = ScoreWriteModeOptions.SectionName;
     internal const int ContractVersion = 1;
 
     private RemoteRunSubmissionOptions(int rulesetVersion)
@@ -57,9 +57,9 @@ internal sealed class RemoteRunSubmissionOptions
 
         var section = configuration.GetSection(SectionName);
         ValidateKnownSettings(section);
-        var rulesetVersion = string.IsNullOrWhiteSpace(section["RulesetVersion"])
+        var rulesetVersion = string.IsNullOrWhiteSpace(section["ruleset_version"])
                                  ? 1
-                                 : ParsePositiveInteger(section["RulesetVersion"], "RulesetVersion");
+                                 : ParsePositiveInteger(section["ruleset_version"], "ruleset_version");
         return new RemoteRunSubmissionOptions(rulesetVersion);
     }
 
@@ -67,14 +67,13 @@ internal sealed class RemoteRunSubmissionOptions
     {
         foreach (var child in section.GetChildren())
         {
-            if (child.Key is "Mode" or "RulesetVersion")
+            if (ScoreWriteModeOptions.Keys.Contains(child.Key))
             {
                 continue;
             }
 
             throw new InvalidOperationException(
-                $"{SectionName}:{child.Key} is not valid in remote-write mode. "
-                + "Only Mode and RulesetVersion are accepted; score policy is backend-owned.");
+                $"{SectionName}:{child.Key} is not valid in remote-write mode; score policy is backend-owned.");
         }
     }
 
@@ -84,7 +83,7 @@ internal sealed class RemoteRunSubmissionOptions
             || value <= 0)
         {
             throw new InvalidOperationException(
-                $"{SectionName}:{setting} must be a positive integer when Timer:ScoreWrite:Mode=remote-write.");
+                $"{SectionName}:{setting} must be a positive integer when score_write:mode=remote-write.");
         }
 
         return value;

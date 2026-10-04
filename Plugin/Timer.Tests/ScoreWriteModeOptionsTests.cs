@@ -33,7 +33,7 @@ public sealed class ScoreWriteModeOptionsTests
         => new ConfigurationBuilder()
            .AddInMemoryCollection(new Dictionary<string, string?>
            {
-               ["Timer:ScoreWrite:Mode"] = mode,
+               ["score_write:mode"] = mode,
            })
            .Build();
 }

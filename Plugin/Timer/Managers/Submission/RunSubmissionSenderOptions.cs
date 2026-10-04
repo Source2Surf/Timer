@@ -19,6 +19,7 @@
 using System;
 using System.Globalization;
 using Microsoft.Extensions.Configuration;
+using Source2Surf.Timer.Configuration;
 
 namespace Source2Surf.Timer.Managers.Submission;
 
@@ -28,7 +29,7 @@ namespace Source2Surf.Timer.Managers.Submission;
 /// </summary>
 internal sealed class RunSubmissionSenderOptions
 {
-    internal const string SectionName = "Timer:RunSubmissionSender";
+    internal const string SectionName = ScoreWriteModeOptions.SectionName;
 
     private const int DefaultBatchSize = 16;
 
@@ -81,31 +82,31 @@ internal sealed class RunSubmissionSenderOptions
         var section = configuration.GetSection(SectionName);
         ValidateKnownSettings(section);
 
-        var enabled                   = string.IsNullOrWhiteSpace(section["Enabled"])
-                                            ? !string.IsNullOrWhiteSpace(section["Endpoint"])
-                                            : ParseBoolean(section["Enabled"], "Enabled");
-        var allowInsecureLoopback     = ParseBoolean(section["AllowInsecureLoopback"], "AllowInsecureLoopback");
-        var rpcDeadline               = ParseMilliseconds(section["RpcDeadlineMilliseconds"],
-                                                            "RpcDeadlineMilliseconds",
+        var enabled                   = string.IsNullOrWhiteSpace(section["enabled"])
+                                            ? !string.IsNullOrWhiteSpace(section["endpoint"])
+                                            : ParseBoolean(section["enabled"], "enabled");
+        var allowInsecureLoopback     = ParseBoolean(section["allow_insecure_loopback"], "allow_insecure_loopback");
+        var rpcDeadline               = ParseMilliseconds(section["rpc_deadline_milliseconds"],
+                                                            "rpc_deadline_milliseconds",
                                                             TimeSpan.FromSeconds(10),
                                                             minimum: 100,
                                                             maximum: 300_000);
-        var pollInterval              = ParseMilliseconds(section["PollIntervalMilliseconds"],
-                                                            "PollIntervalMilliseconds",
+        var pollInterval              = ParseMilliseconds(section["poll_interval_milliseconds"],
+                                                            "poll_interval_milliseconds",
                                                             TimeSpan.FromMilliseconds(250),
                                                             minimum: 10,
                                                             maximum: 60_000);
-        var shutdownDrainTimeout      = ParseMilliseconds(section["ShutdownDrainTimeoutMilliseconds"],
-                                                            "ShutdownDrainTimeoutMilliseconds",
+        var shutdownDrainTimeout      = ParseMilliseconds(section["shutdown_drain_timeout_milliseconds"],
+                                                            "shutdown_drain_timeout_milliseconds",
                                                             TimeSpan.FromSeconds(15),
                                                             minimum: 100,
                                                             maximum: 300_000);
-        var batchSize                 = ParseInteger(section["BatchSize"],
-                                                     "BatchSize",
+        var batchSize                 = ParseInteger(section["batch_size"],
+                                                     "batch_size",
                                                      DefaultBatchSize,
                                                      minimum: 1,
                                                      maximum: 128);
-        var endpoint                  = ParseEndpoint(section["Endpoint"], enabled);
+        var endpoint                  = ParseEndpoint(section["endpoint"], enabled);
 
         return new RunSubmissionSenderOptions(enabled,
                                                endpoint,
@@ -166,18 +167,10 @@ internal sealed class RunSubmissionSenderOptions
     {
         foreach (var setting in section.GetChildren())
         {
-            if (string.Equals(setting.Key, "Enabled", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(setting.Key, "Endpoint", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(setting.Key, "RpcDeadlineMilliseconds", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(setting.Key, "PollIntervalMilliseconds", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(setting.Key, "ShutdownDrainTimeoutMilliseconds", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(setting.Key, "BatchSize", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(setting.Key, "AllowInsecureLoopback", StringComparison.OrdinalIgnoreCase))
+            if (!ScoreWriteModeOptions.Keys.Contains(setting.Key))
             {
-                continue;
+                throw new InvalidOperationException($"{SectionName}:{setting.Key} is not supported.");
             }
-
-            throw new InvalidOperationException($"{SectionName}:{setting.Key} is not supported.");
         }
     }
 

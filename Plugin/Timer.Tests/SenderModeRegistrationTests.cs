@@ -14,8 +14,8 @@ public sealed class SenderModeRegistrationTests
     {
         var values = new Dictionary<string, string?>
         {
-            ["Timer:ScoreWrite:Mode"] = "remote-write",
-            ["Timer:RunSubmissionSender:Endpoint"] = "http://backend.example:5082",
+            ["score_write:mode"] = "remote-write",
+            ["score_write:endpoint"] = "http://backend.example:5082",
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var services = new ServiceCollection();
@@ -26,6 +26,24 @@ public sealed class SenderModeRegistrationTests
 
         var options = provider.GetRequiredService<RunSubmissionSenderOptions>();
         Assert.True(options.Enabled);
+    }
+
+    [Fact]
+    public void LocalSqlIgnoresALeftoverEndpoint()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["score_write:mode"] = "local-sql",
+            ["score_write:endpoint"] = "http://127.0.0.1:5082",
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton(ScoreWriteModeOptions.FromConfiguration(configuration));
+        services.AddManagerService();
+        using var provider = services.BuildServiceProvider();
+
+        Assert.False(provider.GetRequiredService<RunSubmissionSenderOptions>().Enabled);
     }
 
     [Theory]
@@ -39,9 +57,9 @@ public sealed class SenderModeRegistrationTests
     {
         var values = new Dictionary<string, string?>
         {
-            ["Timer:ScoreWrite:Mode"] = mode,
-            ["Timer:RunSubmissionSender:Enabled"] = senderEnabled.ToString(),
-            ["Timer:RunSubmissionSender:Endpoint"] = "https://backend.example:443",
+            ["score_write:mode"] = mode,
+            ["score_write:enabled"] = senderEnabled.ToString(),
+            ["score_write:endpoint"] = "https://backend.example:443",
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var services = new ServiceCollection();

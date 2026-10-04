@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
@@ -57,7 +58,6 @@ public class Timer : IModSharpModule
         ArgumentNullException.ThrowIfNull(dllPath);
         ArgumentNullException.ThrowIfNull(sharpPath);
         ArgumentNullException.ThrowIfNull(version);
-        ArgumentNullException.ThrowIfNull(coreConfiguration);
 
         var token = new CancellationTokenSource();
 
@@ -87,10 +87,12 @@ public class Timer : IModSharpModule
         services.AddSingleton(factory);
         services.AddSingleton(shared);
         services.AddSingleton(gameData);
-        // The host owns this configuration. Remote score-write mode is explicitly selected
-        // from it; registering the existing instance adds no file watcher or network I/O.
-        services.AddSingleton<IConfiguration>(coreConfiguration);
-        services.AddSingleton(ScoreWriteModeOptions.FromConfiguration(coreConfiguration));
+        // Remote score-write mode is selected in timer.jsonc's score_write section.
+        var configuration = TimerConfiguration.Load(Path.Combine(sharpPath, "configs", "timer.jsonc"));
+        var scoreWrite    = ScoreWriteModeOptions.FromConfiguration(configuration);
+        services.AddSingleton(configuration);
+        services.AddSingleton(scoreWrite);
+        logger.LogInformation("Score write mode: {mode}", scoreWrite.Mode);
         /*ConfigureDebugServices(services, bridge);*/
         ConfigureServices(services);
 

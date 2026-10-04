@@ -50,10 +50,10 @@ internal static class ManagerDi
 
             if (mode.Mode == ScoreWriteMode.LocalSql)
             {
-                if (options.Enabled)
+                // A leftover endpoint is ignored; only an explicit enabled contradicts the mode.
+                if (bool.TryParse(configuration[$"{RunSubmissionSenderOptions.SectionName}:enabled"], out var enabled) && enabled)
                 {
-                    throw new InvalidOperationException(
-                        "Timer:RunSubmissionSender:Enabled requires Timer:ScoreWrite:Mode=remote-write.");
+                    throw new InvalidOperationException("score_write:enabled requires score_write:mode=remote-write.");
                 }
 
                 return RunSubmissionSenderOptions.Disabled;
@@ -61,8 +61,7 @@ internal static class ManagerDi
 
             if (!options.Enabled)
             {
-                throw new InvalidOperationException(
-                    "Timer:ScoreWrite:Mode=remote-write requires Timer:RunSubmissionSender:Enabled=true.");
+                throw new InvalidOperationException("score_write:mode=remote-write requires score_write:endpoint.");
             }
 
             return options;

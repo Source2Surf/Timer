@@ -55,7 +55,7 @@ public sealed class RemoteRunSubmissionMapperTests
     [Fact]
     public void RemoteModeUsesRulesetOneByDefault()
     {
-        var minimalConfiguration = BuildConfiguration(("Timer:ScoreWrite:Mode", "remote-write"));
+        var minimalConfiguration = BuildConfiguration(("score_write:mode", "remote-write"));
         var options = RemoteRunSubmissionOptions.FromConfiguration(
             minimalConfiguration,
             ScoreWriteModeOptions.FromConfiguration(minimalConfiguration));
@@ -66,21 +66,21 @@ public sealed class RemoteRunSubmissionMapperTests
     [Fact]
     public void ExplicitInvalidRulesetStillFails()
     {
-        var configuration = BuildConfiguration(("Timer:ScoreWrite:Mode", "remote-write"),
-                                               ("Timer:ScoreWrite:RulesetVersion", "0"));
+        var configuration = BuildConfiguration(("score_write:mode", "remote-write"),
+                                               ("score_write:ruleset_version", "0"));
         Assert.Throws<InvalidOperationException>(() => RemoteRunSubmissionOptions.FromConfiguration(
                                                        configuration,
                                                        ScoreWriteModeOptions.FromConfiguration(configuration)));
     }
 
     [Theory]
-    [InlineData("StyleFactor")]
-    [InlineData("Points")]
+    [InlineData("style_factor")]
+    [InlineData("points")]
     public void RemoteModeRejectsClientScorePolicySettings(string setting)
     {
-        var configuration = BuildConfiguration(("Timer:ScoreWrite:Mode", "remote-write"),
-                                               ("Timer:ScoreWrite:RulesetVersion", "1"),
-                                               ($"Timer:ScoreWrite:{setting}", "99"));
+        var configuration = BuildConfiguration(("score_write:mode", "remote-write"),
+                                               ("score_write:ruleset_version", "1"),
+                                               ($"score_write:{setting}", "99"));
 
         Assert.Throws<InvalidOperationException>(() => RemoteRunSubmissionOptions.FromConfiguration(
                                                        configuration,
@@ -90,8 +90,8 @@ public sealed class RemoteRunSubmissionMapperTests
     [Fact]
     public void RemoteModeRejectsRemovedPluginVersionSetting()
     {
-        var configuration = BuildConfiguration(("Timer:ScoreWrite:Mode", "remote-write"),
-                                               ("Timer:ScoreWrite:PluginVersion", "obsolete"));
+        var configuration = BuildConfiguration(("score_write:mode", "remote-write"),
+                                               ("score_write:plugin_version", "obsolete"));
 
         Assert.Throws<InvalidOperationException>(() => RemoteRunSubmissionOptions.FromConfiguration(
                                                        configuration,
@@ -241,8 +241,8 @@ public sealed class RemoteRunSubmissionMapperTests
 
     private static RemoteRunSubmissionOptions GetRemoteOptions()
     {
-        var configuration = BuildConfiguration(("Timer:ScoreWrite:Mode", "remote-write"),
-                                               ("Timer:ScoreWrite:RulesetVersion", "7"));
+        var configuration = BuildConfiguration(("score_write:mode", "remote-write"),
+                                               ("score_write:ruleset_version", "7"));
         return RemoteRunSubmissionOptions.FromConfiguration(configuration,
                                                              ScoreWriteModeOptions.FromConfiguration(configuration));
     }

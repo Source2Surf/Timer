@@ -12,5 +12,11 @@
   "replay": {
     // replace storage_base_url to your storage endpoint
     "storage_base_url": ""
+  },
+  // "local-sql" writes runs straight to the database above. "remote-write" sends them to Timer.Backend instead, at
+  // "endpoint" (its gRPC port, e.g. "http://127.0.0.1:5082").
+  "score_write": {
+    "mode": "local-sql",
+    "endpoint": ""
   }
 }

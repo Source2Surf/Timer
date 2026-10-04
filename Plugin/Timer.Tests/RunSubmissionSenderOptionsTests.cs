@@ -19,9 +19,9 @@ public sealed class RunSubmissionSenderOptionsTests
     public void EndpointAloneEnablesSenderWithoutHttps()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            RunSubmissionSenderOptions.FromConfiguration(Build(("Enabled", "true"))));
+            RunSubmissionSenderOptions.FromConfiguration(Build(("enabled", "true"))));
 
-        var options = RunSubmissionSenderOptions.FromConfiguration(Build(("Endpoint", "http://timer.example:5082")));
+        var options = RunSubmissionSenderOptions.FromConfiguration(Build(("endpoint", "http://timer.example:5082")));
 
         Assert.True(options.Enabled);
         Assert.Equal(new Uri("http://timer.example:5082/"), options.Endpoint);
@@ -30,29 +30,29 @@ public sealed class RunSubmissionSenderOptionsTests
     [Fact]
     public void HttpsEndpointIsAcceptedWithoutCredentials()
     {
-        var options = RunSubmissionSenderOptions.FromConfiguration(Build(("Enabled", "true"),
-                                                                          ("Endpoint", "https://timer.example")));
+        var options = RunSubmissionSenderOptions.FromConfiguration(Build(("enabled", "true"),
+                                                                          ("endpoint", "https://timer.example")));
         Assert.Equal(Uri.UriSchemeHttps, options.Endpoint?.Scheme);
     }
 
     [Fact]
     public void ExplicitDisabledSenderStaysDisabledAndLegacyH2cSwitchIsAccepted()
     {
-        var options = RunSubmissionSenderOptions.FromConfiguration(Build(("Enabled", "false"),
-                                                                          ("Endpoint", "http://timer.example:5082"),
-                                                                          ("AllowInsecureLoopback", "true")));
+        var options = RunSubmissionSenderOptions.FromConfiguration(Build(("enabled", "false"),
+                                                                          ("endpoint", "http://timer.example:5082"),
+                                                                          ("allow_insecure_loopback", "true")));
 
         Assert.False(options.Enabled);
         Assert.True(options.AllowInsecureLoopback);
     }
 
     [Theory]
-    [InlineData("ApiKey")]
-    [InlineData("ServerId")]
+    [InlineData("api_key")]
+    [InlineData("server_id")]
     public void ObsoleteIdentitySettingsFailFast(string setting)
     {
         Assert.Throws<InvalidOperationException>(() =>
-            RunSubmissionSenderOptions.FromConfiguration(Build(("Endpoint", "http://timer.example:5082"),
+            RunSubmissionSenderOptions.FromConfiguration(Build(("endpoint", "http://timer.example:5082"),
                                                                (setting, "obsolete"))));
     }
 
