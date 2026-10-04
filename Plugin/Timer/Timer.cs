@@ -27,6 +27,7 @@ using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Command;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.MapChooser;
+using Source2Surf.Timer.Managers.Movement;
 using Source2Surf.Timer.Managers.Permission;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
@@ -178,6 +179,7 @@ public class Timer : IModSharpModule
         RefreshPermissionProvider();
         RefreshLocalizationProvider();
         RefreshMapChooser();
+        RefreshMovementExtension();
 
         _serviceProvider.GetRequiredService<ISharedSystem>()
                         .GetSharpModuleManager()
@@ -186,6 +188,8 @@ public class Timer : IModSharpModule
 
     public void OnLibraryConnected(string moduleIdentity)
     {
+        RefreshMovementExtension();
+
         if (moduleIdentity.Equals(IRequestManager.Identity, StringComparison.Ordinal))
         {
             RefreshRequestManager();
@@ -214,6 +218,8 @@ public class Timer : IModSharpModule
 
     public void OnLibraryDisconnect(string moduleIdentity)
     {
+        _serviceProvider.GetService<MovementExtensionProxy>()?.OnModuleUnloading(moduleIdentity);
+
         if (moduleIdentity.Equals(IRequestManager.Identity, StringComparison.Ordinal))
         {
             SwitchRequestManagerToUnavailable();
@@ -256,6 +262,7 @@ public class Timer : IModSharpModule
         RefreshPermissionProvider();
         RefreshLocalizationProvider();
         RefreshMapChooser();
+        RefreshMovementExtension();
     }
 
     public void Shutdown()
@@ -413,6 +420,11 @@ public class Timer : IModSharpModule
     private void RefreshMapChooser()
     {
         _serviceProvider.GetService<MapChooserProxy>()?.RefreshManager();
+    }
+
+    private void RefreshMovementExtension()
+    {
+        _serviceProvider.GetService<MovementExtensionProxy>()?.RefreshManager();
     }
 
     // ModSharp passes the module's assembly name here.

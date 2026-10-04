@@ -22,6 +22,7 @@ using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers.Command;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.MapChooser;
+using Source2Surf.Timer.Managers.Movement;
 using Source2Surf.Timer.Managers.Patch;
 using Source2Surf.Timer.Managers.Permission;
 using Source2Surf.Timer.Managers.Player;
@@ -81,6 +82,7 @@ internal static class ManagerDi
         services.ImplSingleton<IPermissionProvider, IManager, PermissionProviderProxy>();
         services.ImplSingleton<ILocalizationProvider, IManager, LocalizationProviderProxy>();
         services.ImplSingleton<IMapChooser, IManager, MapChooserProxy>();
+        services.ImplSingleton<IMovementExtension, IManager, MovementExtensionProxy>();
 
         services.AddSingleton<ReplayProviderProxy>();
     }

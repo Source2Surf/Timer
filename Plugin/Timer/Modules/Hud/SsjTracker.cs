@@ -77,6 +77,13 @@ internal sealed class SsjTracker
     private float _takeoffSpeed;
     private float _takeoffZ;
 
+    // The acceleration being scored, which steps split from it share.
+    private long                       _accel = long.MinValue;
+    private float                      _accelYaw;
+    private float                      _accelFwd;
+    private float                      _accelSide;
+    private (float Gain, bool Synced)? _accelGain;
+
     // The oldest jump still kept after serial.
     public SsjJump? After(int serial)
     {
@@ -111,8 +118,9 @@ internal sealed class SsjTracker
         => _jumped = true;
 
     // The moves are in units (after CheckParameters), side move positive to the left. A jump's own step still
-    // counts toward the jump before it, and it takes off with the speed the step started with.
-    public SsjJump? EndStep(float weight, float yaw, float forwardMove, float sideMove, float airMaxWish, float z)
+    // counts toward the jump before it, and it takes off with the speed the step started with. Steps split from one
+    // acceleration share its id and score once, from the velocity it started with.
+    public SsjJump? EndStep(float weight, float yaw, float forwardMove, float sideMove, float airMaxWish, float z, long accel)
     {
         InStep = false;
 
@@ -129,7 +137,7 @@ internal sealed class SsjTracker
 
             if (Jump > 0)
             {
-                AirStep(weight, yaw, forwardMove, sideMove, airMaxWish);
+                AirStep(weight, yaw, forwardMove, sideMove, airMaxWish, accel);
             }
 
             // A strafe is a key reversed on either axis; the chain's first air step has nothing to reverse.
@@ -191,7 +199,7 @@ internal sealed class SsjTracker
         return along < wishSpd ? ((wishSpd - MathF.Abs(along)) / wishSpd, true) : (0f, false);
     }
 
-    private void AirStep(float weight, float yaw, float forwardMove, float sideMove, float airMaxWish)
+    private void AirStep(float weight, float yaw, float forwardMove, float sideMove, float airMaxWish, long accel)
     {
         var dt    = weight * TimerConstants.TickInterval;
         var speed = MathF.Sqrt((_stepVx * _stepVx) + (_stepVy * _stepVy));
@@ -201,7 +209,16 @@ internal sealed class SsjTracker
         _dy         += _stepVy * dt;
         _trajectory += speed * dt;
 
-        if (StepGain(_stepVx, _stepVy, yaw, forwardMove, sideMove, MathF.Max(airMaxWish, 0.01f)) is { } step)
+        if (accel != _accel || yaw != _accelYaw || forwardMove != _accelFwd || sideMove != _accelSide)
+        {
+            _accel     = accel;
+            _accelYaw  = yaw;
+            _accelFwd  = forwardMove;
+            _accelSide = sideMove;
+            _accelGain = StepGain(_stepVx, _stepVy, yaw, forwardMove, sideMove, MathF.Max(airMaxWish, 0.01f));
+        }
+
+        if (_accelGain is { } step)
         {
             _gain += weight * step.Gain;
 
@@ -246,6 +263,7 @@ internal sealed class SsjTracker
     {
         Jump      = 0;
         _chainAir = 0;
+        _accel    = long.MinValue;
         ClearSegment();
     }
 

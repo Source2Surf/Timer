@@ -8,6 +8,8 @@ public sealed class SsjTrackerTests
     private const float AirMaxWish = 30f;
     private const float Strafe     = 250f; // a full key, in units
 
+    private static long _accel;
+
     private static SsjJump? Step(SsjTracker t,
                                  bool       ground,
                                  float      vx,
@@ -17,7 +19,8 @@ public sealed class SsjTrackerTests
                                  float      z      = 0,
                                  bool       jump   = false,
                                  float      yaw    = 0,
-                                 float      weight = 1)
+                                 float      weight = 1,
+                                 long?      accel  = null)
     {
         t.BeginStep(vx, vy, ground);
 
@@ -26,7 +29,7 @@ public sealed class SsjTrackerTests
             t.Jumped();
         }
 
-        return t.EndStep(weight, yaw, fwd, side, AirMaxWish, z);
+        return t.EndStep(weight, yaw, fwd, side, AirMaxWish, z, accel ?? ++_accel);
     }
 
     // Jumping from the ground: the step's inputs still count toward the jump before it.
@@ -200,6 +203,21 @@ public sealed class SsjTrackerTests
         var stats = Jump(t, side: Strafe).Stats!.Value;
         Assert.Equal(0.8f, stats.Gain, 3);
         Assert.Equal(0.8f, stats.Sync, 3);
+    }
+
+    [Fact]
+    public void StepsSplitFromOneAccelerationScoreOnce()
+    {
+        var t = new SsjTracker();
+        Jump(t);
+
+        // The first half reaches wishspd along the wish direction, so the second half alone would score nothing.
+        Step(t, false, 300, side: Strafe, weight: 0.5f, accel: -1);
+        Step(t, false, 300, 30, side: Strafe, weight: 0.5f, accel: -1);
+
+        var stats = Jump(t, side: Strafe).Stats!.Value;
+        Assert.Equal(1f, stats.Gain, 3);
+        Assert.Equal(1f, stats.Sync, 3);
     }
 
     [Fact]

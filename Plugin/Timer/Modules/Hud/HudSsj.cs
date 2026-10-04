@@ -78,7 +78,8 @@ internal partial class HudModule
                       mv->ForwardMove,
                       mv->SideMove,
                       _airMaxWish,
-                      mv->AbsOrigin.Z);
+                      mv->AbsOrigin.Z,
+                      MovementFixModule.GetAccelerationStep(param.Client.Slot, mv));
     }
 
     private void OnAirMaxWishChanged(IConVar conVar)

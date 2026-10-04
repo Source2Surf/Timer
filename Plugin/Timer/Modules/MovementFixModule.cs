@@ -23,6 +23,7 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Managers;
+using Source2Surf.Timer.Shared.Interfaces;
 
 namespace Source2Surf.Timer.Modules;
 
@@ -36,6 +37,8 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private readonly InterfaceBridge            _bridge;
     private readonly IInlineHookManager         _inlineHookManager;
     private readonly ILogger<MovementFixModule> _logger;
+
+    private static IMovementExtension _movementExtension = null!;
 
     // cvars
     // ReSharper disable InconsistentNaming
@@ -68,11 +71,13 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
     public MovementFixModule(InterfaceBridge            bridge,
                              IInlineHookManager         inlineHookManager,
-                             ILogger<MovementFixModule> logger)
+                             ILogger<MovementFixModule> logger,
+                             IMovementExtension         movementExtension)
     {
         _bridge            = bridge;
         _inlineHookManager = inlineHookManager;
         _logger            = logger;
+        _movementExtension = movementExtension;
 
         timer_slopefix = bridge.ConVarManager.CreateConVar("timer_slopefix",
                                                            true,
@@ -199,4 +204,8 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
         return new ();
     }
+
+    // The acceleration a sub-tick step is part of. Steps split from one accelerate once between them.
+    internal static long GetAccelerationStep(PlayerSlot slot, MoveData* mv)
+        => _movementExtension.GetAccelerationStep(slot, (nint) mv);
 }
