@@ -20,6 +20,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -69,7 +70,20 @@ internal static class ReplayShared
 
             var target = BuildRecentRunPath(replayDirectory, mapName, style, track, stage, steamId, runId);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.Move(filePath, target, true);
+
+            try
+            {
+                File.Move(filePath, target, true);
+            }
+            catch (DirectoryNotFoundException) when (File.Exists(filePath))
+            {
+                // Removed as empty by the housekeeping sweep in between.
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Move(filePath, target, true);
+            }
+
+            // Its age limit counts from now.
+            File.SetLastWriteTimeUtc(target, DateTime.UtcNow);
 
             var runs = new List<(long RunId, string Path)>();
 
@@ -91,6 +105,195 @@ internal static class ReplayShared
         catch (Exception e)
         {
             logger.LogWarning(e, "Failed to keep the replay of run {RunId} ({Path})", runId, filePath);
+        }
+    }
+
+    /// <summary>
+    ///     Deletes slower runs' replays kept since before <paramref name="cutoffUtc" />, and the folders left empty.
+    /// </summary>
+    public static int DeleteOldRecentRuns(string replayDirectory, DateTime cutoffUtc, ILogger logger)
+    {
+        var deleted = 0;
+
+        if (!Directory.Exists(replayDirectory))
+        {
+            return deleted;
+        }
+
+        try
+        {
+            foreach (var styleDirectory in Directory.EnumerateDirectories(replayDirectory, "style_*"))
+            {
+                var recent = Path.Combine(styleDirectory, "recent");
+
+                if (!Directory.Exists(recent))
+                {
+                    continue;
+                }
+
+                foreach (var path in Directory.EnumerateFiles(recent, "*.replay", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        // KeepRecentRun stamps when it was kept.
+                        if (File.GetLastWriteTimeUtc(path) < cutoffUtc)
+                        {
+                            File.Delete(path);
+                            deleted++;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogWarning(e, "Failed to delete old replay {Path}", path);
+                    }
+                }
+
+                DeleteEmptyDirectories(recent, DateTime.UtcNow.AddHours(-1), logger);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Failed to look for old replays in {Dir}", replayDirectory);
+        }
+
+        return deleted;
+    }
+
+    // Skips folders changed in the last hour, as KeepRecentRun may have just created one to move a file into.
+    // Each folder's time is read before its children are deleted, which updates it.
+    private static void DeleteEmptyDirectories(string directory, DateTime unchangedSinceUtc, ILogger logger)
+    {
+        foreach (var child in Directory.GetDirectories(directory))
+        {
+            try
+            {
+                var changedUtc = Directory.GetLastWriteTimeUtc(child);
+                DeleteEmptyDirectories(child, unchangedSinceUtc, logger);
+
+                if (changedUtc < unchangedSinceUtc && !Directory.EnumerateFileSystemEntries(child).Any())
+                {
+                    Directory.Delete(child);
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogDebug(e, "Failed to delete empty replay folder {Path}", child);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     A best run's replay on disk, which the cache may delete once it is in remote storage.
+    /// </summary>
+    internal readonly record struct CachedReplay(string Path, long RunId, long Size, DateTime LastUsedUtc);
+
+    /// <summary>
+    ///     Best runs' replays: in each style's folder and its stage folder, named after their run id. Slower runs'
+    ///     replays (recent) and temp files are not part of the cache.
+    /// </summary>
+    public static List<CachedReplay> ListCachedReplays(string replayDirectory)
+    {
+        var cached = new List<CachedReplay>();
+
+        if (!Directory.Exists(replayDirectory))
+        {
+            return cached;
+        }
+
+        foreach (var styleDirectory in Directory.EnumerateDirectories(replayDirectory, "style_*"))
+        {
+            foreach (var directory in new[] { styleDirectory, Path.Combine(styleDirectory, "stage") })
+            {
+                if (!Directory.Exists(directory))
+                {
+                    continue;
+                }
+
+                foreach (var file in new DirectoryInfo(directory).EnumerateFiles("*.replay"))
+                {
+                    var name = Path.GetFileNameWithoutExtension(file.Name);
+
+                    if (long.TryParse(name.AsSpan(name.LastIndexOf('_') + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var runId))
+                    {
+                        cached.Add(new CachedReplay(file.FullName, runId, file.Length, File.GetLastAccessTimeUtc(file.FullName)));
+                    }
+                }
+            }
+        }
+
+        return cached;
+    }
+
+    /// <summary>
+    ///     The least recently used replays to delete to get the cache within <paramref name="budgetBytes" />: only those
+    ///     in remote storage, and none used since <paramref name="usedBeforeUtc" />.
+    /// </summary>
+    public static List<CachedReplay> ChooseEvictions(IReadOnlyCollection<CachedReplay> cached, long budgetBytes,
+                                                     IReadOnlySet<long> storedRunIds, DateTime usedBeforeUtc)
+    {
+        var total = cached.Sum(c => c.Size);
+        var evict = new List<CachedReplay>();
+
+        foreach (var replay in cached.OrderBy(c => c.LastUsedUtc))
+        {
+            if (total <= budgetBytes)
+            {
+                break;
+            }
+
+            if (replay.LastUsedUtc < usedBeforeUtc && storedRunIds.Contains(replay.RunId))
+            {
+                evict.Add(replay);
+                total -= replay.Size;
+            }
+        }
+
+        return evict;
+    }
+
+    /// <summary>
+    ///     Saves a replay downloaded from remote storage where it would be on disk, so the next load reads it from there.
+    /// </summary>
+    public static void CacheDownloadedReplay(string path, byte[] bytes, ILogger logger)
+    {
+        if (File.Exists(path))
+        {
+            return;
+        }
+
+        var temp = $"{path}.{Guid.NewGuid():N}.tmp";
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(temp, bytes);
+            File.Move(temp, path, false);
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Failed to cache downloaded replay at {Path}", path);
+
+            try
+            {
+                File.Delete(temp);
+            }
+            catch (Exception)
+            {
+                // The orphaned temp file sweep removes it later.
+            }
+        }
+    }
+
+    // Reading doesn't reliably update the access time (often disabled), so the cache's LRU order is kept here.
+    private static void MarkUsed(string path)
+    {
+        try
+        {
+            File.SetLastAccessTimeUtc(path, DateTime.UtcNow);
+        }
+        catch (Exception)
+        {
+            // Only affects which replay the cache deletes first.
         }
     }
 
@@ -266,6 +469,8 @@ internal static class ReplayShared
                 logger.LogError("Failed to deserialize frames: {p}", path);
                 return null;
             }
+
+            MarkUsed(path);
 
             return new ReplayLoadResult(style, track, stage, new ReplayContent { Header = header, Frames = frames });
         }

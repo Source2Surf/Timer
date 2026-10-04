@@ -198,7 +198,7 @@ public sealed class StorageConsistencyTests : IDisposable
                 CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
             }).ExecuteCommandAsync();
         }
-        var provider = new DbReplayProvider(_storage, new TestReplayStorage(), false, NullLogger<DbReplayProvider>.Instance);
+        var provider = new DbReplayProvider(_storage, new TestReplayStorage(), NullLogger<DbReplayProvider>.Instance);
         var data = stage == 0 ? await provider.GetReplayAsync("surf_replay", 0, 0)
                               : await provider.GetStageReplayAsync("surf_replay", 0, 0, stage);
         Assert.Equal("replay-10", Encoding.UTF8.GetString(data!));

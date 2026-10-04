@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -55,6 +56,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
     public int ListenerPriority => 0;
 
     private const int MinValidFrames = (int) (TimerConstants.Tickrate * 0.7f);
+    private const float HousekeepingDelaySeconds = 60f;
 
     private readonly InterfaceBridge               _bridge;
     private readonly ITimerModule                  _timerModule;
@@ -89,7 +91,11 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
     private readonly IConVar timer_replay_file_compression_workers;
     private readonly IConVar timer_replay_pending_timeout;
     private readonly IConVar timer_replay_fallback_ttl;
+    private readonly IConVar timer_replay_slower_runs;
     private readonly IConVar timer_replay_keep_runs;
+    private readonly IConVar timer_replay_keep_stage_runs;
+    private readonly IConVar timer_replay_recent_max_days;
+    private readonly IConVar timer_replay_cache_size_mb;
 
     // ReSharper restore InconsistentNaming
 
@@ -148,12 +154,40 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                                 "Minutes a fallback replay record waits for OnRecordSaved before being discarded")
             !;
 
+        timer_replay_slower_runs
+            = bridge.ConVarManager.CreateConVar("timer_replay_slower_runs",
+                                                0,
+                                                0,
+                                                2,
+                                                "Runs that don't beat the player's PB: 0 not saved, 1 kept on disk for a few days, 2 also uploaded to the replay store")!;
+
         timer_replay_keep_runs
             = bridge.ConVarManager.CreateConVar("timer_replay_keep_runs",
                                                 10,
                                                 0,
                                                 100,
-                                                "Replays kept of each player's slower runs per map, style, track and stage, to watch in !replay (My runs); 0 deletes them")!;
+                                                "Replays kept of each player's slower runs per map, style and track (see timer_replay_slower_runs); 0 deletes them")!;
+
+        timer_replay_keep_stage_runs
+            = bridge.ConVarManager.CreateConVar("timer_replay_keep_stage_runs",
+                                                2,
+                                                0,
+                                                100,
+                                                "Replays kept of each player's slower stage runs per stage (see timer_replay_slower_runs); 0 deletes them")!;
+
+        timer_replay_recent_max_days
+            = bridge.ConVarManager.CreateConVar("timer_replay_recent_max_days",
+                                                3,
+                                                0,
+                                                3650,
+                                                "Days a slower run's replay is kept (see timer_replay_slower_runs); 0 keeps it until newer runs replace it")!;
+
+        timer_replay_cache_size_mb
+            = bridge.ConVarManager.CreateConVar("timer_replay_cache_size_mb",
+                                                2048,
+                                                0,
+                                                1048576,
+                                                "MB of best-run replays kept on disk; beyond that, the least recently watched that are in remote storage are deleted and downloaded again when needed. 0 keeps all")!;
 
         _replayDirectory = Path.Combine(bridge.TimerDataPath, "replays");
     }
@@ -247,6 +281,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         {
             _logger.LogWarning(ex, "Failed to scan for orphaned temp replay files in {Dir}", _replayDirectory);
         }
+
+        ScheduleHousekeeping();
     }
 
     public void OnGameShutdown()
@@ -256,6 +292,89 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         foreach (var (key, pending) in allPending)
         {
             SavePendingReplayAsFallback(key, pending);
+        }
+    }
+
+    private int KeepRuns(int stage)
+        => stage == 0 ? timer_replay_keep_runs.GetInt32() : timer_replay_keep_stage_runs.GetInt32();
+
+    // Once the map has loaded its replays, off the main thread.
+    private void ScheduleHousekeeping()
+    {
+        _bridge.ModSharp.PushTimer(() =>
+                                   {
+                                       var maxDays     = timer_replay_recent_max_days.GetInt32();
+                                       var cacheSizeMb = timer_replay_cache_size_mb.GetInt32();
+
+                                       Task.Run(async () =>
+                                       {
+                                           if (maxDays > 0)
+                                           {
+                                               var deleted = ReplayShared.DeleteOldRecentRuns(_replayDirectory,
+                                                                                              DateTime.UtcNow.AddDays(-maxDays),
+                                                                                              _logger);
+
+                                               if (deleted > 0)
+                                               {
+                                                   _logger.LogInformation("Deleted {Count} slower runs' replays kept over {Days} days", deleted, maxDays);
+                                               }
+                                           }
+
+                                           if (cacheSizeMb > 0 && _replayProviderProxy.IsAvailable)
+                                           {
+                                               await TrimReplayCacheAsync(cacheSizeMb * 1024L * 1024L).ConfigureAwait(false);
+                                           }
+                                       });
+
+                                       return TimerAction.Stop;
+                                   },
+                                   HousekeepingDelaySeconds,
+                                   GameTimerFlags.StopOnMapEnd);
+    }
+
+    private async Task TrimReplayCacheAsync(long budgetBytes)
+    {
+        try
+        {
+            var cached = ReplayShared.ListCachedReplays(_replayDirectory);
+
+            if (cached.Sum(c => c.Size) <= budgetBytes)
+            {
+                return;
+            }
+
+            var stored = await _replayProviderProxy.GetStoredRunIdsAsync(cached.Select(c => (ulong) c.RunId).ToArray())
+                                                   .ConfigureAwait(false);
+
+            // Anything used in the last hour may be loading right now.
+            var evict = ReplayShared.ChooseEvictions(cached,
+                                                     budgetBytes,
+                                                     stored.Select(id => (long) id).ToHashSet(),
+                                                     DateTime.UtcNow.AddHours(-1));
+            long freed = 0;
+
+            foreach (var replay in evict)
+            {
+                try
+                {
+                    File.Delete(replay.Path);
+                    freed += replay.Size;
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Failed to delete cached replay {Path}", replay.Path);
+                }
+            }
+
+            if (evict.Count > 0)
+            {
+                _logger.LogInformation("Replay cache: deleted {Count} replays ({Megabytes:F1} MB) that are in remote storage",
+                                       evict.Count, freed / (1024.0 * 1024.0));
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Failed to trim the replay cache in {Dir}", _replayDirectory);
         }
     }
 
@@ -848,7 +967,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         var compressionLevel   = timer_replay_file_compression_level.GetInt32();
         var compressionWorkers = timer_replay_file_compression_workers.GetInt32();
-        var keepRuns           = timer_replay_keep_runs.GetInt32();
+        var keepRuns           = KeepRuns(stage);
+        var slowerRuns         = timer_replay_slower_runs.GetInt32();
 
         Task.Run(async () =>
         {
@@ -868,7 +988,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                 var replayContent = new ReplayContent { Header = header, Frames = frames };
 
                 var providerReady = _replayProviderProxy.IsAvailable;
-                var uploadNonPB   = _replayProviderProxy.UploadNonPersonalBest;
+                var uploadNonPB   = slowerRuns >= 2;
 
                 // Use the authoritative record result, as the fallback path does. The playback
                 // notify below only reports whether this run replaced the server-best cache, which
@@ -945,8 +1065,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
                 if (context.AttemptResult == EAttemptResult.NoNewRecord)
                 {
-                    // Not a new best: kept among the player's recent runs (to watch in !replay), or deleted.
-                    if (runId is { } keptRunId)
+                    // Not a new best: kept a few days among the player's recent runs when the server saves slower runs.
+                    if (slowerRuns >= 1 && runId is { } keptRunId)
                     {
                         ReplayShared.KeepRecentRun(filePath, _replayDirectory, mapName, style, track, stage, header.SteamId, keptRunId, keepRuns, _logger);
                     }
@@ -1117,7 +1237,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         var recordSteamId       = recordEvent.SteamId.AsPrimitive();
         var inMemoryContent     = fallback.Content;
         var replayDirectory     = _replayDirectory;
-        var keepRuns            = timer_replay_keep_runs.GetInt32();
+        var keepRuns            = KeepRuns(stage);
+        var slowerRuns          = timer_replay_slower_runs.GetInt32();
 
         // The run is confirmed; if its temp file cannot be used, a PB/WR must still reach playback
         // from the copy held in memory (the playback cache is not fed until confirmation).
@@ -1274,7 +1395,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             }
 
             var providerReady = replayProviderProxy.IsAvailable;
-            var uploadNonPB   = replayProviderProxy.UploadNonPersonalBest;
+            var uploadNonPB   = slowerRuns >= 2;
 
 #if DEBUG
             logger.LogInformation(
@@ -1327,8 +1448,15 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
             if (attemptResult == EAttemptResult.NoNewRecord)
             {
-                // Not a new best: kept among the player's recent runs (to watch in !replay), or deleted.
-                ReplayShared.KeepRecentRun(finalPath, replayDirectory, mapName, style, track, stage, recordSteamId, runId, keepRuns, logger);
+                // Not a new best: kept a few days among the player's recent runs when the server saves slower runs.
+                if (slowerRuns >= 1)
+                {
+                    ReplayShared.KeepRecentRun(finalPath, replayDirectory, mapName, style, track, stage, recordSteamId, runId, keepRuns, logger);
+                }
+                else
+                {
+                    DeleteUnreferencedReplayFile(finalPath, logger);
+                }
             }
 #if DEBUG
             logger.LogInformation("Successfully processed fallback record for {SteamId} style={Style} track={Track} stage={Stage} attemptId={AttemptId}: renamed {TempPath} → {FinalPath}",

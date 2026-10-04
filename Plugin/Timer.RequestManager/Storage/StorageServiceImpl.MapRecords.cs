@@ -222,14 +222,16 @@ internal sealed partial class StorageServiceImpl
     }
 
     public Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10)
-        => GetPlayerRunsCoreAsync(mapName, steamId, null, limit);
+        => GetPlayerRunsCoreAsync(mapName, steamId, null, limit, false);
 
     public Task<IReadOnlyList<RunRecord>> GetPlayerRuns(string mapName, SteamID steamId, int style, int track, int stage, int limit = 10)
-        => GetPlayerRunsCoreAsync(mapName, steamId, (style, track, stage), limit);
+        => GetPlayerRunsCoreAsync(mapName, steamId, (style, track, stage), limit, true);
 
     // A player's finishes on the map, newest first: on one leaderboard, or every full-map run when board is null.
+    // With personalBestsOnly, just the runs that were their PB when they set them.
     private async Task<IReadOnlyList<RunRecord>> GetPlayerRunsCoreAsync(string mapName, SteamID steamId,
-                                                                       (int Style, int Track, int Stage)? board, int limit)
+                                                                       (int Style, int Track, int Stage)? board, int limit,
+                                                                       bool personalBestsOnly)
     {
         var mapId = await ResolveMapIdByNameAsync(mapName);
 
@@ -256,6 +258,21 @@ internal sealed partial class StorageServiceImpl
         else
         {
             query = query.Where(x => x.RunType == RunType.Main && x.Stage == 0);
+        }
+
+        if (personalBestsOnly)
+        {
+            // No earlier run of theirs on the board was as fast.
+            query = query.Where(x => SqlFunc.Subqueryable<RunEntity>()
+                                            .Where(p => p.MapId     == x.MapId
+                                                        && p.SteamId == x.SteamId
+                                                        && p.RunType == x.RunType
+                                                        && p.Style   == x.Style
+                                                        && p.Track   == x.Track
+                                                        && p.Stage   == x.Stage
+                                                        && p.Id      < x.Id
+                                                        && p.Time    <= x.Time)
+                                            .NotAny());
         }
 
         var rows = await query

@@ -1074,12 +1074,12 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
         var tasks = new List<Task>();
 
-        foreach (var (style, track, stage, _) in wrKeys)
+        foreach (var (style, track, stage, wr) in wrKeys)
         {
             token.ThrowIfCancellationRequested();
 
             if (results.ContainsKey((style, track, stage))) continue;
-            tasks.Add(LoadSingleRemoteReplay(semaphore, mapName, style, track, stage, results, token));
+            tasks.Add(LoadSingleRemoteReplay(semaphore, mapName, style, track, stage, wr, results, token));
         }
 
         if (tasks.Count > 0)
@@ -1090,7 +1090,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
     }
 
     private async Task LoadSingleRemoteReplay(
-        SemaphoreSlim semaphore, string mapName, int style, int track, int stage,
+        SemaphoreSlim semaphore, string mapName, int style, int track, int stage, RunRecord wr,
         Dictionary<(int style, int track, int stage), ReplayContent> results,
         CancellationToken token)
     {
@@ -1099,17 +1099,31 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
         {
             token.ThrowIfCancellationRequested();
 
-            var bytes = stage == 0
-                ? await _replayProviderProxy.GetReplayAsync(mapName, style, track)
-                : await _replayProviderProxy.GetStageReplayAsync(mapName, style, track, stage);
+            ReplayContent? content = null;
+
+            if (await _replayProviderProxy.GetRunReplayAsync((ulong) wr.Id) is { } runBytes)
+            {
+                content = DeserializeAndCache(runBytes, mapName, style, track, stage, wr.Id);
+            }
+            else
+            {
+                var bytes = stage == 0
+                    ? await _replayProviderProxy.GetReplayAsync(mapName, style, track)
+                    : await _replayProviderProxy.GetStageReplayAsync(mapName, style, track, stage);
+
+                if (bytes != null)
+                {
+                    content = ReplayShared.DeserializeReplay(bytes, style, track, stage, _logger)?.Content;
+                }
+            }
 
             token.ThrowIfCancellationRequested();
 
-            if (bytes != null && ReplayShared.DeserializeReplay(bytes, style, track, stage, _logger) is { } result)
+            if (content is not null)
             {
                 lock (results)
                 {
-                    results[(style, track, stage)] = result.Content;
+                    results[(style, track, stage)] = content;
                 }
             }
         }

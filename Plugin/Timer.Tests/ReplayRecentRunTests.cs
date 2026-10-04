@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -40,6 +41,61 @@ public sealed class ReplayRecentRunTests : IDisposable
         Assert.False(File.Exists(path));
         Assert.Empty(Kept(Player, stage: 0));
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public void PersonalBestsStayWhateverTheirAge(int stage)
+    {
+        var best = ReplayShared.BuildReplayPath(_directory, Map, 0, 0, stage, 3);
+        Directory.CreateDirectory(Path.GetDirectoryName(best)!);
+        File.WriteAllText(best, "3");
+        Age(best, DateTime.UtcNow.AddDays(-100));
+
+        Assert.Equal(0, ReplayShared.DeleteOldRecentRuns(_directory, DateTime.UtcNow.AddDays(-3), NullLogger.Instance));
+        Assert.True(File.Exists(best));
+    }
+
+    [Fact]
+    public void OnlySlowerRunsOlderThanTheCutoffAreDeleted()
+    {
+        var now = DateTime.UtcNow;
+        Keep(Player, stage: 0, 1, keep: 10);
+        Keep(Player, stage: 0, 2, keep: 10);
+        Keep(Player, stage: 2, 3, keep: 10);
+        Keep(Another, stage: 0, 4, keep: 10);
+        Age(BuildRecent(Player, 0, 1), now.AddDays(-40));
+        Age(BuildRecent(Player, 2, 3), now.AddDays(-40));
+        Age(BuildRecent(Another, 0, 4), now.AddDays(-40));
+        var best = ReplayShared.BuildReplayPath(_directory, Map, 0, 0, 0, 5);
+        File.WriteAllText(best, "5");
+        Age(best, now.AddDays(-400));
+
+        var stageFolder = Path.GetDirectoryName(BuildRecent(Player, 2, 3))!;
+        Assert.Equal(3, ReplayShared.DeleteOldRecentRuns(_directory, now.AddDays(-30), NullLogger.Instance));
+        Assert.Equal([2L], Kept(Player, stage: 0));
+        Assert.True(File.Exists(best));
+        // Just emptied, so a run being moved in right now still finds it.
+        Assert.True(Directory.Exists(stageFolder));
+
+        // An hour later the whole emptied chain goes in one sweep.
+        foreach (var folder in FoldersUnder(Path.Combine(_directory, "style_0", "recent")))
+        {
+            Directory.SetLastWriteTimeUtc(folder, now.AddHours(-2));
+        }
+        ReplayShared.DeleteOldRecentRuns(_directory, now.AddDays(-30), NullLogger.Instance);
+        Assert.False(Directory.Exists(stageFolder));
+        Assert.False(Directory.Exists(Path.Combine(_directory, "style_0", "recent", Another.ToString())));
+        Assert.Equal([2L], Kept(Player, stage: 0));
+    }
+
+    private string BuildRecent(ulong steamId, int stage, long runId)
+        => ReplayShared.BuildRecentRunPath(_directory, Map, 0, 0, stage, steamId, runId);
+
+    private static void Age(string path, DateTime writeTimeUtc) => File.SetLastWriteTimeUtc(path, writeTimeUtc);
+
+    private static IEnumerable<string> FoldersUnder(string folder)
+        => Directory.EnumerateDirectories(folder, "*", SearchOption.AllDirectories).ToArray();
 
     // Writes a finished run's file as the recorder does, then hands it over like a slower run.
     private string Keep(ulong steamId, int stage, long runId, int keep)

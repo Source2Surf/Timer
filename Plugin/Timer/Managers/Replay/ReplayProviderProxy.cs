@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -31,7 +32,6 @@ internal sealed class ReplayProviderProxy
 
     public bool IsAvailable => Volatile.Read(ref _provider) is not null;
 
-    public bool UploadNonPersonalBest => Volatile.Read(ref _provider)?.UploadNonPersonalBest ?? false;
 
     public ReplayProviderProxy(ISharedSystem shared, ILogger<ReplayProviderProxy> logger)
     {
@@ -78,6 +78,14 @@ internal sealed class ReplayProviderProxy
         if (provider is null) return null;
 
         return await provider.GetRunReplayAsync(runId);
+    }
+
+    public async Task<IReadOnlyCollection<ulong>> GetStoredRunIdsAsync(IReadOnlyList<ulong> runIds)
+    {
+        var provider = Volatile.Read(ref _provider);
+        if (provider is null) return [];
+
+        return await provider.GetStoredRunIdsAsync(runIds);
     }
 
     public async Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)

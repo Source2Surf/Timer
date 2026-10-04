@@ -22,7 +22,6 @@ public class SqlRequestManager : IModSharpModule
     private const string ConnectionStringKey            = "Timer";
     private const string ModuleConnectionStringKey      = "Timer.RequestManager";
     private const string ReplayStorageBaseUrlKey        = "Timer:ReplayStorageBaseUrl";
-    private const string ReplayUploadNonPersonalBestKey = "Timer:ReplayUploadNonPersonalBest";
     private const string InitializeSchemaKey            = "Timer:InitializeSchema";
 
     private readonly ISharedSystem              _shared;
@@ -67,14 +66,11 @@ public class SqlRequestManager : IModSharpModule
         }
         else
         {
-            _logger.LogInformation("Resolved replay storage URL from {source} (uploadNonPersonalBest={flag}).",
-                                   replayConfig.Source,
-                                   replayConfig.UploadNonPersonalBest);
+            _logger.LogInformation("Resolved replay storage URL from {source}.", replayConfig.Source);
 
             var replayStorage = new HttpReplayStorage(new HttpClient(), replayConfig.BaseUrl);
             _replayProvider = new DbReplayProvider(storageImpl,
                                                    replayStorage,
-                                                   replayConfig.UploadNonPersonalBest,
                                                    sharedSystem.GetLoggerFactory().CreateLogger<DbReplayProvider>());
         }
     }
@@ -167,7 +163,7 @@ public class SqlRequestManager : IModSharpModule
         throw new InvalidDataException($"{InitializeSchemaKey} must be true or false.");
     }
 
-    private readonly record struct ReplayConfig(string BaseUrl, bool UploadNonPersonalBest, string Source);
+    private readonly record struct ReplayConfig(string BaseUrl, string Source);
 
     private static ReplayConfig ResolveReplayConfig(JsonDocument? timerConfig, string configPath, IConfiguration configuration)
     {
@@ -181,18 +177,14 @@ public class SqlRequestManager : IModSharpModule
             }
         }
 
-        var fallbackUrl                  = configuration[ReplayStorageBaseUrlKey];
-        var fallbackUploadNonBestRaw     = configuration[ReplayUploadNonPersonalBestKey];
-        var fallbackUploadNonBest        = !string.IsNullOrWhiteSpace(fallbackUploadNonBestRaw)
-                                        && bool.TryParse(fallbackUploadNonBestRaw, out var parsedBool)
-                                        && parsedBool;
+        var fallbackUrl = configuration[ReplayStorageBaseUrlKey];
 
         if (!string.IsNullOrWhiteSpace(fallbackUrl))
         {
-            return new ReplayConfig(fallbackUrl, fallbackUploadNonBest, $"IConfiguration:{ReplayStorageBaseUrlKey}");
+            return new ReplayConfig(fallbackUrl, $"IConfiguration:{ReplayStorageBaseUrlKey}");
         }
 
-        return new ReplayConfig(string.Empty, false, "none");
+        return new ReplayConfig(string.Empty, "none");
     }
 
     private static (DbType DbType, string ConnectionString) ParseTimerJsonc(JsonElement root, string configPath)
@@ -231,19 +223,14 @@ public class SqlRequestManager : IModSharpModule
         if (!TryGetPropertyIgnoreCase(root, "replay", out var replaySection)
             || replaySection.ValueKind != JsonValueKind.Object)
         {
-            return new ReplayConfig(string.Empty, false, configPath);
+            return new ReplayConfig(string.Empty, configPath);
         }
 
         var storageBaseUrl = ReadOptionalString(replaySection,
                                                 "storage_base_url",
                                                 "storageBaseUrl");
 
-        var uploadNonBest  = ReadOptionalBool(replaySection,
-                                              "upload_non_personal_best",
-                                              "uploadNonPersonalBest")
-                            ?? false;
-
-        return new ReplayConfig(storageBaseUrl ?? string.Empty, uploadNonBest, configPath);
+        return new ReplayConfig(storageBaseUrl ?? string.Empty, configPath);
     }
 
     private static string ResolveConnectionString(IConfiguration configuration)

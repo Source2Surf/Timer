@@ -11,8 +11,6 @@
   // See README.md → "Replay Storage" for the HTTP contract your endpoint must implement.
   "replay": {
     // replace storage_base_url to your storage endpoint
-    "storage_base_url": "",
-    // If true, every finished run is uploaded; if false, only new PB/WR replays.
-    "upload_non_personal_best": false
+    "storage_base_url": ""
   }
 }

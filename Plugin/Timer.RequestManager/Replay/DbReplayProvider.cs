@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Common.Entities;
@@ -16,17 +18,13 @@ internal sealed class DbReplayProvider : IReplayProvider
     private readonly IReplayStorage            _replayStorage;
     private readonly ILogger<DbReplayProvider> _logger;
 
-    public bool UploadNonPersonalBest { get; }
-
     public DbReplayProvider(StorageServiceImpl        storage,
                             IReplayStorage            replayStorage,
-                            bool                      uploadNonPersonalBest,
                             ILogger<DbReplayProvider> logger)
     {
-        _storage              = storage;
-        _replayStorage        = replayStorage;
-        UploadNonPersonalBest = uploadNonPersonalBest;
-        _logger               = logger;
+        _storage       = storage;
+        _replayStorage = replayStorage;
+        _logger        = logger;
     }
 
     public Task<byte[]?> GetReplayAsync(string mapName, int style, int track, ulong? steamId = null)
@@ -43,6 +41,21 @@ internal sealed class DbReplayProvider : IReplayProvider
             .FirstAsync();
 
         return await DownloadAsync(replayUrl);
+    }
+
+    public async Task<IReadOnlyCollection<ulong>> GetStoredRunIdsAsync(IReadOnlyList<ulong> runIds)
+    {
+        var stored = new List<ulong>();
+
+        foreach (var chunk in runIds.Chunk(1000))
+        {
+            stored.AddRange(await _storage.Db.Queryable<ReplayEntity>()
+                                          .Where(r => chunk.Contains(r.RunId))
+                                          .Select(r => r.RunId)
+                                          .ToListAsync());
+        }
+
+        return stored;
     }
 
     public Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)

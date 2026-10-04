@@ -400,7 +400,12 @@ internal partial class ReplayPlaybackModule : ICentralReplay
 
         var bytes = await _replayProviderProxy.GetRunReplayAsync((ulong) record.Id).ConfigureAwait(false);
 
-        if (bytes is null && best)
+        if (bytes is not null)
+        {
+            return DeserializeAndCache(bytes, mapName, record.Style, record.Track, record.Stage, record.Id);
+        }
+
+        if (best)
         {
             bytes = record.Stage == 0
                 ? await _replayProviderProxy.GetReplayAsync(mapName, record.Style, record.Track, record.SteamId).ConfigureAwait(false)
@@ -409,5 +414,20 @@ internal partial class ReplayPlaybackModule : ICentralReplay
         }
 
         return bytes is null ? null : ReplayShared.DeserializeReplay(bytes, record.Style, record.Track, record.Stage, _logger)?.Content;
+    }
+
+    // Only a replay fetched by its run id is surely that run's, so only those are saved to disk.
+    private ReplayContent? DeserializeAndCache(byte[] bytes, string mapName, int style, int track, int stage, long runId)
+    {
+        if (ReplayShared.DeserializeReplay(bytes, style, track, stage, _logger) is not { } loaded)
+        {
+            return null;
+        }
+
+        ReplayShared.CacheDownloadedReplay(ReplayShared.BuildReplayPath(_replayDirectory, mapName, style, track, stage, runId),
+                                           bytes,
+                                           _logger);
+
+        return loaded.Content;
     }
 }

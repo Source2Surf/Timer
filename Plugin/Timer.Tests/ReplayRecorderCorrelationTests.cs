@@ -338,7 +338,9 @@ public sealed class ReplayRecorderCorrelationTests
                   "_replayProviderProxy",
                   (ReplayProviderProxy) RuntimeHelpers.GetUninitializedObject(typeof(ReplayProviderProxy)));
         SetField(module, "_pendingReplayStore", new PendingReplayStore());
+        SetField(module, "timer_replay_slower_runs", DispatchProxy.Create<IConVar, FixedConVarProxy>());
         SetField(module, "timer_replay_keep_runs", DispatchProxy.Create<IConVar, FixedConVarProxy>());
+        SetField(module, "timer_replay_keep_stage_runs", DispatchProxy.Create<IConVar, FixedConVarProxy>());
 
         return module;
     }

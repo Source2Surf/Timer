@@ -107,8 +107,8 @@ public interface IRequestManager
     Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10);
 
     /// <summary>
-    /// A player's most recent finishes on one leaderboard (stage 0 is the map), newest first, slower ones
-    /// included. The replay menu lists them under My runs; a provider that doesn't implement it lists none.
+    /// A player's PB history on one leaderboard (stage 0 is the map): the runs that were their PB when set, newest
+    /// first. The replay menu lists them under My runs; a provider that doesn't implement it lists none.
     /// </summary>
     Task<IReadOnlyList<RunRecord>> GetPlayerRuns(string mapName, SteamID steamId, int style, int track, int stage, int limit = 10)
         => Task.FromResult<IReadOnlyList<RunRecord>>([]);

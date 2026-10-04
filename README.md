@@ -80,20 +80,37 @@ also use that player's best from the store.
 
 ### My runs
 
-The replay menu's second tab lists a player's own recent finishes on the picked
-track, stage and style, slower ones included. Every finish is recorded, but its
-replay is only kept as follows:
+The replay menu's second tab lists a player's PB history on the picked track,
+stage and style: each run that was their PB when they set it, newest first.
+Every PB's replay is kept, on disk and in the replay store, so the whole history
+can be watched. A run that didn't beat the player's PB is up to
+`timer_replay_slower_runs`: `0` (default) it isn't saved, `1` it's kept on disk
+for a few days, `2` it's also uploaded to the replay store:
 
-- **On the server:** a run that isn't a new PB or WR keeps its replay among the
-  player's newest `timer_replay_keep_runs` (default 10) for that map, style, track
-  and stage, in `replays/style_<n>/recent/<steamid64>/<map>/<track>/`. Older ones are
-  deleted. `0` deletes them all, as before.
-- **In the replay store:** with `upload_non_personal_best` on, every run is
-  uploaded. The menu fetches one through `IReplayProvider.GetRunReplayAsync(runId)`.
+- **On the server:** among the player's newest `timer_replay_keep_runs` (default
+  10) for that map, style and track, in
+  `replays/style_<n>/recent/<steamid64>/<map>/<track>/`, or
+  `timer_replay_keep_stage_runs` (default 2) for each stage. Each is deleted
+  after `timer_replay_recent_max_days` (default 3, `0` for never), checked a
+  minute after each map starts.
+- **In the replay store:** with `2`, they're uploaded as well.
+
+A replay that isn't on disk is fetched by run id through
+`IReplayProvider.GetRunReplayAsync(runId)`.
 
 The list itself comes from `IRequestManager.GetPlayerRuns`. Both methods have
 default implementations that find nothing, so custom providers keep working
 without them.
+
+### Replay cache
+
+With a replay store, the best runs' replays on disk are a cache of
+`timer_replay_cache_size_mb` (default 2048, `0` keeps all). A minute after each
+map starts, if they take more than that, the least recently watched ones are
+deleted, but only those that `IReplayProvider.GetStoredRunIdsAsync` confirms
+are in the store, and none watched in the last hour. A replay downloaded by
+its run id is saved back to disk. Without a store, or with a provider that
+doesn't implement that method, nothing is deleted.
 
 ### Profile card
 
@@ -265,8 +282,7 @@ Merge into `sharp/configs/timer.jsonc` alongside `database`:
 ```json
 {
   "replay": {
-    "storage_base_url": "http://127.0.0.1:5080",
-    "upload_non_personal_best": false
+    "storage_base_url": "http://127.0.0.1:5080"
   }
 }
 ```

@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Source2Surf.Timer.Shared.Interfaces;
@@ -25,12 +26,6 @@ namespace Source2Surf.Timer.Shared.Interfaces;
 public interface IReplayProvider
 {
     static readonly string Identity = typeof(IReplayProvider).FullName!;
-
-    /// <summary>
-    /// If true, the provider accepts uploads for runs that are NOT a new personal best.
-    /// When false (default), only PB / WR replays are uploaded.
-    /// </summary>
-    bool UploadNonPersonalBest => false;
 
     /// <summary>
     /// Gets replay binary data for the specified map, style, and track.
@@ -47,11 +42,19 @@ public interface IReplayProvider
     Task<byte[]?> GetStageReplayAsync(string mapName, int style, int track, int stage, ulong? steamId = null);
 
     /// <summary>
-    /// Gets the replay of one run by its id, slower runs included when they were uploaded (see
-    /// <see cref="UploadNonPersonalBest" />). The replay menu uses it for a player's own past runs.
+    /// Gets the replay of one run by its id: a PB, or a slower run the server chose to upload. The replay menu uses it
+    /// for a player's own past runs.
     /// </summary>
     /// <returns>Replay binary data, or null if not found; a provider that doesn't implement it finds none</returns>
     Task<byte[]?> GetRunReplayAsync(ulong runId) => Task.FromResult<byte[]?>(null);
+
+    /// <summary>
+    /// Which of these runs have a replay in remote storage. The server deletes its own copy of those first when its
+    /// replay cache is full, and downloads them again when needed.
+    /// </summary>
+    /// <returns>The stored run ids; a provider that doesn't implement it confirms none, so nothing is deleted</returns>
+    Task<IReadOnlyCollection<ulong>> GetStoredRunIdsAsync(IReadOnlyList<ulong> runIds)
+        => Task.FromResult<IReadOnlyCollection<ulong>>([]);
 
     /// <summary>
     /// Uploads replay binary data to remote storage.
