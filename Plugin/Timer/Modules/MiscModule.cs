@@ -39,6 +39,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
 {
     private readonly InterfaceBridge     _bridge;
     private readonly ICommandManager     _commandManager;
+    private readonly IInlineHookManager  _inlineHookManager;
     private readonly IPatchManager       _patchManager;
     private readonly IReplayModule       _replayModule;
     private readonly IStyleModule        _styleModule;
@@ -74,13 +75,14 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
                       ITimerModule        timerModule,
                       ILogger<MiscModule> logger)
     {
-        _bridge         = bridge;
-        _commandManager = commandManager;
-        _patchManager   = patchManager;
-        _replayModule   = replayModule;
-        _styleModule    = styleModule;
-        _timerModule    = timerModule;
-        _logger         = logger;
+        _bridge            = bridge;
+        _commandManager    = commandManager;
+        _inlineHookManager = inlineHookManager;
+        _patchManager      = patchManager;
+        _replayModule      = replayModule;
+        _styleModule       = styleModule;
+        _timerModule       = timerModule;
+        _logger            = logger;
 
         CBaseEntity_m_vecVelocity_offset = bridge.SchemaManager.GetNetVarOffset("CBaseEntity", "m_vecVelocity");
 
@@ -122,6 +124,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     public void OnPostInit(ServiceProvider provider)
     {
         PatchTheNavCheck();
+        BlockMapConfigs();
     }
 
     public void Shutdown()
@@ -132,6 +135,9 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         _bridge.HookManager.PlayerDispatchTraceAttack.RemoveHookPre(OnPlayerDispatchAttackPre);
         _bridge.HookManager.PlayerDropWeapon.RemoveForward(OnPlayerDropWeapon);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommand);
+
+        // InlineHookManager shuts down first and removes the hook.
+        FreeEmptyCommand();
     }
 
     public void OnGameActivate()
