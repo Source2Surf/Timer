@@ -27,6 +27,7 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Modules.Hud;
 using Source2Surf.Timer.Modules.Practice;
@@ -72,6 +73,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     private readonly IPlayerManager     _playerManager;
     private readonly ICommandManager    _commandManager;
     private readonly IRequestManager    _request;
+    private readonly IEventHookManager  _eventHook;
     private readonly ILogger<HudModule> _logger;
     private readonly HudSettingsStore   _store;
 
@@ -83,7 +85,10 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     private readonly float[] _turnAt = new float[PlayerSlot.MaxPlayerCount];
 
     // ReSharper disable InconsistentNaming
-    private readonly IConVar timer_hud_layout;
+    private readonly IConVar  timer_hud_layout;
+    private readonly IConVar? sv_air_max_wishspeed;
+
+    private float _airMaxWish = DefaultAirMaxWish;
 
     // ReSharper restore InconsistentNaming
 
@@ -101,6 +106,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
                      IPlayerManager     playerManager,
                      ICommandManager    commandManager,
                      IRequestManager    request,
+                     IEventHookManager  eventHook,
                      ILogger<HudModule> logger)
     {
         _bridge         = bridge;
@@ -118,12 +124,15 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _playerManager  = playerManager;
         _commandManager = commandManager;
         _request        = request;
+        _eventHook      = eventHook;
         _logger         = logger;
         _store          = new HudSettingsStore(bridge.TimerDataPath, logger);
 
         timer_hud_layout = bridge.ConVarManager.CreateConVar("timer_hud_layout",
                                                              DefaultLayout,
                                                              "Panorama layout of the timer HUD. Clients must have it mounted (workshop addon).")!;
+
+        sv_air_max_wishspeed = bridge.ConVarManager.FindConVar("sv_air_max_wishspeed");
     }
 
     public bool Init()
@@ -131,8 +140,17 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerRunCommand.InstallHookPost(OnPlayerRunCommandPost);
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnPlayerProcessMovePre);
+        _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnSsjMovePre);
+        _bridge.HookManager.PlayerProcessMovePost.InstallForward(OnSsjMovePost);
         _bridge.ModSharp.InstallGameFrameHook(null, OnGameFramePost);
         _panorama.InstallClickListener(OnHudClicked);
+        _eventHook.ListenEvent("player_jump", OnSsjJump);
+
+        if (sv_air_max_wishspeed is not null)
+        {
+            _airMaxWish = sv_air_max_wishspeed.GetFloat();
+            _bridge.ConVarManager.InstallChangeHook(sv_air_max_wishspeed, OnAirMaxWishChanged);
+        }
 
         _timerModule.RegisterListener(this);
         _zoneModule.RegisterListener(this);
@@ -143,6 +161,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _commandManager.AddClientChatCommand("replay", OnCommandReplay);
         _commandManager.AddClientChatCommand("profile", OnCommandProfile);
         _commandManager.AddClientChatCommand("stats", OnCommandProfile);
+        _commandManager.AddClientChatCommand("ssj", OnCommandSsj);
 
         return true;
     }
@@ -157,7 +176,14 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPost(OnPlayerRunCommandPost);
         _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnPlayerProcessMovePre);
+        _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnSsjMovePre);
+        _bridge.HookManager.PlayerProcessMovePost.RemoveForward(OnSsjMovePost);
         _bridge.ModSharp.RemoveGameFrameHook(null, OnGameFramePost);
+
+        if (sv_air_max_wishspeed is not null)
+        {
+            _bridge.ConVarManager.RemoveChangeHook(sv_air_max_wishspeed, OnAirMaxWishChanged);
+        }
 
         foreach (var p in _players)
         {
@@ -646,8 +672,8 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         }
         else if (HudOptions.ById.TryGetValue(buttonId, out var option))
         {
-            // Greyed-out options ignore clicks; sizes only change through their steppers.
-            if ((option.Needs is null || option.Needs(p.Settings)) && !option.IsSize)
+            // Greyed-out options ignore clicks; steppers only change through their buttons.
+            if ((option.Needs is null || option.Needs(p.Settings)) && !option.IsStepper)
             {
                 p.Settings[option.Index] = (p.Settings[option.Index] + 1) % option.Choices.Length;
                 MarkSettingsChanged(p);
@@ -678,7 +704,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     {
         foreach (var candidate in HudOptions.All)
         {
-            if (!candidate.IsSize)
+            if (!candidate.IsStepper)
             {
                 continue;
             }

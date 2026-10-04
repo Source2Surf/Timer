@@ -243,6 +243,30 @@
     "en-us": "Strafes",
     "zh-cn": "转向"
   },
+  "hud.ssj.jump": {
+    "en-us": "J{0}",
+    "zh-cn": "J{0}"
+  },
+  "hud.ssj.height": {
+    "en-us": "H",
+    "zh-cn": "H"
+  },
+  "hud.ssj.gain": {
+    "en-us": "G",
+    "zh-cn": "G"
+  },
+  "hud.ssj.sync": {
+    "en-us": "SN",
+    "zh-cn": "SN"
+  },
+  "hud.ssj.strafes": {
+    "en-us": "SPJ",
+    "zh-cn": "SPJ"
+  },
+  "hud.ssj.efficiency": {
+    "en-us": "EF",
+    "zh-cn": "EF"
+  },
   "rm.count.times_one": {
     "en-us": "1 time",
     "zh-cn": "1 个成绩"
@@ -539,6 +563,10 @@
     "en-us": "locations",
     "zh-cn": "存点"
   },
+  "ui.target.ssj": {
+    "en-us": "SSJ",
+    "zh-cn": "SSJ"
+  },
   "ui.locs.title": {
     "en-us": "Locations",
     "zh-cn": "存点"
@@ -718,6 +746,78 @@
   "ui.keys.jump_duck": {
     "en-us": "Jump and duck",
     "zh-cn": "跳跃和下蹲"
+  },
+  "ui.tab.ssj": {
+    "en-us": "SSJ",
+    "zh-cn": "SSJ"
+  },
+  "ui.panel.ssj": {
+    "en-us": "SSJ panel",
+    "zh-cn": "SSJ 面板"
+  },
+  "ui.ssj.empty": {
+    "en-us": "SSJ shows here",
+    "zh-cn": "SSJ 显示在这里"
+  },
+  "ui.ssj.jump": {
+    "en-us": "Show jump",
+    "zh-cn": "显示第几跳"
+  },
+  "ui.ssj.repeat": {
+    "en-us": "Repeat",
+    "zh-cn": "重复"
+  },
+  "ui.ssj.repeat_desc": {
+    "en-us": "Every multiple of that jump too",
+    "zh-cn": "该跳数的每个倍数也显示"
+  },
+  "ui.ssj.first": {
+    "en-us": "First jump",
+    "zh-cn": "第一跳"
+  },
+  "ui.ssj.first_desc": {
+    "en-us": "Your takeoff speed",
+    "zh-cn": "你的起跳速度"
+  },
+  "ui.ssj.stats": {
+    "en-us": "Stats",
+    "zh-cn": "数据"
+  },
+  "ui.ssj.speed_diff": {
+    "en-us": "Speed change",
+    "zh-cn": "速度变化"
+  },
+  "ui.ssj.height_diff": {
+    "en-us": "Height change",
+    "zh-cn": "高度变化"
+  },
+  "ui.ssj.gain": {
+    "en-us": "Gain",
+    "zh-cn": "增益"
+  },
+  "ui.ssj.gain_desc": {
+    "en-us": "How much of the speed your strafes could add",
+    "zh-cn": "转向加到了多少可加的速度"
+  },
+  "ui.ssj.sync": {
+    "en-us": "Sync",
+    "zh-cn": "同步"
+  },
+  "ui.ssj.sync_desc": {
+    "en-us": "Air time your strafes were adding speed",
+    "zh-cn": "转向在加速的空中时间占比"
+  },
+  "ui.ssj.strafes": {
+    "en-us": "Strafes",
+    "zh-cn": "转向"
+  },
+  "ui.ssj.efficiency": {
+    "en-us": "Efficiency",
+    "zh-cn": "效率"
+  },
+  "ui.ssj.efficiency_desc": {
+    "en-us": "Gain, lower the more your path curves",
+    "zh-cn": "增益，路线越弯越低"
   },
   "ui.replay.title": {
     "en-us": "Replays",

@@ -35,7 +35,8 @@
 .InfoPanel,
 .SplitsPanel,
 .KeysPanel,
-.LocsPanel {
+.LocsPanel,
+.SsjPanel {
     width: fit-children;
     height: fit-children;
     border: 2px solid #5ab4ff00;
@@ -436,6 +437,105 @@
     color: #ffffffb3;
 }
 
+/* ---- SSJ ---- */
+
+/* One line just under center speed, plain text like it; the timer's padding is all that's below. */
+.SsjPanel {
+    horizontal-align: center;
+    vertical-align: center;
+    y: 12%;
+    padding: 0px 8px;
+}
+
+.SsjBody {
+    horizontal-align: center;
+}
+
+.SsjPanel Label {
+    vertical-align: center;
+    font-family: timerFont;
+    font-weight: bold;
+    color: white;
+    text-shadow: textShadow;
+}
+
+/* Shows when a jump comes up and fades out with a slight slide a few seconds later. The transition is on the resting
+   rule like the menu's (one only on the gone state never ran, and keyframes here were reported missing). */
+.SsjCard {
+    horizontal-align: center;
+    width: fit-children;
+    height: fit-children;
+    flow-children: right;
+    opacity: 1;
+    transform: translateY( 0px );
+
+    transition-property: opacity, transform;
+    transition-duration: .4s;
+    transition-timing-function: ease-out;
+}
+
+.SsjCard.gone {
+    opacity: 0;
+    transform: translateY( 8px );
+}
+
+/* From faded out until the update it shows again (HudSsj.cs), so it shows at once and only going fades. */
+.SsjCard.snap {
+    transition-duration: 0s;
+}
+
+.SsjPanel .SsjJump {
+    font-size: 17px;
+    color: #c3cad1;
+}
+
+.SsjPanel .SsjSpeed {
+    margin-left: 8px;
+    font-size: 17px;
+}
+
+.SsjRow {
+    vertical-align: center;
+    width: fit-children;
+    height: fit-children;
+    margin-left: 8px;
+    flow-children: right;
+}
+
+.SsjPanel .SsjName {
+    margin-right: 4px;
+    font-size: 17px;
+    color: #c3cad1;
+}
+
+.SsjPanel .SsjValue {
+    font-size: 17px;
+}
+
+/* bhop-get-stats' tier colours, worst to best (HudSsj.cs has the bars); plain for values it doesn't rate. Red,
+   green and cyan are softer than its pure ones, which are hard to read over the map. */
+.SsjPanel .tier-red    { color: lossColor; }
+.SsjPanel .tier-orange { color: #ffa500; }
+.SsjPanel .tier-green  { color: gainColor; }
+.SsjPanel .tier-cyan   { color: #66d9ef; }
+.SsjPanel .tier-white  { color: #ffffff; }
+.SsjPanel .tier-plain  { color: #ffffff; }
+
+.SsjEmpty {
+    visibility: collapse;
+    horizontal-align: center;
+    margin: 4px 10px;
+    font-size: 14px;
+}
+
+.SsjPanel .SsjEmpty {
+    color: mutedColor;
+}
+
+.SsjEmpty.shown {
+    visibility: visible;
+}
+
 /* ---- Dragging (menu and every HUD panel) ---- */
 
 /* Full-screen, so its fine x/y offset adds to the panel's coarse one (timer_positions.css). A panel near a screen
@@ -456,7 +556,8 @@
 .InfoPanel.placed,
 .SplitsPanel.placed,
 .KeysPanel.placed,
-.LocsPanel.placed {
+.LocsPanel.placed,
+.SsjPanel.placed {
     horizontal-align: center;
     vertical-align: center;
     margin: 0px;
@@ -483,7 +584,8 @@
 .InfoPanel.smooth,
 .SplitsPanel.smooth,
 .KeysPanel.smooth,
-.LocsPanel.smooth {
+.LocsPanel.smooth,
+.SsjPanel.smooth {
     transition-property: background-color, border-color, box-shadow, position;
     transition-duration: .1s, .1s, .1s, .12s;
     transition-timing-function: ease, ease, ease, linear;
@@ -497,7 +599,8 @@
 .InfoPanel.editing,
 .SplitsPanel.editing,
 .KeysPanel.editing,
-.LocsPanel.editing {
+.LocsPanel.editing,
+.SsjPanel.editing {
     border-color: #5ab4ff59;
     background-color: #0a0e1359;
 }
@@ -507,7 +610,8 @@
 .InfoPanel.editing:hover,
 .SplitsPanel.editing:hover,
 .KeysPanel.editing:hover,
-.LocsPanel.editing:hover {
+.LocsPanel.editing:hover,
+.SsjPanel.editing:hover {
     border-color: #5ab4ffd9;
     background-color: #0a0e1380;
 }
@@ -518,7 +622,8 @@
 .InfoPanel.editing.dragging,
 .SplitsPanel.editing.dragging,
 .KeysPanel.editing.dragging,
-.LocsPanel.editing.dragging {
+.LocsPanel.editing.dragging,
+.SsjPanel.editing.dragging {
     background-color: #0a0e13b8;
     border-color: accentColor;
     box-shadow: #5ab4ff59 0px 0px 14px 2px;
@@ -735,7 +840,7 @@
 /* Every tab keeps the same height, so the menu doesn't jump when you switch. */
 .MenuPages {
     width: 100%;
-    height: 410px;
+    height: 450px;
     margin-top: 6px;
 }
 
@@ -895,6 +1000,11 @@
 .Stepper .MenuValue {
     margin: 0px 6px;
     min-width: 52px;
+}
+
+/* No pill after it: flush right, where the pills end. */
+.SsjStepper {
+    margin-right: 0px;
 }
 
 .PillButton {

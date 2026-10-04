@@ -13,7 +13,7 @@
 		every class it uses once on a new entity.
 		Fixed labels have an id and {s:text}, which the plugin sets to the player's text (HudLabels in HudText.cs),
 		so they read in the player's language.
-		Draggable panels (Menu, RunPanel, CSpeedPanel, InfoPanel, SplitsPanel, KeysPanel, LocsPanel) get placed / editing /
+		Draggable panels (Menu, RunPanel, CSpeedPanel, InfoPanel, SplitsPanel, KeysPanel, LocsPanel, SsjPanel) get placed / editing /
 		dragging / smooth, and once placed are centre-aligned and offset with mx-N / my-N on the panel plus
 		fx-N / fy-N on their full-screen *Pos wrapper (timer_positions.css).
 	-->
@@ -159,6 +159,27 @@
 					</Panel>
 				</Button>
 			</Panel>
+
+			<!-- SSJ: one line under center speed. The jump the player picked (SSJ tab), its takeoff speed, then the stats
+			     they switched on in fixed slots. Off until turned on; SsjCard gets gone a few seconds after the jump, and
+			     snap from faded out until the next one has come up. -->
+			<Panel id="SsjPos" class="DragPos" hittest="false">
+				<Button id="SsjPanel" class="SsjPanel Hidden">
+					<Panel id="SsjBody" class="PanelBody SsjBody">
+						<Label id="SsjEmpty" class="SsjEmpty" text="{s:text}" />
+						<Panel id="SsjCard" class="SsjCard Hidden">
+							<Label id="SsjJump" class="SsjJump" text="{s:text}" />
+							<Label id="SsjSpeed" class="SsjSpeed" text="{s:text}" />
+							<Panel id="SsjRow0" class="SsjRow"><Label id="SsjRow0Name" class="SsjName Hidden" text="{s:text}" /><Label id="SsjRow0Value" class="SsjValue" text="{s:text}" /></Panel>
+							<Panel id="SsjRow1" class="SsjRow"><Label id="SsjRow1Name" class="SsjName" text="{s:text}" /><Label id="SsjRow1Value" class="SsjValue" text="{s:text}" /></Panel>
+							<Panel id="SsjRow2" class="SsjRow"><Label id="SsjRow2Name" class="SsjName" text="{s:text}" /><Label id="SsjRow2Value" class="SsjValue" text="{s:text}" /></Panel>
+							<Panel id="SsjRow3" class="SsjRow Hidden"><Label id="SsjRow3Name" class="SsjName" text="{s:text}" /><Label id="SsjRow3Value" class="SsjValue" text="{s:text}" /></Panel>
+							<Panel id="SsjRow4" class="SsjRow Hidden"><Label id="SsjRow4Name" class="SsjName" text="{s:text}" /><Label id="SsjRow4Value" class="SsjValue" text="{s:text}" /></Panel>
+							<Panel id="SsjRow5" class="SsjRow Hidden"><Label id="SsjRow5Name" class="SsjName" text="{s:text}" /><Label id="SsjRow5Value" class="SsjValue" text="{s:text}" /></Panel>
+						</Panel>
+					</Panel>
+				</Button>
+			</Panel>
 		</Panel>
 
 		<!-- Centre guides, shown while a dragged panel is snapped to the screen's centre line. -->
@@ -203,6 +224,7 @@
 					<Button id="TabSpeed" class="MenuTab"><Label id="TabSpeedLabel" class="MenuTabLabel" text="{s:text}" /></Button>
 					<Button id="TabSplits" class="MenuTab"><Label id="TabSplitsLabel" class="MenuTabLabel" text="{s:text}" /></Button>
 					<Button id="TabKeys" class="MenuTab"><Label id="TabKeysLabel" class="MenuTabLabel" text="{s:text}" /></Button>
+					<Button id="TabSsj" class="MenuTab"><Label id="TabSsjLabel" class="MenuTabLabel" text="{s:text}" /></Button>
 				</Panel>
 
 				<Panel class="MenuPages">
@@ -361,6 +383,52 @@
 							<Label id="OptKeyMouseValue" class="MenuValue on" text="{s:value}" />
 						</Button>
 						<Button id="OptKeyJumpDuck" class="MenuRow"><Label id="LKeyJumpDuck" class="MenuName" text="{s:text}" /><Label id="OptKeyJumpDuckValue" class="MenuValue on" text="{s:value}" /></Button>
+					</Panel>
+
+					<!-- SSJ (!ssj): the panel, which jumps it shows, and its stats -->
+					<Panel id="PageSsj" class="MenuPage Hidden">
+						<Panel class="MenuSection"><Label id="LSsjShow" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+						<Panel class="MenuRow static">
+							<Label id="LSsjPanel" class="MenuName" text="{s:text}" />
+							<Panel class="Stepper">
+								<Button id="SizeSsjDown" class="Step"><Label text="−" /></Button>
+								<Label id="SizeSsjValue" class="MenuValue" text="{s:value}" />
+								<Button id="SizeSsjUp" class="Step"><Label text="+" /></Button>
+							</Panel>
+							<Button id="OptSsj" class="PillButton"><Label id="OptSsjValue" class="MenuValue off" text="{s:value}" /></Button>
+						</Panel>
+						<Panel class="MenuRow static">
+							<Label id="LSsjJump" class="MenuName" text="{s:text}" />
+							<Panel class="Stepper SsjStepper">
+								<Button id="OptSsjJumpDown" class="Step"><Label text="−" /></Button>
+								<Label id="OptSsjJumpValue" class="MenuValue" text="{s:value}" />
+								<Button id="OptSsjJumpUp" class="Step"><Label text="+" /></Button>
+							</Panel>
+						</Panel>
+						<Button id="OptSsjRepeat" class="MenuRow tall">
+							<Panel class="MenuText"><Label id="LSsjRepeat" class="MenuName" text="{s:text}" /><Label id="LSsjRepeatDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Label id="OptSsjRepeatValue" class="MenuValue off" text="{s:value}" />
+						</Button>
+						<Button id="OptSsjFirst" class="MenuRow tall">
+							<Panel class="MenuText"><Label id="LSsjFirst" class="MenuName" text="{s:text}" /><Label id="LSsjFirstDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Label id="OptSsjFirstValue" class="MenuValue on" text="{s:value}" />
+						</Button>
+						<Panel class="MenuSection"><Label id="LSsjStats" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+						<Button id="OptSsjSpeedDiff" class="MenuRow"><Label id="LSsjSpeedDiff" class="MenuName" text="{s:text}" /><Label id="OptSsjSpeedDiffValue" class="MenuValue on" text="{s:value}" /></Button>
+						<Button id="OptSsjHeight" class="MenuRow"><Label id="LSsjHeight" class="MenuName" text="{s:text}" /><Label id="OptSsjHeightValue" class="MenuValue off" text="{s:value}" /></Button>
+						<Button id="OptSsjGain" class="MenuRow tall">
+							<Panel class="MenuText"><Label id="LSsjGain" class="MenuName" text="{s:text}" /><Label id="LSsjGainDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Label id="OptSsjGainValue" class="MenuValue on" text="{s:value}" />
+						</Button>
+						<Button id="OptSsjSync" class="MenuRow tall">
+							<Panel class="MenuText"><Label id="LSsjSync" class="MenuName" text="{s:text}" /><Label id="LSsjSyncDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Label id="OptSsjSyncValue" class="MenuValue on" text="{s:value}" />
+						</Button>
+						<Button id="OptSsjStrafes" class="MenuRow"><Label id="LSsjStrafes" class="MenuName" text="{s:text}" /><Label id="OptSsjStrafesValue" class="MenuValue off" text="{s:value}" /></Button>
+						<Button id="OptSsjEfficiency" class="MenuRow tall">
+							<Panel class="MenuText"><Label id="LSsjEfficiency" class="MenuName" text="{s:text}" /><Label id="LSsjEfficiencyDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Label id="OptSsjEfficiencyValue" class="MenuValue off" text="{s:value}" />
+						</Button>
 					</Panel>
 				</Panel>
 

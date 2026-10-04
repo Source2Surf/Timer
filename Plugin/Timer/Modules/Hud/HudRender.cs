@@ -217,6 +217,11 @@ internal partial class HudModule
             UpdateKeys(w, p, s);
         }
 
+        if (p.IsOn(HudOptions.Ssj))
+        {
+            UpdateSsj(w, p, s, now);
+        }
+
         UpdateLocs(w, p, s);
     }
 
@@ -411,7 +416,7 @@ internal partial class HudModule
                 }
             }
 
-            if (option.IsSize)
+            if (option.IsStepper)
             {
                 var index = p.Settings[option.Index];
                 w.Class(option.DownId, "disabled", index == 0);

@@ -237,6 +237,15 @@ internal sealed class HudPlayer
     public int       ZoneTrack;
     public int       ZoneData;                     // the stage number of a stage zone
 
+    // ---- SSJ: this player's jumps, and the jump their panel shows (theirs, or a spectated player's)
+    public readonly SsjTracker  Ssj = new ();
+    public          SsjTracker? SsjFrom;
+    public          int         SsjSeen;
+    public          SsjJump?    SsjShown;
+    public          float       SsjShownAt; // game time it was picked; it fades out a few seconds later
+    public          bool        SsjSnap;    // as last sent: transitions off, from faded out until it shows again
+    public          bool        SsjWasGone;
+
     /// <summary>
     ///     The player's PB checkpoint splits, which the record cache doesn't keep, fetched per style and track.
     /// </summary>

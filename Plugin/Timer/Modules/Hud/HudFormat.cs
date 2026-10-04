@@ -129,6 +129,30 @@ internal static class HudFormat
         return n < 0 ? ZString.Concat('-', -n, " u/s") : ZString.Concat('+', n, " u/s");
     }
 
+    public static string Signed(float value)
+    {
+        var n = RoundSpeed(value);
+
+        return n < 0 ? ZString.Concat('-', -n) : ZString.Concat('+', n);
+    }
+
+    // The tier above each bar the value reaches (bars ascending, one per tier above grey).
+    public static SsjTier Tier(float value, float[] bars)
+    {
+        var tier = 0;
+
+        while (tier < bars.Length && value >= bars[tier])
+        {
+            tier++;
+        }
+
+        return (SsjTier) tier;
+    }
+
+    // A fraction as a percentage with one decimal.
+    public static string Percent(float fraction)
+        => ZString.Concat((float.IsFinite(fraction) ? fraction * 100f : 0f).ToString("F1", CultureInfo.InvariantCulture), '%');
+
     /// <summary>
     ///     What a replay is, for its title and the replay menu: the style unless it's the default, the bonus or
     ///     stage, then SR or its rank, or Run for a player's own run that isn't on the leaderboard.

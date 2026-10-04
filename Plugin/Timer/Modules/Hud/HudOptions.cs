@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Source2Surf.Timer.Modules.Hud;
@@ -64,11 +65,18 @@ internal sealed class HudOption
     public int        Initial { get; }
 
     /// <summary>
+    ///     Changed with its <c>&lt;Id&gt;Down</c> / <c>&lt;Id&gt;Up</c> buttons rather than by clicking it, like a size.
+    /// </summary>
+    public bool Stepped { get; init; }
+
+    /// <summary>
     ///     Greys the option out (shown as Off) while other settings make it meaningless.
     /// </summary>
     public Func<int[], bool>? Needs { get; init; }
 
     public bool IsSize => ReferenceEquals(Choices, HudOptions.SizeChoices);
+
+    public bool IsStepper => Stepped || IsSize;
 }
 
 internal static class HudOptions
@@ -144,11 +152,33 @@ internal static class HudOptions
     public static readonly HudOption KeyMouse    = new ("OptKeyMouse", OnOff);
     public static readonly HudOption KeyJumpDuck = new ("OptKeyJumpDuck", OnOff);
 
+    // SSJ tab: the panel (off until turned on there), which jumps it shows, and what it shows of them
+    public static readonly HudOption Ssj     = new ("OptSsj", Shown, ["SsjPanel"], 1);
+    public static readonly HudOption SizeSsj = new ("SizeSsj", SizeChoices, ["SsjBody"], SizeDefault);
+
+    public static readonly HudOption SsjJump =
+        new ("OptSsjJump", Enumerable.Range(1, 16).Select(n => new HudChoice(n.ToString(CultureInfo.InvariantCulture))).ToArray(), initial: 5)
+        {
+            Stepped = true,
+        };
+
+    // Jump 1 with repeat is every jump; jump 1 alone is the takeoff only, so first jump adds nothing to it.
+    public static readonly HudOption SsjRepeat = new ("OptSsjRepeat", OnOff, initial: 1);
+    public static readonly HudOption SsjFirst  = new ("OptSsjFirst", OnOff) { Needs = settings => settings[SsjJump.Index] > 0 };
+
+    public static readonly HudOption SsjSpeedDiff  = new ("OptSsjSpeedDiff", OnOff);
+    public static readonly HudOption SsjHeight     = new ("OptSsjHeight", OnOff, initial: 1);
+    public static readonly HudOption SsjGain       = new ("OptSsjGain", OnOff);
+    public static readonly HudOption SsjSync       = new ("OptSsjSync", OnOff);
+    public static readonly HudOption SsjStrafes    = new ("OptSsjStrafes", OnOff, initial: 1);
+    public static readonly HudOption SsjEfficiency = new ("OptSsjEfficiency", OnOff, initial: 1);
+
     public static readonly HudOption[] All =
     [
         Run, SizeRun, CSpeed, SizeCSpeed, Info, SizeInfo, Splits, SizeSplits, Keys, SizeKeys,
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
+        Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;
@@ -286,6 +316,7 @@ internal enum HudTarget
     Splits,
     Keys,
     Locs,
+    Ssj,
 }
 
 /// <summary>
@@ -321,6 +352,7 @@ internal static class HudTargets
         new ("SplitsPanel", "SplitsPos", (-40, -34), (20, 19), true, HudTexts.TargetSplits, "splits"),
         new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, HudTexts.TargetKeys, "keys"),
         new ("LocsPanel", "LocsPos", (-42, 0), (13, 21), true, HudTexts.TargetLocs, "locs"),
+        new ("SsjPanel", "SsjPos", (0, 12), (22, 4), true, HudTexts.TargetSsj, "ssj"),
     ];
 
     /// <summary>
@@ -335,6 +367,7 @@ internal static class HudTargets
         ["SplitsPanel"] = HudTarget.Splits,
         ["KeysPanel"]   = HudTarget.Keys,
         ["LocsPanel"]   = HudTarget.Locs,
+        ["SsjPanel"]    = HudTarget.Ssj,
     };
 
     public static HudTargetDef Def(HudTarget target)
@@ -347,8 +380,10 @@ internal static class HudTargets
 /// </summary>
 internal static class HudTabs
 {
-    public static readonly string[] Names  = ["Hud", "Timer", "Speed", "Splits", "Keys"];
+    public static readonly string[] Names  = ["Hud", "Timer", "Speed", "Splits", "Keys", "Ssj"];
     public static readonly string[] Tabs   = Names.Select(n => $"Tab{n}").ToArray();
     public static readonly string[] Labels = Names.Select(n => $"Tab{n}Label").ToArray();
     public static readonly string[] Pages  = Names.Select(n => $"Page{n}").ToArray();
+
+    public static readonly int Ssj = Array.IndexOf(Names, "Ssj");
 }

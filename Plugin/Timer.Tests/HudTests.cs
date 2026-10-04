@@ -286,6 +286,9 @@ public sealed class HudOptionsTests
         var settings = HudOptions.NewSettings();
 
         Assert.False(HudOptions.IsOn(settings, HudOptions.Keys));     // off until !showkeys
+        Assert.False(HudOptions.IsOn(settings, HudOptions.Ssj));      // off until turned on
+        Assert.Equal("6", HudOptions.SsjJump.Choices[settings[HudOptions.SsjJump.Index]].Label);
+        Assert.False(HudOptions.IsOn(settings, HudOptions.SsjRepeat));
         Assert.False(HudOptions.IsOn(settings, HudOptions.Jumps));
         Assert.True(HudOptions.IsOn(settings, HudOptions.Zone));
         Assert.Equal("100%", HudOptions.SizeRun.Choices[settings[HudOptions.SizeRun.Index]].Label);
@@ -436,6 +439,19 @@ public sealed class HudLayoutContractTests
              .Select(m => m.Groups[1].Value)
              .ToHashSet();
 
+    // resourcecompiler rejects a malformed layout, and the plugin addresses panels by id.
+    [Fact]
+    public void TheLayoutIsWellFormedWithUniqueIds()
+    {
+        var ids = System.Xml.Linq.XDocument.Parse(Xml)
+                        .Descendants()
+                        .Select(e => (string?) e.Attribute("id"))
+                        .OfType<string>()
+                        .ToList();
+
+        Assert.Empty(ids.GroupBy(id => id).Where(g => g.Count() > 1).Select(g => g.Key));
+    }
+
     [Fact]
     public void EveryOptionHasItsButtonAndValueLabel()
     {
@@ -448,7 +464,7 @@ public sealed class HudLayoutContractTests
 
             Assert.Contains(option.ValueId, Ids);
 
-            if (option.IsSize)
+            if (option.IsStepper)
             {
                 Assert.Contains(option.DownId, Ids);
                 Assert.Contains(option.UpId, Ids);
@@ -504,6 +520,7 @@ public sealed class HudLayoutContractTests
             "MoveKeyCancel", "MoveKeyReset", "MoveKeyFree", "MenuReset", "MenuClose",
             "LocsTitle", "LocsSave", "LocsTele", "LocsPrev", "LocsNext", "LocsHide", "LocsNote",
             "LocsKeySave", "LocsKeyTele", "LocsKeyPrev", "LocsKeyNext", "LocsKeyHide", "LocsClear", "LocsKeyClear",
+            "SsjEmpty", "SsjCard", "SsjJump", "SsjSpeed",
         ];
 
         foreach (var id in others)
@@ -538,6 +555,13 @@ public sealed class HudLayoutContractTests
             Assert.Contains(id, Ids);
         }
 
+        for (var i = 0; i < 6; i++)
+        {
+            Assert.Contains($"SsjRow{i}", Ids);
+            Assert.Contains($"SsjRow{i}Name", Ids);
+            Assert.Contains($"SsjRow{i}Value", Ids);
+        }
+
         for (var i = 0; i < HudPlayer.MaxSplits; i++)
         {
             Assert.Contains($"Split{i}", Ids);
@@ -554,7 +578,8 @@ public sealed class HudLayoutContractTests
         {
             "Hidden", "on", "off", "disabled", "active", "placed", "dragging", "editing", "smooth", "moving", "shown",
             "gain", "loss", "gap", "blank", "stopped", "paused", "practice", "replay", "finished", "faster", "slower",
-            "nofade", "shift-a", "shift-b", "enter-a", "enter-b", "Closed", "sel", "you", "now", "wr", "warn", "lit", "none",
+            "nofade", "shift-a", "shift-b", "enter-a", "enter-b", "Closed", "sel", "you", "now", "wr", "warn", "lit", "none", "gone", "snap",
+            "tier-red", "tier-orange", "tier-green", "tier-cyan", "tier-white", "tier-plain",
         };
 
         // The replay menu's progress bar, in 2% steps.

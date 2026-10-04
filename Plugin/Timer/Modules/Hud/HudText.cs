@@ -156,6 +156,14 @@ internal static class HudTexts
     public static readonly HudText RowJumps   = new ("hud.row.jumps", "Jumps");
     public static readonly HudText RowStrafes = new ("hud.row.strafes", "Strafes");
 
+    // ---- SSJ panel
+    public static readonly HudText SsjJumpN       = new ("hud.ssj.jump", "J{0}");
+    public static readonly HudText SsjHeightN     = new ("hud.ssj.height", "H");
+    public static readonly HudText SsjGainN       = new ("hud.ssj.gain", "G");
+    public static readonly HudText SsjSyncN       = new ("hud.ssj.sync", "SN");
+    public static readonly HudText SsjStrafesN    = new ("hud.ssj.strafes", "SPJ");
+    public static readonly HudText SsjEfficiencyN = new ("hud.ssj.efficiency", "EF");
+
     // ---- replay menu
     public static readonly HudText TimesOne        = new ("rm.count.times_one", "1 time");
     public static readonly HudText Times           = new ("rm.count.times", "{0} times");
@@ -236,6 +244,7 @@ internal static class HudTexts
     public static readonly HudText TargetSplits = new ("ui.target.splits", "splits");
     public static readonly HudText TargetKeys   = new ("ui.target.keys", "keys");
     public static readonly HudText TargetLocs   = new ("ui.target.locs", "locations");
+    public static readonly HudText TargetSsj    = new ("ui.target.ssj", "SSJ");
 
     public static readonly HudText LocsTitle      = new ("ui.locs.title", "Locations");
     public static readonly HudText LocsTitleCount = new ("ui.locs.title_count", "Locations · {0}");
@@ -283,6 +292,24 @@ internal static class HudTexts
     public static readonly HudText KeyMouse       = new ("ui.keys.turn", "Turn direction");
     public static readonly HudText KeyMouseDesc   = new ("ui.keys.turn_desc", "Arrows light up as you turn");
     public static readonly HudText KeyJumpDuck    = new ("ui.keys.jump_duck", "Jump and duck");
+    public static readonly HudText TabSsj         = new ("ui.tab.ssj", "SSJ");
+    public static readonly HudText PanelSsj       = new ("ui.panel.ssj", "SSJ panel");
+    public static readonly HudText SsjEmpty       = new ("ui.ssj.empty", "SSJ shows here");
+    public static readonly HudText SsjJump        = new ("ui.ssj.jump", "Show jump");
+    public static readonly HudText SsjRepeat      = new ("ui.ssj.repeat", "Repeat");
+    public static readonly HudText SsjRepeatDesc  = new ("ui.ssj.repeat_desc", "Every multiple of that jump too");
+    public static readonly HudText SsjFirst       = new ("ui.ssj.first", "First jump");
+    public static readonly HudText SsjFirstDesc   = new ("ui.ssj.first_desc", "Your takeoff speed");
+    public static readonly HudText SsjStats       = new ("ui.ssj.stats", "Stats");
+    public static readonly HudText SsjSpeedDiff   = new ("ui.ssj.speed_diff", "Speed change");
+    public static readonly HudText SsjHeight      = new ("ui.ssj.height_diff", "Height change");
+    public static readonly HudText SsjGain        = new ("ui.ssj.gain", "Gain");
+    public static readonly HudText SsjGainDesc    = new ("ui.ssj.gain_desc", "How much of the speed your strafes could add");
+    public static readonly HudText SsjSync        = new ("ui.ssj.sync", "Sync");
+    public static readonly HudText SsjSyncDesc    = new ("ui.ssj.sync_desc", "Air time your strafes were adding speed");
+    public static readonly HudText SsjStrafes     = new ("ui.ssj.strafes", "Strafes");
+    public static readonly HudText SsjEfficiency  = new ("ui.ssj.efficiency", "Efficiency");
+    public static readonly HudText SsjEfficiencyDesc = new ("ui.ssj.efficiency_desc", "Gain, lower the more your path curves");
 
     public static readonly HudText ReplaysTitle = new ("ui.replay.title", "Replays");
     public static readonly HudText Leaderboard  = new ("ui.replay.leaderboard", "Leaderboard");
@@ -349,6 +376,24 @@ internal static class HudLabels
         ("LKeyMouse", HudTexts.KeyMouse),
         ("LKeyMouseDesc", HudTexts.KeyMouseDesc),
         ("LKeyJumpDuck", HudTexts.KeyJumpDuck),
+        ("TabSsjLabel", HudTexts.TabSsj),
+        ("LSsjShow", HudTexts.Show),
+        ("LSsjPanel", HudTexts.PanelSsj),
+        ("LSsjJump", HudTexts.SsjJump),
+        ("LSsjRepeat", HudTexts.SsjRepeat),
+        ("LSsjRepeatDesc", HudTexts.SsjRepeatDesc),
+        ("LSsjFirst", HudTexts.SsjFirst),
+        ("LSsjFirstDesc", HudTexts.SsjFirstDesc),
+        ("LSsjStats", HudTexts.SsjStats),
+        ("LSsjSpeedDiff", HudTexts.SsjSpeedDiff),
+        ("LSsjHeight", HudTexts.SsjHeight),
+        ("LSsjGain", HudTexts.SsjGain),
+        ("LSsjGainDesc", HudTexts.SsjGainDesc),
+        ("LSsjSync", HudTexts.SsjSync),
+        ("LSsjSyncDesc", HudTexts.SsjSyncDesc),
+        ("LSsjStrafes", HudTexts.SsjStrafes),
+        ("LSsjEfficiency", HudTexts.SsjEfficiency),
+        ("LSsjEfficiencyDesc", HudTexts.SsjEfficiencyDesc),
         ("LMenuReset", HudTexts.MenuReset),
         ("LMenuClose", HudTexts.Close),
     ];
@@ -397,5 +442,6 @@ internal static class HudLabels
     ];
 
     public static IEnumerable<(string Id, HudText Text)> All
-        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Append(("SplitsEmpty", HudTexts.SplitsEmpty));
+        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Append(("SplitsEmpty", HudTexts.SplitsEmpty))
+                .Append(("SsjEmpty", HudTexts.SsjEmpty));
 }
