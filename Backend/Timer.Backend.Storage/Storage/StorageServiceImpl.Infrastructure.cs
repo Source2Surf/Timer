@@ -349,22 +349,10 @@ internal sealed partial class StorageServiceImpl
 
     private sealed record WorkshopMap(string MapKey, ulong WorkshopId);
 
-    private sealed class AttemptBestTimesRow
+    private sealed class PlayerBestCheckRow
     {
-        // 0 when the player has no best row. The queries aggregate MAX over a CASE whose
-        // other-player branch is 0 rather than NULL: SqlSugar's PostgreSQL provider sends a
-        // null unsigned parameter as 0, so a NULL branch made every other player's row read
-        // as id 0 and hid this player's row. The unique key allows one row per player, and
-        // ids start at 1, so MAX is exactly that row.
-        public ulong? PlayerBestRowId { get; set; }
-        public ulong? PlayerBestRunId { get; set; }
-
-        public float? ServerBestTime { get; set; }
-
-        // SqlSugar's MySQL-family materializer maps a nullable float CASE aggregate
-        // to zero when the projection targets a DTO. Keep this value double-typed
-        // so an existing personal best remains distinguishable from no value.
-        public double? PlayerBestTime { get; set; }
+        public ulong Id            { get; set; }
+        public int   AtLeastAsFast { get; set; }
     }
 
 }

@@ -32,6 +32,8 @@ public sealed class DatabaseEdgeCaseRegressionTests
         foreach (var time in new[] { 80f, 80.1f, MathF.BitIncrement(80f) })
             await EqualTimeRanksFollowTheScoreOrder(fixture, time);
         await ImprovedBestUpdatesOwnRowBesideOtherPlayers(fixture);
+        foreach (var time in new[] { 123.46875f, 10000.03125f })
+            await TiesNeverBeatTheStoredTime(fixture, time);
         await LegacyJoinDateMigrationIsAdditiveAndIdempotent(fixture);
         await InvalidHistoricalTimesCanBeRepaired(fixture);
         if (type != DbType.Sqlite) await ConcurrentWritesPreserveJoinDatesAndCounters(fixture);
@@ -184,6 +186,37 @@ public sealed class DatabaseEdgeCaseRegressionTests
         Assert.Equal(85f, main.BestTime);
         Assert.Equal(checked((ulong)stageImproved.Item2.Id), stage.RunId);
         Assert.Equal(25f, stage.BestTime);
+    }
+
+    // MySQL returns FLOAT rounded to 6 digits (123.46875 -> 123.469), so a tie compared in C# beat the stored time.
+    private static async Task TiesNeverBeatTheStoredTime(Fixture f, float time)
+    {
+        var map = await f.Store.GetMapInfo(Fixture.MapName());
+        var holder = Fixture.Player();
+        var challenger = Fixture.Player();
+        var holderId = checked((long)holder.AsPrimitive());
+        await Profile(f.Store, holderId, "Holder");
+        await Profile(f.Store, checked((long)challenger.AsPrimitive()), "Challenger");
+
+        var record = await f.Store.AddPlayerRecord(holder, map.MapName, new RecordRequest { Time = time });
+        var tie = await f.Store.AddPlayerRecord(challenger, map.MapName, new RecordRequest { Time = time });
+        var repeat = await f.Store.AddPlayerRecord(holder, map.MapName, new RecordRequest { Time = time });
+        Assert.Equal(EAttemptResult.NewServerRecord, record.Item1);
+        Assert.Equal(EAttemptResult.NewPersonalRecord, tie.Item1);
+        Assert.Equal(EAttemptResult.NoNewRecord, repeat.Item1);
+
+        var stageRecord = await f.Store.AddPlayerStageRecord(holder, map.MapName, new RecordRequest { Stage = 1, Time = time });
+        var stageTie = await f.Store.AddPlayerStageRecord(challenger, map.MapName, new RecordRequest { Stage = 1, Time = time });
+        var stageRepeat = await f.Store.AddPlayerStageRecord(holder, map.MapName, new RecordRequest { Stage = 1, Time = time });
+        Assert.Equal(EAttemptResult.NewServerRecord, stageRecord.Item1);
+        Assert.Equal(EAttemptResult.NewPersonalRecord, stageTie.Item1);
+        Assert.Equal(EAttemptResult.NoNewRecord, stageRepeat.Item1);
+
+        var bests = await f.Store.Db.Queryable<PlayerBestRunEntity>()
+                           .Where(x => x.MapId == map.MapId && x.SteamId == holderId)
+                           .ToListAsync();
+        Assert.Equal(checked((ulong)record.Item2.Id), Assert.Single(bests, x => x.RunType == RunType.Main).RunId);
+        Assert.Equal(checked((ulong)stageRecord.Item2.Id), Assert.Single(bests, x => x.RunType == RunType.Stage).RunId);
     }
 
     private static async Task LegacyJoinDateMigrationIsAdditiveAndIdempotent(Fixture f)

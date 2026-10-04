@@ -232,10 +232,6 @@ internal sealed partial class StorageServiceImpl
             throw new InvalidOperationException("Run writes require an active record transaction.");
         }
 
-        var bestTimes = run.RunType == RunType.Main
-            ? await QueryMainBestTimesAsync(run.SteamId, run.MapId, run.Style, run.Track)
-            : await QueryStageBestTimesAsync(run.SteamId, run.MapId, run.Style, run.Track, run.Stage);
-        var result = ResolveAttemptResult(run.Time, bestTimes?.ServerBestTime, bestTimes?.PlayerBestTime);
         run.Id = unchecked((ulong)await _db.Insertable(run).ExecuteReturnBigIdentityAsync(OperationCancellation));
 
         var segments = createSegments(run.Id);
@@ -244,7 +240,16 @@ internal sealed partial class StorageServiceImpl
             await _db.Insertable(segments).ExecuteCommandAsync(OperationCancellation);
         }
 
-        await UpsertPlayerBestRunAsync(run, bestTimes);
+        // Compare against the saved run in SQL: MySQL returns FLOAT rounded to 6 digits.
+        var playerBest = await QueryPlayerBestAsync(run);
+        var result = playerBest is { AtLeastAsFast: 1 } ? EAttemptResult.NoNewRecord
+                   : await AnyBestAtLeastAsFastAsync(run) ? EAttemptResult.NewPersonalRecord
+                   : EAttemptResult.NewServerRecord;
+
+        if (result != EAttemptResult.NoNewRecord)
+        {
+            await UpsertPlayerBestRunAsync(run, playerBest?.Id);
+        }
 
         if (enqueueScoreRecalc && result != EAttemptResult.NoNewRecord)
         {
@@ -259,35 +264,30 @@ internal sealed partial class StorageServiceImpl
         return new RunWriteOutcome(result, WakeScoreRecalcWorker: false);
     }
 
-    private Task<AttemptBestTimesRow?> QueryMainBestTimesAsync(SteamID steamId,
-                                                                ulong   mapId,
-                                                                int     style,
-                                                                ushort  track)
-        => QueryMainBestTimesAsync(ToDbSteamId(steamId), mapId, style, track);
-
-    private async Task<AttemptBestTimesRow?> QueryMainBestTimesAsync(long steamIdValue,
-                                                                      ulong mapId,
-                                                                      int style,
-                                                                      ushort track)
+    private async Task<PlayerBestCheckRow?> QueryPlayerBestAsync(RunEntity run)
     {
-        const ushort stage = 0;
+        var (runId, steamId, mapId, runType, style, track, stage) = (run.Id, run.SteamId, run.MapId, run.RunType, run.Style, run.Track, run.Stage);
 
-        return await QueryBestRuns().Where(x => x.MapId == mapId
-                                                && x.RunType == RunType.Main
-                                                && x.Style == style
-                                                && x.Track == track
-                                                && x.Stage == stage)
-                                    .Select(x => new AttemptBestTimesRow
+        return await QueryBestRuns().InnerJoin<RunEntity>((best, saved) => saved.Id == runId)
+                                    .Where((best, saved) => best.SteamId == steamId && best.MapId == mapId && best.RunType == runType
+                                                            && best.Style == style && best.Track == track && best.Stage == stage)
+                                    .Select((best, saved) => new PlayerBestCheckRow
                                     {
-                                        // 0, not NULL, for other players' rows: see AttemptBestTimesRow.
-                                        PlayerBestRowId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.Id, 0UL)),
-                                        PlayerBestRunId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.RunId, 0UL)),
-                                        ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
-                                        PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
-                                                                                           (double?) x.BestTime,
-                                                                                           null)),
+                                        Id            = best.Id,
+                                        AtLeastAsFast = SqlFunc.IIF(best.BestTime <= saved.Time, 1, 0),
                                     })
                                     .FirstAsync(OperationCancellation);
+    }
+
+    // Stops at the first row of the board's rank index, so it doesn't grow with the board.
+    private Task<bool> AnyBestAtLeastAsFastAsync(RunEntity run)
+    {
+        var (runId, mapId, runType, style, track, stage) = (run.Id, run.MapId, run.RunType, run.Style, run.Track, run.Stage);
+
+        return QueryBestRuns().InnerJoin<RunEntity>((best, saved) => saved.Id == runId)
+                              .Where((best, saved) => best.MapId == mapId && best.RunType == runType && best.Style == style
+                                                      && best.Track == track && best.Stage == stage && best.BestTime <= saved.Time)
+                              .AnyAsync(OperationCancellation);
     }
 
     private async Task<int> QueryMainRunRankAsync(ulong mapId, int style, ushort track, ulong runId)
@@ -308,37 +308,6 @@ internal sealed partial class StorageServiceImpl
             .CountAsync(OperationCancellation);
 
         return precedingCount + 1;
-    }
-
-    private Task<AttemptBestTimesRow?> QueryStageBestTimesAsync(SteamID steamId,
-                                                                 ulong   mapId,
-                                                                 int     style,
-                                                                 ushort  track,
-                                                                 ushort  stage)
-        => QueryStageBestTimesAsync(ToDbSteamId(steamId), mapId, style, track, stage);
-
-    private async Task<AttemptBestTimesRow?> QueryStageBestTimesAsync(long steamIdValue,
-                                                                       ulong mapId,
-                                                                       int style,
-                                                                       ushort track,
-                                                                       ushort stage)
-    {
-        return await QueryBestRuns().Where(x => x.MapId == mapId
-                                                && x.RunType == RunType.Stage
-                                                && x.Style == style
-                                                && x.Track == track
-                                                && x.Stage == stage)
-                                    .Select(x => new AttemptBestTimesRow
-                                    {
-                                        // 0, not NULL, for other players' rows: see AttemptBestTimesRow.
-                                        PlayerBestRowId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.Id, 0UL)),
-                                        PlayerBestRunId = SqlFunc.AggregateMax(SqlFunc.IIF(x.SteamId == steamIdValue, x.RunId, 0UL)),
-                                        ServerBestTime = SqlFunc.AggregateMin(x.BestTime),
-                                        PlayerBestTime = SqlFunc.AggregateMin(SqlFunc.IIF(x.SteamId == steamIdValue,
-                                                                                           (double?) x.BestTime,
-                                                                                           null)),
-                                    })
-                                    .FirstAsync(OperationCancellation);
     }
 
     private async Task<int> QueryStageRunRankAsync(ulong    mapId,
@@ -427,21 +396,6 @@ internal sealed partial class StorageServiceImpl
         }
 
         return segments;
-    }
-
-    private static EAttemptResult ResolveAttemptResult(float newTime, float? serverBestTime, double? playerBestTime)
-    {
-        if (serverBestTime is null || newTime < serverBestTime.Value)
-        {
-            return EAttemptResult.NewServerRecord;
-        }
-
-        if (playerBestTime is null || newTime < playerBestTime.Value)
-        {
-            return EAttemptResult.NewPersonalRecord;
-        }
-
-        return EAttemptResult.NoNewRecord;
     }
 
     private sealed class PlayerIdRow
