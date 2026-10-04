@@ -77,6 +77,9 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     private List<PoolMap>               _pool       = [];
     private Dictionary<string, PoolMap> _poolByName = new (StringComparer.OrdinalIgnoreCase);
     private int                         _poolEpoch;
+    private int                         _poolVersion;
+    private int                         _voteFailedVersion = -1; // the pool an end-of-map vote found nothing in
+    private int                         _emptyWarnedEpoch  = -1;
     private string                      _currentMap = string.Empty;
     private bool                        _mapRunning;
     private MapVote?                    _vote;
@@ -279,7 +282,15 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     {
         _pool       = pool;
         _poolByName = pool.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+        _poolVersion++;
         Changed();
+
+        if (pool.Count == 0 && _emptyWarnedEpoch != _poolEpoch)
+        {
+            _emptyWarnedEpoch = _poolEpoch;
+            _logger.LogWarning("No maps to choose from: the server hosts no workshop maps (+host_workshop_collection) "
+                               + "and extra_maps in {path} has none installed", _configPath);
+        }
     }
 
     private IEnumerable<string> LoadRecent()

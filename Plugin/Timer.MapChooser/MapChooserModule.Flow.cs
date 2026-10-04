@@ -60,9 +60,14 @@ public sealed partial class MapChooserModule
         {
             TimeUp(now);
         }
-        else if (_vote is null && _nextMap is null && left <= _config.VoteBeforeEnd && Players() > 0)
+        else if (_vote is null
+                 && _nextMap is null
+                 && left <= _config.VoteBeforeEnd
+                 && _voteFailedVersion != _poolVersion
+                 && Players() > 0
+                 && !StartVote(MapVoteKind.EndOfMap, now))
         {
-            StartVote(MapVoteKind.EndOfMap, now);
+            _voteFailedVersion = _poolVersion; // not again until the pool changes
         }
     }
 
@@ -86,7 +91,10 @@ public sealed partial class MapChooserModule
 
         if (options.All(x => x.IsExtend))
         {
-            _logger.LogWarning("No maps to vote for: the pool has {count} maps, all recent or excluded", _pool.Count);
+            if (_pool.Count > 0)
+            {
+                _logger.LogWarning("No maps to vote for: the pool has none besides {map}", _currentMap);
+            }
 
             return false;
         }
@@ -163,7 +171,7 @@ public sealed partial class MapChooserModule
         if (_nextMap is null)
         {
             _logger.LogWarning("The map is over but there is no map to change to; extending it");
-            _clock.Extend(_config.ExtendMinutes);
+            _clock.Extend(_config.ExtendMinutes, false);
 
             return;
         }
