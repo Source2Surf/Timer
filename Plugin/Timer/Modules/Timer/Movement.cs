@@ -47,8 +47,7 @@ internal partial class TimerModule
 
         var service = arg.Service;
 
-        service.Stamina   = 0f;
-        service.DuckSpeed = 7.0f;
+        service.Stamina = 0f;
 
         if (_timerInfo[client.Slot] is not { } timerInfo || _stageTimerInfo[client.Slot] is not { } stageTimer)
         {
