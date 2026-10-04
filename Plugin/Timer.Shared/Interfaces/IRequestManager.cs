@@ -64,6 +64,13 @@ public interface IRequestManager
     /// </summary>
     Task<IReadOnlyList<string>> GetAllMapNamesAsync();
 
+    /// <summary>
+    /// Every map with its tiers and workshop item, by name. Unlike <see cref="GetMapInfo"/> it never adds a map.
+    /// A provider that doesn't implement it returns none.
+    /// </summary>
+    Task<IReadOnlyList<MapProfile>> GetMapProfilesAsync()
+        => Task.FromResult<IReadOnlyList<MapProfile>>([]);
+
 #endregion
 
 #region Record
@@ -112,6 +119,13 @@ public interface IRequestManager
     /// </summary>
     Task<PlayerSummary?> GetPlayerSummary(SteamID steamId)
         => Task.FromResult<PlayerSummary?>(null);
+
+    /// <summary>
+    /// The maps a player has finished on one style and track, as map id to their best time. A provider that
+    /// doesn't implement it returns none.
+    /// </summary>
+    Task<IReadOnlyDictionary<ulong, float>> GetCompletedMapsAsync(SteamID steamId, int style, int track)
+        => Task.FromResult<IReadOnlyDictionary<ulong, float>>(new Dictionary<ulong, float>());
 
 #endregion
 

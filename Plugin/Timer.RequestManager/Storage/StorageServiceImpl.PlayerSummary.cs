@@ -108,6 +108,29 @@ internal sealed partial class StorageServiceImpl
         };
     }
 
+    public async Task<IReadOnlyDictionary<ulong, float>> GetCompletedMapsAsync(SteamID steamId, int style, int track)
+    {
+        var steamIdValue = ToDbSteamId(steamId);
+        var trackValue   = (ushort) track;
+
+        var rows = await _db.Queryable<PlayerBestRunEntity>()
+                            .Where(x => x.SteamId    == steamIdValue
+                                        && x.RunType == RunType.Main
+                                        && x.Style   == style
+                                        && x.Track   == trackValue
+                                        && x.Stage   == 0)
+                            .Select(x => new CompletedMapRow { MapId = x.MapId, BestTime = x.BestTime })
+                            .ToListAsync(OperationCancellation);
+
+        return rows.ToDictionary(x => x.MapId, x => x.BestTime);
+    }
+
+    private sealed class CompletedMapRow
+    {
+        public ulong MapId    { get; set; }
+        public float BestTime { get; set; }
+    }
+
     private sealed class SummaryBestRow
     {
         public ulong   MapId    { get; set; }

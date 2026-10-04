@@ -13,6 +13,7 @@
   <Folder Name="/Plugin/">
     <Project Path="Plugin/Timer.Benchmarks/Timer.Benchmarks.csproj" />
     <Project Path="Plugin/Timer.Localization/Timer.Localization.csproj" />
+    <Project Path="Plugin/Timer.MapChooser/Timer.MapChooser.csproj" />
     <Project Path="Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
     <Project Path="Plugin/Timer.RequestManager/Timer.RequestManager.csproj" />
     <Project Path="Plugin/Timer.Shared/Timer.Shared.csproj" />

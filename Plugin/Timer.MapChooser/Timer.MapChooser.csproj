@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AssemblyName>Timer.MapChooser</AssemblyName>
+		<RootNamespace>Timer.MapChooser</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="ModSharp.Sharp.Shared" Version="*" PrivateAssets="all" />
+		<!-- Provided at runtime by their modules, from sharp/shared. -->
+		<PackageReference Include="ModSharp.Sharp.Modules.CommandCenter.Shared" Version="*" PrivateAssets="all" ExcludeAssets="runtime" />
+		<PackageReference Include="ModSharp.Sharp.Modules.AdminManager.Shared" Version="*" PrivateAssets="all" ExcludeAssets="runtime" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Timer.Shared\Timer.Shared.csproj" Private="false" ExcludeAssets="runtime" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Timer.Tests" />
+	</ItemGroup>
+</Project>

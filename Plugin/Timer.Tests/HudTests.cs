@@ -687,7 +687,7 @@ public sealed class HudLocaleTests
             Assert.Equal(text.English, translations["en-us"]);
         }
 
-        Assert.Empty(Locale.Keys.Except(HudTexts.All.Select(t => t.Key)));
+        Assert.Empty(Locale.Keys.Except(HudTexts.All.Select(t => t.Key)).Except(global::Timer.MapChooser.ChooserTexts.All.Select(t => t.Key)));
     }
 
     [Fact]

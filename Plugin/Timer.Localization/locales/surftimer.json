@@ -870,5 +870,149 @@
   "ui.profile.pb": {
     "en-us": "Personal best",
     "zh-cn": "个人最佳"
+  },
+  "mc.vote.started": {
+    "en-us": "Vote for the next map: type !1 to !{0} in chat, or use the vote keys.",
+    "zh-cn": "投票选择下一张地图：在聊天中输入 !1 到 !{0}，或使用投票按键。"
+  },
+  "mc.vote.option": {
+    "en-us": "{0}. {1}",
+    "zh-cn": "{0}. {1}"
+  },
+  "mc.vote.extend": {
+    "en-us": "Extend {0} minutes",
+    "zh-cn": "延长 {0} 分钟"
+  },
+  "mc.vote.cast": {
+    "en-us": "You voted for {0}.",
+    "zh-cn": "你投给了 {0}。"
+  },
+  "mc.vote.won": {
+    "en-us": "Next map: {0} ({1} of {2} votes).",
+    "zh-cn": "下一张地图：{0}（{2} 票中得 {1} 票）。"
+  },
+  "mc.vote.extended": {
+    "en-us": "The map was extended by {0} minutes.",
+    "zh-cn": "当前地图延长了 {0} 分钟。"
+  },
+  "mc.vote.running": {
+    "en-us": "A vote is already running.",
+    "zh-cn": "已有投票正在进行。"
+  },
+  "mc.vote.cancelled": {
+    "en-us": "The vote was cancelled.",
+    "zh-cn": "投票已取消。"
+  },
+  "mc.changing": {
+    "en-us": "Changing to {0} in {1} seconds.",
+    "zh-cn": "{1} 秒后更换到 {0}。"
+  },
+  "mc.rtv.wants": {
+    "en-us": "{0} wants to rock the vote ({1}/{2}).",
+    "zh-cn": "{0} 想要发起换图投票（{1}/{2}）。"
+  },
+  "mc.rtv.already": {
+    "en-us": "You already want to rock the vote ({0}/{1}).",
+    "zh-cn": "你已经发起过换图投票了（{0}/{1}）。"
+  },
+  "mc.rtv.removed": {
+    "en-us": "You no longer want to rock the vote ({0}/{1}).",
+    "zh-cn": "你撤回了换图投票（{0}/{1}）。"
+  },
+  "mc.rtv.too_soon": {
+    "en-us": "You can rock the vote in {0}.",
+    "zh-cn": "{0} 后才能发起换图投票。"
+  },
+  "mc.rtv.changing": {
+    "en-us": "The map is already changing.",
+    "zh-cn": "地图已经在更换中。"
+  },
+  "mc.rtv.no_maps": {
+    "en-us": "Rock the vote passed, but there are no other maps to vote for.",
+    "zh-cn": "换图投票已通过，但没有其他地图可以投票。"
+  },
+  "mc.nominate.usage": {
+    "en-us": "Pick a map in the menu, or type !nominate <name> or !nominate <tier>.",
+    "zh-cn": "在菜单中选择地图，或输入 !nominate <地图名> 或 !nominate <难度>。"
+  },
+  "mc.nominate.done": {
+    "en-us": "{0} nominated {1}.",
+    "zh-cn": "{0} 提名了 {1}。"
+  },
+  "mc.nominate.changed": {
+    "en-us": "{0} changed their nomination to {1}.",
+    "zh-cn": "{0} 将提名改为 {1}。"
+  },
+  "mc.nominate.taken": {
+    "en-us": "{0} is already nominated.",
+    "zh-cn": "{0} 已被提名。"
+  },
+  "mc.nominate.full": {
+    "en-us": "The nominations are full.",
+    "zh-cn": "提名已满。"
+  },
+  "mc.nominate.current": {
+    "en-us": "That's the current map.",
+    "zh-cn": "这是当前地图。"
+  },
+  "mc.nominate.recent": {
+    "en-us": "{0} was played recently.",
+    "zh-cn": "{0} 最近玩过了。"
+  },
+  "mc.nominate.not_found": {
+    "en-us": "{0} isn't one of the maps.",
+    "zh-cn": "{0} 不在地图列表中。"
+  },
+  "mc.nominate.no_match": {
+    "en-us": "No map matches \"{0}\".",
+    "zh-cn": "没有地图匹配“{0}”。"
+  },
+  "mc.nominate.matches": {
+    "en-us": "{0} maps match: {1}",
+    "zh-cn": "{0} 张地图匹配：{1}"
+  },
+  "mc.nominate.closed": {
+    "en-us": "Nominations are closed.",
+    "zh-cn": "提名已关闭。"
+  },
+  "mc.nominate.none": {
+    "en-us": "You haven't nominated a map.",
+    "zh-cn": "你还没有提名地图。"
+  },
+  "mc.nominate.removed": {
+    "en-us": "Your nomination of {0} was removed.",
+    "zh-cn": "你对 {0} 的提名已撤回。"
+  },
+  "mc.nominations": {
+    "en-us": "Nominated: {0}",
+    "zh-cn": "已提名：{0}"
+  },
+  "mc.nominations.none": {
+    "en-us": "Nothing is nominated yet.",
+    "zh-cn": "还没有地图被提名。"
+  },
+  "mc.nextmap": {
+    "en-us": "Next map: {0}.",
+    "zh-cn": "下一张地图：{0}。"
+  },
+  "mc.nextmap.pending": {
+    "en-us": "The next map hasn't been chosen yet.",
+    "zh-cn": "下一张地图尚未确定。"
+  },
+  "mc.nextmap.set": {
+    "en-us": "The next map was set to {0}.",
+    "zh-cn": "下一张地图已设为 {0}。"
+  },
+  "mc.timeleft": {
+    "en-us": "Time left on this map: {0}.",
+    "zh-cn": "当前地图剩余时间：{0}。"
+  },
+  "mc.admin.busy": {
+    "en-us": "A vote is running or the map is already changing.",
+    "zh-cn": "投票正在进行或地图正在更换。"
+  },
+  "mc.admin.no_vote": {
+    "en-us": "No vote is running.",
+    "zh-cn": "当前没有投票。"
   }
 }

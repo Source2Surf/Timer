@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -245,6 +246,18 @@ internal sealed partial class StorageServiceImpl : IRequestManager
                                   .ToListAsync(OperationCancellation);
 
         return ToMapProfile(mapInfo, trackTiers);
+    }
+
+    public async Task<IReadOnlyList<MapProfile>> GetMapProfilesAsync()
+    {
+        var maps = await _db.Queryable<MapEntity>()
+                            .OrderBy(x => x.File)
+                            .ToListAsync(OperationCancellation);
+
+        var tracks = (await _db.Queryable<MapTrackEntity>().ToListAsync(OperationCancellation))
+                     .ToLookup(x => x.MapId);
+
+        return maps.Select(x => ToMapProfile(x, tracks[x.MapId].ToList())).ToList();
     }
 
     /// <summary>
