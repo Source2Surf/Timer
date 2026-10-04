@@ -524,10 +524,16 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         _currentGameModeConfig = config;
         _currentGameMode       = config.GameMode;
 
-        // Without a cfg of its own, the base cvars and the mode's go straight to the server.
+        // On every map, before the game mode's: its cfg is only written once, so it misses base cvars added later.
+        foreach (var cvar in _baseCvars)
+        {
+            _bridge.ModSharp.ServerCommand(cvar);
+        }
+
+        // Without a cfg of its own, the mode's cvars go straight to the server.
         if (config.Cfg.Length == 0)
         {
-            foreach (var cvar in _baseCvars.Concat(config.Cvars))
+            foreach (var cvar in config.Cvars)
             {
                 _bridge.ModSharp.ServerCommand(cvar);
             }
