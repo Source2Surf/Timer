@@ -23,6 +23,7 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
+using Source2Surf.Timer.Configuration;
 
 namespace Source2Surf.Timer.Managers.Submission;
 
@@ -35,7 +36,7 @@ namespace Source2Surf.Timer.Managers.Submission;
 internal sealed class RunSubmissionSender : IManager, IDisposable
 {
     private readonly RunSubmissionSpool              _spool;
-    private readonly RunSubmissionSenderOptions      _options;
+    private readonly BackendOptions                  _options;
     private readonly IRunSubmissionTransportFactory  _transportFactory;
     private readonly ILogger<RunSubmissionSender>    _logger;
     private readonly CancellationToken               _applicationStopping;
@@ -55,7 +56,7 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
     private int                            _resourcesDisposed;
 
     public RunSubmissionSender(RunSubmissionSpool             spool,
-                               RunSubmissionSenderOptions     options,
+                               BackendOptions                 options,
                                IRunSubmissionTransportFactory transportFactory,
                                InterfaceBridge                bridge,
                                ILogger<RunSubmissionSender>   logger)
@@ -64,7 +65,7 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
     }
 
     internal RunSubmissionSender(RunSubmissionSpool             spool,
-                                 RunSubmissionSenderOptions     options,
+                                 BackendOptions                 options,
                                  IRunSubmissionTransportFactory transportFactory,
                                  CancellationToken              applicationStopping,
                                  ILogger<RunSubmissionSender>   logger)
@@ -81,22 +82,12 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
         _logger              = logger;
     }
 
-    /// <summary>
-    /// A disabled sender deliberately has no side effects. The enclosing remote-write mode must
-    /// opt in before this method starts the in-memory queue or creates a gRPC channel.
-    /// </summary>
     public bool Init()
     {
         lock (_lifecycleGate)
         {
             if (Volatile.Read(ref _initialized) != 0)
             {
-                return true;
-            }
-
-            if (!_options.Enabled)
-            {
-                Volatile.Write(ref _initialized, 1);
                 return true;
             }
 
@@ -117,7 +108,7 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
                     return false;
                 }
 
-                _transport      = _transportFactory.Create(_options);
+                _transport      = _transportFactory.Create();
                 _workerStopping = CancellationTokenSource.CreateLinkedTokenSource(_applicationStopping);
                 Volatile.Write(ref _initialized, 1);
 
@@ -257,7 +248,7 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
             }
         }
 
-        if (_options.Enabled && Volatile.Read(ref _initialized) != 0)
+        if (Volatile.Read(ref _initialized) != 0)
         {
             try
             {
@@ -552,11 +543,6 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
     {
         lock (_lifecycleGate)
         {
-            if (!_options.Enabled)
-            {
-                throw new InvalidOperationException("The in-memory run submission sender is disabled.");
-            }
-
             if (Volatile.Read(ref _initialized) == 0 || _worker is null || _worker.IsCompleted)
             {
                 throw new InvalidOperationException("The in-memory run submission sender is not initialized.");

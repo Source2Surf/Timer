@@ -4,9 +4,8 @@ using Microsoft.Extensions.Configuration;
 namespace Timer.Backend.Configuration;
 
 /// <summary>
-/// Explicit deployment configuration for the standalone API.
-/// The target architecture keeps database credentials in this process. During the score-write
-/// canary, legacy plugin IRequestManager reads and other writes still need the SQL provider.
+/// Explicit deployment configuration for the standalone API. The database credentials live only
+/// in this process; game servers reach the data through its gRPC services.
 /// </summary>
 internal sealed record TimerBackendOptions(string DatabaseType,
                                            string ConnectionString,

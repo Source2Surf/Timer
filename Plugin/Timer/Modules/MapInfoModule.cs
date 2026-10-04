@@ -28,7 +28,6 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
-using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Modules.MapInfo;
 using Source2Surf.Timer.Utilities;
@@ -63,7 +62,6 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     private readonly InterfaceBridge _bridge;
     private readonly IRequestManager _requestManager;
     private readonly ICommandManager _commandManager;
-    private readonly ScoreWriteMode _scoreWriteMode;
     private readonly ILocalizationProvider _localization;
 
     private readonly ILogger<MapInfoModule>          _logger;
@@ -124,7 +122,6 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     private GameModeConfig _currentGameModeConfig = DefaultConfig;
 
     private bool _mapStatsPersisted;
-    private bool _mapProfileLoaded;
 
     // Late-resolved to avoid circular DI (RecordModule depends on IMapInfoModule)
     private IRecordModule _recordModule = null!;
@@ -133,14 +130,12 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     public MapInfoModule(InterfaceBridge        bridge,
                          IRequestManager        requestManager,
                          ICommandManager        commandManager,
-                         ScoreWriteModeOptions  scoreWriteMode,
                          ILocalizationProvider  localization,
                          ILogger<MapInfoModule> logger)
     {
         _bridge         = bridge;
         _requestManager = requestManager;
         _commandManager = commandManager;
-        _scoreWriteMode = scoreWriteMode.Mode;
         _localization   = localization;
         _logger         = logger;
         _taskTracker    = new TaskTracker(logger);
@@ -192,7 +187,6 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         _bridge.RefreshMapName();
         _currentMapStartTime = _bridge.ModSharp.EngineTime();
         _mapStatsPersisted   = false;
-        _mapProfileLoaded    = false;
 
         // Reset immediately: keeping the previous map's profile visible during the async
         // load would let consumers key data (e.g. replays) against the WRONG MapId.
@@ -209,11 +203,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
                     RetryHelper.IsTransient, _logger, "GetMapInfo"
                 ).ConfigureAwait(false);
 
-                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
-                {
-                    _currentMapProfileInfo = profile;
-                    _mapProfileLoaded = true;
-                });
+                await _bridge.ModSharp.InvokeFrameActionAsync(() => _currentMapProfileInfo = profile);
             }
             catch (Exception e)
             {
@@ -256,39 +246,48 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     private ECommandAction OnCommandSetTier(PlayerSlot slot, StringCommand command)
     {
-        if (_scoreWriteMode == ScoreWriteMode.RemoteWrite)
-        {
-            _logger.LogWarning("set_tier is unavailable in remote-write mode. Use the backend set-tier command so backend score policy is used and affected boards are recalculated.");
-            return ECommandAction.Handled;
-        }
-
-        if (command.ArgCount < 1)
+        if (command.ArgCount < 1 || !command.TryGetArg<byte>(1, out var tier) || tier == 0)
         {
             return ECommandAction.Handled;
         }
 
-        if (command.TryGetArg<byte>(1, out var tier) && tier > 0)
+        var mapName = _bridge.CurrentMapName;
+
+        _taskTracker.Track(Task.Run(async () =>
         {
-            // Persisting the placeholder would overwrite the map's real Stages/PlayCount
-            // with zeros — refuse until the profile load has completed.
-            if (!_mapProfileLoaded)
+            try
             {
-                _logger.LogWarning("set_tier ignored: map profile not loaded yet.");
+                var result = await RetryHelper.RetryAsync(() => _requestManager.SetMapTierAsync(mapName, tier),
+                                                          RetryHelper.IsTransient, _logger, "SetMapTierAsync")
+                                              .ConfigureAwait(false);
 
-                return ECommandAction.Handled;
+                if (!result.MapFound)
+                {
+                    _logger.LogWarning("set_tier: map {map} isn't stored yet.", mapName);
+
+                    return;
+                }
+
+                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+                {
+                    if (string.Equals(_currentMapProfileInfo.MapName, mapName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _currentMapProfileInfo.Tier[0] = tier;
+                    }
+                }).ConfigureAwait(false);
+
+                _logger.LogInformation("Set {map}'s tier to {tier}; queued {boards} score board(s) for recalculation.",
+                                       mapName, tier, result.BoardsQueued);
             }
-
-            _currentMapProfileInfo.Tier[0] = tier;
-
-            var profile = _currentMapProfileInfo;
-            _taskTracker.Track(Task.Run(async () => await RetryHelper.RetryAsync(
-                () => _requestManager.UpdateMapInfo(profile),
-                RetryHelper.IsTransient, _logger, "UpdateMapInfo"
-            ).ConfigureAwait(false), _bridge.CancellationToken));
-        }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error when setting the tier of {map}", mapName);
+            }
+        }, _bridge.CancellationToken));
 
         return ECommandAction.Handled;
     }
+
     private ECommandAction OnCommandTier(PlayerSlot slot, StringCommand command)
     {
         if (_bridge.ClientManager.GetGameClient(slot) is not { } client

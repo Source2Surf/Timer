@@ -49,9 +49,15 @@ public interface IRequestManager
     /// </summary>
     void SetMapWorkshopId(string mapName, ulong workshopId);
 
+    /// <summary>
+    /// Gets the map, adding it when it's new.
+    /// </summary>
     Task<MapProfile> GetMapInfo(string map);
 
-    Task UpdateMapInfo(MapProfile info);
+    /// <summary>
+    /// Sets the map's main-track tier and queues its score recalculation under the backend's score policy.
+    /// </summary>
+    Task<ScoreQueueResult> SetMapTierAsync(string mapName, byte tier);
 
     /// <summary>
     /// Atomically records one completed map session without writing an old map-profile snapshot
@@ -90,13 +96,7 @@ public interface IRequestManager
                                                       int    stage,
                                                       int    limit = DefaultRecordLimit);
 
-    Task<(EAttemptResult, RunRecord, int rank)> AddPlayerRecord(SteamID steamId, string mapName, RecordRequest recordRequest);
-
     Task<IReadOnlyList<RunRecord>> GetPlayerRecords(SteamID steamId, string mapName);
-
-    Task<RunRecord?> GetPlayerRecord(SteamID steamId, string mapName, int style, int track);
-
-    Task<(EAttemptResult, RunRecord, int rank)> AddPlayerStageRecord(SteamID steamId, string mapName, RecordRequest newRunRecord);
 
     Task<IReadOnlyList<RunRecord>> GetPlayerStageRecords(SteamID steamId, string mapName);
 
@@ -132,12 +132,10 @@ public interface IRequestManager
 #region Score
 
     /// <summary>
-    /// Manually trigger score recalculation for all tracks on a given map.
+    /// Queues score recalculation for a map, or for every map when <paramref name="mapName"/> is null, under the
+    /// backend's score policy.
     /// </summary>
-    /// <param name="mapName">Map name</param>
-    /// <param name="styleFactors">Style score factor dictionary (key: style index, value: ScoreFactor)</param>
-    /// <returns>Number of tracks queued for recalculation</returns>
-    Task<int> RecalculateMapScoresAsync(string mapName, IReadOnlyDictionary<int, double>? styleFactors = null);
+    Task<ScoreQueueResult> RecalculateMapScoresAsync(string? mapName);
 
 #endregion
 
@@ -154,8 +152,6 @@ public interface IRequestManager
     Task SaveZonesAsync(string mapName, IReadOnlyList<ZoneData> zones);
 
 #endregion
-
-    Task<PlayerProfile> GetPlayerProfile(SteamID steamId, string name);
 
     /// <summary>
     /// Get the player's rank by points (1-based) and total ranked player count.

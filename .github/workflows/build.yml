@@ -37,14 +37,6 @@ jobs:
           -o sharp/modules/Timer
           --no-restore
 
-      - name: Publish Timer.RequestManager
-        run: >
-          dotnet publish Plugin/Timer.RequestManager/Timer.RequestManager.csproj
-          -c ${{ env.CONFIGURATION }}
-          -p:Platform=x64
-          -o sharp/modules/Timer.RequestManager
-          --no-restore
-
       - name: Publish Timer.Shared
         run: >
           dotnet publish Plugin/Timer.Shared/Timer.Shared.csproj

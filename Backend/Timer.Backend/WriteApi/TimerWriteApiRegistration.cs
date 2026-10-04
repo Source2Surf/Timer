@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Timer.Backend.Configuration;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 
 namespace Timer.Backend.WriteApi;
 
@@ -15,6 +15,7 @@ namespace Timer.Backend.WriteApi;
 internal static class TimerWriteApiRegistration
 {
     internal const int MaxMessageSizeBytes = 64 * 1024;
+    internal const int MaxResponseSizeBytes = 64 * 1024 * 1024;
 
     public static void Add(IServiceCollection services, TimerWriteApiOptions options)
     {
@@ -29,13 +30,15 @@ internal static class TimerWriteApiRegistration
         // Deliberately do not widen TimerBackendStorage. This separate facade shares the
         // owner's lifecycle/scope while keeping REST-facing storage publicly read-only.
         services.AddSingleton<TimerBackendWriteStorage>();
+        services.AddSingleton<TimerBackendGameStorage>();
         services.AddGrpc(grpc =>
         {
             // A legal v1 request contains at most 63 compact checkpoints and is only a
             // few KiB. Keep bounded headroom for future append-only fields without accepting
             // the 4 MiB framework default into the public deserialization path.
             grpc.MaxReceiveMessageSize = MaxMessageSizeBytes;
-            grpc.MaxSendMessageSize = MaxMessageSizeBytes;
+            // Responses are the backend's own data; a full map's leaderboards run to a few MiB.
+            grpc.MaxSendMessageSize = MaxResponseSizeBytes;
             grpc.EnableDetailedErrors = false;
 
             // Endpoint routing is not bound to a Kestrel listener, so without this the
@@ -56,7 +59,7 @@ internal static class TimerWriteApiRegistration
 
         if (options.Enabled)
         {
-            endpoints.MapMagicOnionService([typeof(TimerWriteServiceV1)]);
+            endpoints.MapMagicOnionService([typeof(TimerWriteServiceV1), typeof(TimerStorageServiceV1)]);
         }
     }
 }

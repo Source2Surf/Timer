@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Timer.Backend.Configuration;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 
 namespace Timer.Backend.Infrastructure;
 

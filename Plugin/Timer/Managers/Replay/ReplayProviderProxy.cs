@@ -15,28 +15,51 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared;
+using Source2Surf.Timer.Managers.Request;
 using Source2Surf.Timer.Shared.Interfaces;
 
 namespace Source2Surf.Timer.Managers.Replay;
 
-internal sealed class ReplayProviderProxy
+/// <summary>
+/// Remote replays: an external IReplayProvider module when one is loaded, otherwise the built-in one when
+/// timer.jsonc sets replay:storage_base_url.
+/// </summary>
+internal sealed class ReplayProviderProxy : IDisposable
 {
+    private const string StorageBaseUrlKey = "replay:storage_base_url";
+
     private readonly ISharedSystem                    _shared;
     private readonly ILogger<ReplayProviderProxy>     _logger;
+    private readonly HttpClient?                      _httpClient;
+    private readonly BackendReplayProvider?           _builtIn;
     private          IReplayProvider?                 _provider;
 
     public bool IsAvailable => Volatile.Read(ref _provider) is not null;
 
-
-    public ReplayProviderProxy(ISharedSystem shared, ILogger<ReplayProviderProxy> logger)
+    public ReplayProviderProxy(ISharedSystem                shared,
+                               IConfiguration               configuration,
+                               IReplayCatalog               catalog,
+                               ILoggerFactory               loggerFactory,
+                               ILogger<ReplayProviderProxy> logger)
     {
         _shared   = shared;
         _logger   = logger;
+
+        if (configuration[StorageBaseUrlKey] is { } baseUrl && !string.IsNullOrWhiteSpace(baseUrl))
+        {
+            _httpClient = new HttpClient();
+            _builtIn    = new BackendReplayProvider(catalog,
+                                                    new HttpReplayStorage(_httpClient, baseUrl),
+                                                    loggerFactory.CreateLogger<BackendReplayProvider>());
+        }
     }
 
     public void RefreshProvider()
@@ -49,12 +72,20 @@ internal sealed class ReplayProviderProxy
             Volatile.Write(ref _provider, instance);
             _logger.LogInformation("Using external IReplayProvider");
         }
+        else if (_builtIn is not null)
+        {
+            Volatile.Write(ref _provider, _builtIn);
+            _logger.LogInformation("Using the replay storage at {key}", StorageBaseUrlKey);
+        }
         else
         {
             Volatile.Write(ref _provider, null);
-            _logger.LogWarning("No external IReplayProvider found, remote replay disabled");
+            _logger.LogWarning("{key} isn't set and no external IReplayProvider is loaded: remote replays are disabled", StorageBaseUrlKey);
         }
     }
+
+    public void Dispose()
+        => _httpClient?.Dispose();
 
     public async Task<byte[]?> GetReplayAsync(string mapName, int style, int track, ulong? steamId = null)
     {

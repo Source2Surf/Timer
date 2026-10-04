@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
 using Timer.Backend.Configuration;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 
 namespace Timer.Backend.WriteApi;
 

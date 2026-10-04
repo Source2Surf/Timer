@@ -31,8 +31,7 @@ using Timer.Backend.Configuration;
 using Timer.Backend.Endpoints;
 using Timer.Backend.Infrastructure;
 using Timer.Backend.WriteApi;
-using Timer.RequestManager.Backend;
-using Timer.RequestManager.Storage;
+using Timer.Backend.Storage;
 using Xunit;
 
 namespace Timer.Backend.Tests;

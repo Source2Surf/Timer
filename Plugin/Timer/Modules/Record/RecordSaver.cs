@@ -23,7 +23,6 @@ using Microsoft.Extensions.Logging;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
-using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Submission;
@@ -40,42 +39,33 @@ internal sealed class RecordSaver
 {
     private readonly InterfaceBridge                    _bridge;
     private readonly IRequestManager                    _request;
-    private readonly IStyleModule                       _styleModule;
     private readonly MapRecordCache                     _mapCache;
     private readonly PlayerRecordCache                  _playerCache;
     private readonly ListenerHub<IRecordModuleListener> _listenerHub;
     private readonly ILogger                            _logger;
-    private readonly ScoreWriteMode                     _scoreWriteMode;
     private readonly RemoteRunSubmissionOptions         _remoteSubmissionOptions;
     private readonly RemoteRunSubmissionWriter          _remoteSubmissionWriter;
     private readonly ILocalizationProvider              _localization;
     private IRecordModuleListener?                        _lateReplayListener;
 
-    private bool UsesRemoteWrite => _scoreWriteMode == ScoreWriteMode.RemoteWrite;
-
     public RecordSaver(InterfaceBridge                    bridge,
                        IRequestManager                    request,
-                       IStyleModule                       styleModule,
                         MapRecordCache                     mapCache,
                         PlayerRecordCache                  playerCache,
                         ListenerHub<IRecordModuleListener> listenerHub,
-                        ScoreWriteModeOptions              scoreWriteMode,
                         RemoteRunSubmissionOptions         remoteSubmissionOptions,
                         RunSubmissionSender                remoteSubmissionSender,
                         ILocalizationProvider              localization,
                         ILogger                            logger)
     {
-        ArgumentNullException.ThrowIfNull(scoreWriteMode);
         ArgumentNullException.ThrowIfNull(remoteSubmissionOptions);
         ArgumentNullException.ThrowIfNull(remoteSubmissionSender);
 
         _bridge                   = bridge;
         _request                  = request;
-        _styleModule              = styleModule;
         _mapCache                 = mapCache;
         _playerCache              = playerCache;
         _listenerHub              = listenerHub;
-        _scoreWriteMode           = scoreWriteMode.Mode;
         _remoteSubmissionOptions  = remoteSubmissionOptions;
         _remoteSubmissionWriter   = new RemoteRunSubmissionWriter(remoteSubmissionSender);
         _localization             = localization;
@@ -91,8 +81,7 @@ internal sealed class RecordSaver
         => _lateReplayListener = replayListener ?? throw new ArgumentNullException(nameof(replayListener));
 
     /// <summary>
-    /// Creates only run facts. Remote-write callers use this overload so they never read or carry
-    /// the plugin-side style score multiplier.
+    /// Creates only run facts: the backend applies the style's score factor.
     /// </summary>
     public static RecordRequest CreateRecordRequest(ITimerInfo timerInfo)
     {
@@ -134,21 +123,7 @@ internal sealed class RecordSaver
         return recordRequest;
     }
 
-    /// <summary>
-    /// Legacy local-SQL projection, which intentionally preserves the pre-existing style factor
-    /// behavior. It must never be used by remote-write submission code.
-    /// </summary>
-    public static RecordRequest CreateRecordRequest(ITimerInfo timerInfo, IStyleModule styleModule)
-    {
-        ArgumentNullException.ThrowIfNull(styleModule);
-
-        var recordRequest = CreateRecordRequest(timerInfo);
-        recordRequest.StyleFactor = styleModule.GetStyleSetting(timerInfo.Style).ScoreFactor;
-        return recordRequest;
-    }
-
-    public Task SaveMapRecordAsync(PlayerSlot        slot,
-                                   SteamID           steamId,
+    public Task SaveMapRecordAsync(SteamID           steamId,
                                    string            playerName,
                                    string            mapName,
                                    ulong             mapId,
@@ -156,110 +131,19 @@ internal sealed class RecordSaver
                                    int               attemptId,
                                    CancellationToken ct)
     {
-        var style = timerInfo.Style;
-        var track = timerInfo.Track;
-        var mapLoad = _mapCache.BeginLoad();
-
-        var records  = _mapCache.GetRecords(style, track);
-        var wrRecord = records.Count > 0 ? records[0] : null;
-        var pbRecord = _playerCache.GetRecord(slot, style, track);
-
+        var mapLoad       = _mapCache.BeginLoad();
         var finishedAtUtc = DateTime.UtcNow;
-        var recordRequest = UsesRemoteWrite
-            ? CreateRecordRequest(timerInfo)
-            : CreateRecordRequest(timerInfo, _styleModule);
+        var recordRequest = CreateRecordRequest(timerInfo);
 
-        if (UsesRemoteWrite)
-        {
-            // An async method runs through its first await on this finish callback. Build and
-            // enqueue the immutable facts before returning to the game loop or scheduling UI.
-            return CompleteRemoteSaveAsync(
-                SaveRemoteMapRecordAsync(steamId, playerName, mapName, mapId, recordRequest,
-                                         finishedAtUtc, mapLoad, attemptId, ct),
-                steamId, "main", ct);
-        }
-
-        return Task.Run(async () =>
-                        {
-                             try
-                             {
-                                 var (recordType, savedRecord, rank) = await _request.AddPlayerRecord(steamId,
-                                                                                        mapName,
-                                                                                        recordRequest)
-                                                                                    .ConfigureAwait(false);
-
-                                _ = rank;
-
-                                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
-                                                                              {
-                                                                                  if (!_mapCache.IsCurrent(mapLoad))
-                                                                                  {
-                                                                                      // Saved after a map change: still let the replay recorder
-                                                                                      // match its fallback file, as the remote path does.
-                                                                                      _lateReplayListener?.OnRecordSaved(new PlayerRecordSavedEvent(steamId,
-                                                                                          playerName,
-                                                                                          recordType,
-                                                                                          savedRecord,
-                                                                                          null,
-                                                                                          null,
-                                                                                          attemptId));
-                                                                                      return;
-                                                                                  }
-
-                                                                                  var recordEvent
-                                                                                      = new PlayerRecordSavedEvent(steamId,
-                                                                                          playerName,
-                                                                                          recordType,
-                                                                                          savedRecord,
-                                                                                          wrRecord,
-                                                                                          pbRecord,
-                                                                                          attemptId);
-
-                                                                                  NotifyRecordSavedListeners(recordEvent);
-
-                                                                                  if (recordType
-                                                                                   < EAttemptResult.NewPersonalRecord)
-                                                                                  {
-                                                                                      return;
-                                                                                  }
-
-                                                                                  if (_bridge.ClientManager
-                                                                                       .GetGameClient(steamId)
-                                                                                   is { } currentClient)
-                                                                                  {
-                                                                                      var currentSlot = currentClient.Slot;
-
-                                                                                      _logger
-                                                                                          .LogInformation("Found player {steamId} at slot {slot}, setting record cache",
-                                                                                              steamId,
-                                                                                              currentSlot);
-
-                                                                                      _playerCache.SetRecord(currentSlot,
-                                                                                          style,
-                                                                                          track,
-                                                                                          savedRecord);
-                                                                                  }
-                                                                              },
-                                                                              ct)
-                                             .ConfigureAwait(false);
-
-                                await RefreshMapRecord(mapName, style, track, mapLoad).ConfigureAwait(false);
-                            }
-                            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                            {
-                                _logger.LogDebug("Stopped local main-record save for {steamId} during shutdown.", steamId);
-                            }
-                            catch (Exception e)
-                            {
-                                _logger.LogError(e, "Error when saving record");
-                                await NotifySaveFailedAsync(steamId, recordRequest, ct).ConfigureAwait(false);
-                            }
-                        },
-                        ct);
+        // An async method runs through its first await on this finish callback. Build and
+        // enqueue the immutable facts before returning to the game loop or scheduling UI.
+        return CompleteRemoteSaveAsync(
+            SaveRemoteMapRecordAsync(steamId, playerName, mapName, mapId, recordRequest,
+                                     finishedAtUtc, mapLoad, attemptId, ct),
+            steamId, "main", ct);
     }
 
-    public Task SaveStageRecordAsync(PlayerSlot        slot,
-                                     SteamID           steamId,
+    public Task SaveStageRecordAsync(SteamID           steamId,
                                      string            playerName,
                                      string            mapName,
                                      ulong             mapId,
@@ -282,81 +166,14 @@ internal sealed class RecordSaver
             return Task.CompletedTask;
         }
 
-        var stageRecords = _mapCache.GetStageRecords(style, track, stage);
-        var wrRecord     = stageRecords is { Count: > 0 } ? stageRecords[0] : null;
-        var pbRecord     = _playerCache.GetRecord(slot, style, track, stage);
-
         var finishedAtUtc = DateTime.UtcNow;
-        var recordRequest = UsesRemoteWrite
-            ? CreateRecordRequest(timerInfo)
-            : CreateRecordRequest(timerInfo, _styleModule);
+        var recordRequest = CreateRecordRequest(timerInfo);
         recordRequest.Stage = timerInfo.Stage;
 
-        if (UsesRemoteWrite)
-        {
-            return CompleteRemoteSaveAsync(
-                SaveRemoteStageRecordAsync(steamId, playerName, mapName, mapId, recordRequest,
-                                           finishedAtUtc, mapLoad, attemptId, ct),
-                steamId, "stage", ct);
-        }
-
-        return Task.Run(async () =>
-                        {
-                             try
-                             {
-                                 var (recordType, savedRecord, rank) = await _request.AddPlayerStageRecord(steamId,
-                                                                                        mapName,
-                                                                                        recordRequest)
-                                                                                    .ConfigureAwait(false);
-
-                                _ = rank;
-
-                                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
-                                             {
-                                                 if (!_mapCache.IsCurrent(mapLoad))
-                                                 {
-                                                     // Saved after a map change: still let the replay recorder
-                                                     // match its fallback file, as the remote path does.
-                                                     _lateReplayListener?.OnRecordSaved(new PlayerRecordSavedEvent(steamId,
-                                                         playerName,
-                                                         recordType,
-                                                         savedRecord,
-                                                         null,
-                                                         null,
-                                                         attemptId));
-                                                     return;
-                                                 }
-
-                                                 var recordEvent = new PlayerRecordSavedEvent(steamId,
-                                                     playerName,
-                                                     recordType,
-                                                     savedRecord,
-                                                     wrRecord,
-                                                     pbRecord,
-                                                     attemptId);
-
-                                                 NotifyRecordSavedListeners(recordEvent);
-
-                                                 if (_bridge.ClientManager.GetGameClient(steamId) is { } currentClient)
-                                                 {
-                                                     _playerCache.SetStageRecord(currentClient.Slot, style, track, stage, savedRecord);
-                                                 }
-                                             })
-                                             .ConfigureAwait(false);
-
-                                await RefreshMapStageRecord(mapName, style, track, stage, mapLoad).ConfigureAwait(false);
-                            }
-                            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                            {
-                                _logger.LogDebug("Stopped local stage-record save for {steamId} during shutdown.", steamId);
-                            }
-                            catch (Exception e)
-                            {
-                                _logger.LogError(e, "Error when saving stage record");
-                                await NotifySaveFailedAsync(steamId, recordRequest, ct).ConfigureAwait(false);
-                            }
-                        },
-                        ct);
+        return CompleteRemoteSaveAsync(
+            SaveRemoteStageRecordAsync(steamId, playerName, mapName, mapId, recordRequest,
+                                       finishedAtUtc, mapLoad, attemptId, ct),
+            steamId, "stage", ct);
     }
 
     private async Task CompleteRemoteSaveAsync(Task              saveTask,
@@ -589,34 +406,6 @@ internal sealed class RecordSaver
         => _logger.LogInformation("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
                                   runKind,
                                   submissionId);
-
-    /// <summary>
-    /// A finished run that the database didn't take: tells its player, who would otherwise wait for a time or PB
-    /// message that never comes. The error itself is in the server log.
-    /// </summary>
-    private async Task NotifySaveFailedAsync(SteamID steamId, RecordRequest run, CancellationToken ct)
-    {
-        var time = Utils.FormatTime(run.Time, true);
-
-        try
-        {
-            await NotifyPlayerAsync(steamId,
-                                    tr =>
-                                    {
-                                        var what = run.Track > 0 ? tr.Format(ChatTexts.SaveRunBonus, run.Track)
-                                            : run.Stage > 0      ? tr.Format(ChatTexts.SaveRunStage, run.Stage)
-                                                                   : tr[ChatTexts.SaveRun];
-
-                                        return ChatColor.Red + tr.Format(ChatTexts.SaveFailed, what, time);
-                                    },
-                                    ct)
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Shutting down: nobody left to tell.
-        }
-    }
 
     private Task NotifyPlayerAsync(SteamID steamId, ChatText text, CancellationToken ct)
         => NotifyPlayerAsync(steamId, tr => tr[text], ct);

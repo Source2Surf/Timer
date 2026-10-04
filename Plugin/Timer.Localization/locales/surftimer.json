@@ -1231,22 +1231,6 @@
     "en-us": "Remote score result was not confirmed; no record result was published.",
     "zh-cn": "远程成绩结果未得到确认，纪录结果未公布。"
   },
-  "chat.save.failed": {
-    "en-us": "Your {0} wasn't saved ({1}): the server couldn't write it to the database. Please tell an admin.",
-    "zh-cn": "你的{0}没有保存（{1}）：服务器无法将其写入数据库。请告知管理员。"
-  },
-  "chat.save.run": {
-    "en-us": "run",
-    "zh-cn": "成绩"
-  },
-  "chat.save.run_bonus": {
-    "en-us": "bonus {0} run",
-    "zh-cn": "奖励关 {0} 成绩"
-  },
-  "chat.save.run_stage": {
-    "en-us": "stage {0} run",
-    "zh-cn": "关卡 {0} 成绩"
-  },
   "chat.timer.missing_stages": {
     "en-us": "Missing stages, stopping timer",
     "zh-cn": "跳过了关卡，计时已停止"

@@ -27,7 +27,6 @@ using Sharp.Shared.GameEntities;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
-using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Player;
@@ -79,14 +78,12 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     private readonly InterfaceBridge       _bridge;
     private readonly ITimerModule          _timerModule;
-    private readonly IStyleModule          _styleModule;
     private readonly IPlayerManager        _playerManager;
     private readonly ICommandManager       _commandManager;
     private readonly IRequestManager       _request;
     private readonly IMapInfoModule        _mapInfo;
     private readonly IPracticeModule       _practiceModule;
     private readonly ILocalizationProvider _localization;
-    private readonly ScoreWriteMode         _scoreWriteMode;
     private readonly ILogger<RecordModule> _logger;
 
     // Sub-components
@@ -104,13 +101,11 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     public RecordModule(InterfaceBridge       bridge,
                         ITimerModule          timerModule,
-                        IStyleModule          styleModule,
                         IPlayerManager        playerManager,
                         IRequestManager       request,
                         ICommandManager       commandManager,
                         IMapInfoModule        mapInfoModule,
                         IPracticeModule       practiceModule,
-                        ScoreWriteModeOptions scoreWriteMode,
                         IConfiguration        configuration,
                         RunSubmissionSender   remoteSubmissionSender,
                         ILocalizationProvider localization,
@@ -118,14 +113,12 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     {
         _bridge         = bridge;
         _timerModule    = timerModule;
-        _styleModule    = styleModule;
         _playerManager  = playerManager;
         _request        = request;
         _commandManager = commandManager;
         _mapInfo        = mapInfoModule;
         _practiceModule = practiceModule;
         _localization   = localization;
-        _scoreWriteMode = scoreWriteMode.Mode;
         _logger         = logger;
 
         _listenerHub = new ListenerHub<IRecordModuleListener>(logger);
@@ -133,12 +126,10 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         _playerCache = new PlayerRecordCache(logger);
         _saver       = new RecordSaver(bridge,
                                        request,
-                                       styleModule,
                                        _mapCache,
                                        _playerCache,
                                        _listenerHub,
-                                       scoreWriteMode,
-                                       RemoteRunSubmissionOptions.FromConfiguration(configuration, scoreWriteMode),
+                                       RemoteRunSubmissionOptions.FromConfiguration(configuration),
                                        remoteSubmissionSender,
                                        localization,
                                        logger);
@@ -317,8 +308,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
         var mapName = _bridge.CurrentMapName;
         var mapId = CaptureFinishMapId(mapName);
-        _taskTracker.Track(_saver.SaveMapRecordAsync(slot,
-                                                     client.SteamId,
+        _taskTracker.Track(_saver.SaveMapRecordAsync(client.SteamId,
                                                      client.Name,
                                                      mapName,
                                                      mapId,
@@ -351,8 +341,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
         var mapName = _bridge.CurrentMapName;
         var mapId = CaptureFinishMapId(mapName);
-        _taskTracker.Track(_saver.SaveStageRecordAsync(slot,
-                                                       client.SteamId,
+        _taskTracker.Track(_saver.SaveStageRecordAsync(client.SteamId,
                                                        client.Name,
                                                        mapName,
                                                        mapId,
@@ -502,64 +491,38 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     /// <summary>
     ///     ServerCommand: timer_recalc_scores [mapname|all]
-    ///     Manually trigger score recalculation. No args = current map, with arg = specified map, "all" = every map.
+    ///     Queues score recalculation on the backend, under its score policy. No args = current map, with arg =
+    ///     specified map, "all" = every map.
     /// </summary>
     private ECommandAction OnCommandRecalcScores(StringCommand arg)
     {
-        if (_scoreWriteMode == ScoreWriteMode.RemoteWrite)
-        {
-            _logger.LogWarning("timer_recalc_scores is unavailable in remote-write mode because score policy and recalculation are backend-owned.");
-            return ECommandAction.Handled;
-        }
-
-        // Build the style factor dictionary
-        var styleCount   = _styleModule.GetStyleCount();
-        var styleFactors = new Dictionary<int, double>(styleCount);
-
-        for (var i = 0; i < styleCount; i++)
-        {
-            styleFactors[i] = _styleModule.GetStyleSetting(i).ScoreFactor;
-        }
-
-        var target = arg.ArgCount > 1 ? arg.GetArg(1) : _bridge.CurrentMapName;
-        var isAll  = string.Equals(target, "all", StringComparison.OrdinalIgnoreCase);
+        var target  = arg.ArgCount > 1 ? arg.GetArg(1) : _bridge.CurrentMapName;
+        var mapName = string.Equals(target, "all", StringComparison.OrdinalIgnoreCase) ? null : target;
 
         Task.Run(async () =>
                  {
                      try
                      {
-                         if (isAll)
+                         var result = await RetryHelper.RetryAsync(
+                             () => _request.RecalculateMapScoresAsync(mapName),
+                             RetryHelper.IsTransient, _logger, "RecalculateMapScoresAsync"
+                         ).ConfigureAwait(false);
+
+                         if (!result.MapFound)
                          {
-                             var mapNames = await RetryHelper.RetryAsync(
-                                 () => _request.GetAllMapNamesAsync(),
-                                 RetryHelper.IsTransient, _logger, "GetAllMapNamesAsync"
-                             ).ConfigureAwait(false);
+                             _logger.LogWarning("timer_recalc_scores: map '{map}' was not found.", target);
 
-                             var totalTracks = 0;
-
-                             foreach (var mapName in mapNames)
-                             {
-                                 totalTracks += await RetryHelper.RetryAsync(
-                                     () => _request.RecalculateMapScoresAsync(mapName, styleFactors),
-                                     RetryHelper.IsTransient, _logger, "RecalculateMapScoresAsync"
-                                 ).ConfigureAwait(false);
-                             }
-
-                             _logger
-                                 .LogInformation("Triggered score recalculation for ALL maps ({mapCount} maps, {trackCount} tracks queued)",
-                                                 mapNames.Count,
-                                                 totalTracks);
+                             return;
                          }
-                         else
-                         {
-                             var count = await RetryHelper.RetryAsync(
-                                 () => _request.RecalculateMapScoresAsync(target, styleFactors),
-                                 RetryHelper.IsTransient, _logger, "RecalculateMapScoresAsync"
-                             ).ConfigureAwait(false);
 
-                             _logger.LogInformation("Triggered score recalculation for map '{map}', {count} track(s) queued",
-                                                    target,
-                                                    count);
+                         _logger.LogInformation("Queued score recalculation for {target}: {boards} board(s) across {maps} map(s)",
+                                                mapName ?? "every map",
+                                                result.BoardsQueued,
+                                                result.MapsAffected);
+
+                         foreach (var failure in result.FailedMaps)
+                         {
+                             _logger.LogWarning("timer_recalc_scores: not queued: {failure}", failure);
                          }
                      }
                      catch (Exception e)

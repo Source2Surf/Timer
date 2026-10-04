@@ -3,8 +3,9 @@
 
 # Timer setup
 
-Requires **.NET 10**, ModSharp (SDK reference: `2.1.136`), and a MySQL/MariaDB or
-PostgreSQL database. Create the database and accounts first.
+Requires **.NET 10**, ModSharp (SDK reference: `2.1.136`), and
+[Timer.Backend](#backend), which keeps the MySQL/MariaDB or PostgreSQL database.
+Game servers never connect to the database themselves.
 
 ## Install
 
@@ -12,7 +13,6 @@ From the repository root:
 
 ```sh
 dotnet publish Plugin/Timer/Timer.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/modules/Timer
-dotnet publish Plugin/Timer.RequestManager/Timer.RequestManager.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/modules/Timer.RequestManager
 dotnet publish Plugin/Timer.Shared/Timer.Shared.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/shared/Timer.Shared
 dotnet publish Plugin/Timer.Localization/Timer.Localization.csproj -c Release -p:Platform=x64 -p:CIBuild=true -o sharp/modules/Timer.Localization
 ```
@@ -27,9 +27,13 @@ have yet to their real names, then fill in `timer.jsonc`:
 cd sharp/configs
 for f in *.example; do [ -e "${f%.example}" ] || cp "$f" "${f%.example}"; done
 ```
-Deploy all four published folders with their dependencies from the same build.
+Deploy all three published folders with their dependencies from the same build.
 Timer.Localization is optional (players read English without it) and needs
 ModSharp's LocalizerManager module; see [Localization](#localization).
+
+Upgrading from a build with `Timer.RequestManager`: delete
+`sharp/modules/Timer.RequestManager`, and in `timer.jsonc` replace the
+`database` and `score_write` sections with [`backend`](#backend).
 
 ## HUD
 
@@ -107,9 +111,9 @@ for a few days, `2` it's also uploaded to the replay store:
 A replay that isn't on disk is fetched by run id through
 `IReplayProvider.GetRunReplayAsync(runId)`.
 
-The list itself comes from `IRequestManager.GetPlayerRuns`. Both methods have
-default implementations that find nothing, so custom providers keep working
-without them.
+The list itself comes from the backend. `GetRunReplayAsync` has a default
+implementation that finds nothing, so a custom `IReplayProvider` keeps working
+without it.
 
 ### Replay cache
 
@@ -123,9 +127,8 @@ doesn't implement that method, nothing is deleted.
 
 ### Profile card
 
-Its overall stats (completions, records and total time played) come from
-`IRequestManager.GetPlayerSummary`. The default body answers null, so a provider
-without it shows the card without that section.
+Its overall stats (completions, records and total time played) come from the
+backend.
 
 ### Saved locations
 
@@ -223,43 +226,23 @@ the interface:
 
 Without a provider, nobody has any of these permissions.
 
-## RequestManager
+## Backend
 
-Merge into `sharp/configs/timer.jsonc`:
+Timer.Backend owns the database. Game servers read and write everything (maps,
+records, zones, players, replays) through its gRPC port.
 
-```json
-{
-  "database": {
-    "type": "postgresql",
-    "host": "127.0.0.1",
-    "port": 5432,
-    "database_name": "timer",
-    "username": "timer_game",
-    "password": "change_me",
-    "initialize_schema": false
-  }
-}
-```
+Copy [appsettings.example.json](Backend/Timer.Backend/appsettings.example.json) to
+`Backend/Timer.Backend/appsettings.Production.json` (preserve an existing file).
+Set `TimerBackend:Database:Type` and `ConnectionString`. Use a normal driver
+connection string without a `mysql://` or `pgsql://` prefix. Set
+`TimerBackend:WriteApi:Enabled=true`: that serves the game servers' gRPC API.
 
-For MySQL, use `"type": "mysql"` and port `3306`.
-
-- **New database:** enable `database.initialize_schema` for the first startup on
-  one game server, then set it back to `false`. Alternatively, bootstrap with
-  Backend's `TimerBackend:InitializeSchema=true` once.
+- **New database:** set `TimerBackend:InitializeSchema=true` for the first
+  startup, then back to `false`.
 - **Existing database:** stop all writers and back up first. Follow the
   [master migration](Backend/Timer.Backend/README.md#upgrade-an-existing-master-sql-database)
   or [earlier Backend upgrade](Backend/Timer.Backend/README.md#update-an-earlier-backend-test-bundle)
   before starting the new build.
-
-Default `local-sql` mode uses RequestManager directly; Backend is optional.
-
-## Backend
-
-Copy [appsettings.example.json](Backend/Timer.Backend/appsettings.example.json) to
-`Backend/Timer.Backend/appsettings.Production.json` (preserve an existing file).
-Set `TimerBackend:Database:Type` and `ConnectionString` to the same database
-used by RequestManager. Use a normal driver connection string without a
-`mysql://` or `pgsql://` prefix.
 
 From the repository root:
 
@@ -270,23 +253,19 @@ dotnet run -c Release --no-launch-profile --project Backend/Timer.Backend/Timer.
 The template uses HTTP port **5081** and HTTP/2 gRPC port **5082**.
 Check `http://127.0.0.1:5081/health/ready` for HTTP 200.
 
-### Remote score writes
-
-Set Backend's `TimerBackend:WriteApi:Enabled=true`, then set `score_write` in the
-game's **`sharp/configs/timer.jsonc`**:
+Then point each game server at the gRPC port in its
+**`sharp/configs/timer.jsonc`**:
 
 ```jsonc
-"score_write": {
-  "mode": "remote-write",
+"backend": {
   "endpoint": "http://127.0.0.1:5082"
 }
 ```
 
-The `Timer` block in `sharp/configs/core.json` is no longer read; move it here.
-
-Start Backend before the game server. **RequestManager and its SQL credentials
-are still required.** Defaults accept ruleset 1 and style 0; configure
-`WriteApi:StyleFactors` for other styles.
+Start Backend before the game server. Defaults accept ruleset 1 and style 0;
+configure `WriteApi:StyleFactors` for other styles. `!set_tier` and
+`timer_recalc_scores` queue score recalculation on the backend under those
+factors, so they need `StyleFactors` set explicitly, including style 0.
 
 Keep gRPC on loopback/private networking: it has no built-in authentication.
 The plugin retry queue is in memory; unacknowledged runs are lost on restart.
@@ -294,7 +273,7 @@ See [Backend documentation](Backend/Timer.Backend/README.md) for deployment and 
 
 ## Replay storage (optional)
 
-Merge into `sharp/configs/timer.jsonc` alongside `database`:
+Merge into `sharp/configs/timer.jsonc` alongside `backend`:
 
 ```json
 {

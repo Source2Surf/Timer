@@ -1,33 +1,30 @@
 using Source2Surf.Timer.Configuration;
-using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Modules.Record;
 using Xunit;
 
 namespace Timer.Tests;
 
-// The score-write settings, read from timer.jsonc's score_write section.
+// The backend settings, read from timer.jsonc's backend section.
 public sealed class TimerConfigurationTests : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"timer-{Guid.NewGuid():N}.jsonc");
 
     [Fact]
-    public void WithoutTheFileScoresAreWrittenLocally()
+    public void WithoutTheFileStartupAsksForTheEndpoint()
     {
         var config = TimerConfiguration.Load(_path);
 
-        Assert.Equal(ScoreWriteMode.LocalSql, ScoreWriteModeOptions.FromConfiguration(config).Mode);
-        Assert.False(RunSubmissionSenderOptions.FromConfiguration(config).Enabled);
+        Assert.Throws<InvalidOperationException>(() => BackendOptions.FromConfiguration(config));
     }
 
     [Fact]
-    public void RemoteWriteIsReadFromScoreWrite()
+    public void BackendIsReadFromItsSection()
     {
         File.WriteAllText(_path, """
                                  {
                                    "database": { "type": "postgresql" },
                                    // comments and trailing commas, as timer.jsonc has them
-                                   "score_write": {
-                                     "mode": "remote-write",
+                                   "backend": {
                                      "endpoint": "http://127.0.0.1:5082",
                                      "rpc_deadline_milliseconds": 4000,
                                      "ruleset_version": 2,
@@ -35,23 +32,20 @@ public sealed class TimerConfigurationTests : IDisposable
                                  }
                                  """);
 
-        var config = TimerConfiguration.Load(_path);
-        var mode   = ScoreWriteModeOptions.FromConfiguration(config);
-        var sender = RunSubmissionSenderOptions.FromConfiguration(config);
+        var config  = TimerConfiguration.Load(_path);
+        var backend = BackendOptions.FromConfiguration(config);
 
-        Assert.Equal(ScoreWriteMode.RemoteWrite, mode.Mode);
-        Assert.True(sender.Enabled);
-        Assert.Equal(new Uri("http://127.0.0.1:5082"), sender.Endpoint);
-        Assert.Equal(TimeSpan.FromMilliseconds(4000), sender.RpcDeadline);
-        Assert.Equal(2, RemoteRunSubmissionOptions.FromConfiguration(config, mode).RulesetVersion);
+        Assert.Equal(new Uri("http://127.0.0.1:5082"), backend.Endpoint);
+        Assert.Equal(TimeSpan.FromMilliseconds(4000), backend.RpcDeadline);
+        Assert.Equal(2, RemoteRunSubmissionOptions.FromConfiguration(config).RulesetVersion);
     }
 
     [Fact]
     public void AnUnknownSettingFailsStartup()
     {
-        File.WriteAllText(_path, """{ "score_write": { "mode": "local-sql", "endpont": "http://127.0.0.1:5082" } }""");
+        File.WriteAllText(_path, """{ "backend": { "endpoint": "http://127.0.0.1:5082", "endpont": "http://127.0.0.1:5082" } }""");
 
-        Assert.Throws<InvalidOperationException>(() => RunSubmissionSenderOptions.FromConfiguration(TimerConfiguration.Load(_path)));
+        Assert.Throws<InvalidOperationException>(() => BackendOptions.FromConfiguration(TimerConfiguration.Load(_path)));
     }
 
     public void Dispose()

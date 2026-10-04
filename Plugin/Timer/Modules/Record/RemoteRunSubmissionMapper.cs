@@ -30,7 +30,7 @@ namespace Source2Surf.Timer.Modules.Record;
 /// </summary>
 internal sealed class RemoteRunSubmissionOptions
 {
-    internal const string SectionName = ScoreWriteModeOptions.SectionName;
+    internal const string SectionName = BackendOptions.SectionName;
     internal const int ContractVersion = 1;
 
     private RemoteRunSubmissionOptions(int rulesetVersion)
@@ -41,19 +41,11 @@ internal sealed class RemoteRunSubmissionOptions
     public int RulesetVersion { get; }
 
     /// <summary>
-    /// Local SQL mode retains its existing configuration surface. Remote mode defaults to
-    /// ruleset v1, which can be overridden explicitly.
+    /// Defaults to ruleset v1, which can be overridden explicitly.
     /// </summary>
-    public static RemoteRunSubmissionOptions FromConfiguration(IConfiguration configuration,
-                                                                ScoreWriteModeOptions scoreWriteMode)
+    public static RemoteRunSubmissionOptions FromConfiguration(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        ArgumentNullException.ThrowIfNull(scoreWriteMode);
-
-        if (scoreWriteMode.Mode != ScoreWriteMode.RemoteWrite)
-        {
-            return new RemoteRunSubmissionOptions(0);
-        }
 
         var section = configuration.GetSection(SectionName);
         ValidateKnownSettings(section);
@@ -67,13 +59,13 @@ internal sealed class RemoteRunSubmissionOptions
     {
         foreach (var child in section.GetChildren())
         {
-            if (ScoreWriteModeOptions.Keys.Contains(child.Key))
+            if (BackendOptions.Keys.Contains(child.Key))
             {
                 continue;
             }
 
             throw new InvalidOperationException(
-                $"{SectionName}:{child.Key} is not valid in remote-write mode; score policy is backend-owned.");
+                $"{SectionName}:{child.Key} is not supported; score policy is backend-owned.");
         }
     }
 
@@ -83,7 +75,7 @@ internal sealed class RemoteRunSubmissionOptions
             || value <= 0)
         {
             throw new InvalidOperationException(
-                $"{SectionName}:{setting} must be a positive integer when score_write:mode=remote-write.");
+                $"{SectionName}:{setting} must be a positive integer.");
         }
 
         return value;
@@ -92,7 +84,7 @@ internal sealed class RemoteRunSubmissionOptions
 }
 
 /// <summary>
-/// Maps the plugin's run facts to the versioned remote-write contract. Score policy is deliberately
+/// Maps the plugin's run facts to the versioned run-submission contract. Score policy is deliberately
 /// absent from this mapper and is resolved by the backend.
 /// </summary>
 internal static class RemoteRunSubmissionMapper

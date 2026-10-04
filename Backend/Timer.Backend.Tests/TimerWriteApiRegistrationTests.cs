@@ -8,7 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Timer.Backend.Configuration;
 using Timer.Backend.WriteApi;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 using Xunit;
 
 namespace Timer.Backend.Tests;

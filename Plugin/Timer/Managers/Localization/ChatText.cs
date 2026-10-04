@@ -121,13 +121,6 @@ internal static class ChatTexts
     public static readonly ChatText SaveRejected    = new ("chat.save.rejected", "Remote backend rejected this run; no record result was published.");
     public static readonly ChatText SaveUnconfirmed = new ("chat.save.unconfirmed", "Remote score result was not confirmed; no record result was published.");
 
-    public static readonly ChatText SaveFailed = new ("chat.save.failed",
-                                                      "Your {0} wasn't saved ({1}): the server couldn't write it to the database. Please tell an admin.");
-
-    public static readonly ChatText SaveRun      = new ("chat.save.run", "run");
-    public static readonly ChatText SaveRunBonus = new ("chat.save.run_bonus", "bonus {0} run");
-    public static readonly ChatText SaveRunStage = new ("chat.save.run_stage", "stage {0} run");
-
     // ---- timer
     public static readonly ChatText MissingStages      = new ("chat.timer.missing_stages", "Missing stages, stopping timer");
     public static readonly ChatText MissingCheckpoints = new ("chat.timer.missing_checkpoints", "Timer stopped: missing checkpoints");

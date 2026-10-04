@@ -2,7 +2,7 @@ using System;
 using Grpc.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Timer.Backend.WriteApi;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 using Xunit;
 
 namespace Timer.Backend.Tests;

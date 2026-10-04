@@ -15,8 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-using System;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
 using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers.Command;
@@ -37,35 +37,15 @@ internal static class ManagerDi
 {
     public static void AddManagerService(this IServiceCollection services)
     {
-        services.ImplSingleton<IRequestManager, IManager, RequestManagerProxy>();
+        services.TryAddSingleton(serviceProvider => BackendOptions.FromConfiguration(
+                                     serviceProvider.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<BackendChannel>();
+        services.AddSingleton<BackendRequestManager>();
+        services.AddSingleton<IRequestManager>(serviceProvider => serviceProvider.GetRequiredService<BackendRequestManager>());
+        services.AddSingleton<IReplayCatalog>(serviceProvider => serviceProvider.GetRequiredService<BackendRequestManager>());
 
         // The spool remains owned by the sender, rather than separately registered as IManager.
-        // Thus the disabled/default sender performs no file I/O during Timer.Init.
         services.AddSingleton<RunSubmissionSpool>();
-        services.AddSingleton(serviceProvider =>
-        {
-            var mode = serviceProvider.GetRequiredService<ScoreWriteModeOptions>();
-            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-            var options = RunSubmissionSenderOptions.FromConfiguration(configuration);
-
-            if (mode.Mode == ScoreWriteMode.LocalSql)
-            {
-                // A leftover endpoint is ignored; only an explicit enabled contradicts the mode.
-                if (bool.TryParse(configuration[$"{RunSubmissionSenderOptions.SectionName}:enabled"], out var enabled) && enabled)
-                {
-                    throw new InvalidOperationException("score_write:enabled requires score_write:mode=remote-write.");
-                }
-
-                return RunSubmissionSenderOptions.Disabled;
-            }
-
-            if (!options.Enabled)
-            {
-                throw new InvalidOperationException("score_write:mode=remote-write requires score_write:endpoint.");
-            }
-
-            return options;
-        });
         services.AddSingleton<IRunSubmissionTransportFactory, MagicOnionRunSubmissionTransportFactory>();
         services.AddSingleton<RunSubmissionSender>();
         services.AddSingleton<IManager>(serviceProvider => serviceProvider.GetRequiredService<RunSubmissionSender>());
@@ -75,7 +55,7 @@ internal static class ManagerDi
         services.ImplSingleton<IEventHookManager, IManager, EventHookManager>();
 
         // After the sender: managers shut down in reverse, so login profile RPCs end before the sender
-        // drains scores and disposes the channel they share.
+        // drains scores and closes the transport they share.
         services.ImplSingleton<IPlayerManager, IManager, PlayerManager>();
 
         services.AddSingleton<CommandManager>();

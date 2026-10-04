@@ -1,7 +1,7 @@
 using System;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 
 namespace Timer.Backend.WriteApi;
 
@@ -23,6 +23,10 @@ internal static class TimerWriteRpcErrors
 
     public static RpcException StyleDisabled()
         => new (new Status(StatusCode.FailedPrecondition, PolicyFailureMessage));
+
+    public static RpcException ScorePolicyNotConfigured()
+        => new (new Status(StatusCode.FailedPrecondition,
+                           "Tier changes and score recalculation need TimerBackend:WriteApi:StyleFactors, including style 0."));
 
     public static RpcException InternalMappingFailure()
         => new (new Status(StatusCode.Internal, InternalFailureMessage));

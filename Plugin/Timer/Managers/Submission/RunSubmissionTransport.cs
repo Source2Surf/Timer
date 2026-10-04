@@ -19,9 +19,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Grpc.Net.Client;
 using MagicOnion.Client;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
+using Source2Surf.Timer.Managers.Request;
 
 namespace Source2Surf.Timer.Managers.Submission;
 
@@ -42,44 +42,36 @@ internal interface IRunSubmissionTransport : IDisposable
 
 internal interface IRunSubmissionTransportFactory
 {
-    IRunSubmissionTransport Create(RunSubmissionSenderOptions options);
+    IRunSubmissionTransport Create();
 }
 
 internal sealed class MagicOnionRunSubmissionTransportFactory : IRunSubmissionTransportFactory
 {
-    public IRunSubmissionTransport Create(RunSubmissionSenderOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        return new MagicOnionRunSubmissionTransport(options);
-    }
+    private readonly BackendChannel _channel;
+
+    public MagicOnionRunSubmissionTransportFactory(BackendChannel channel)
+        => _channel = channel ?? throw new ArgumentNullException(nameof(channel));
+
+    public IRunSubmissionTransport Create()
+        => new MagicOnionRunSubmissionTransport(_channel);
 }
 
 /// <summary>
-/// One lifetime-owned gRPC channel and MagicOnion proxy. gRPC reconnects on its existing
-/// channel; this class never creates a channel for an individual submission.
+/// One MagicOnion proxy on the shared <see cref="BackendChannel"/>, which outlives it; this class never
+/// creates a channel for an individual submission.
 /// </summary>
 internal sealed class MagicOnionRunSubmissionTransport : IRunSubmissionTransport
 {
-    private readonly GrpcChannel                                  _channel;
-    private readonly MagicOnionClientBase<ITimerWriteServiceV1>    _clientBase;
-    private int                                                    _disposed;
+    private readonly MagicOnionClientBase<ITimerWriteServiceV1> _clientBase;
+    private int                                                 _disposed;
 
-    public MagicOnionRunSubmissionTransport(RunSubmissionSenderOptions options)
+    public MagicOnionRunSubmissionTransport(BackendChannel channel)
     {
-        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(channel);
 
-        if (!options.Enabled || options.Endpoint is null)
-        {
-            throw new InvalidOperationException("The MagicOnion transport requires enabled sender options.");
-        }
-
-        _channel = GrpcChannel.ForAddress(options.Endpoint, CreateChannelOptions(options));
-
-        var createdClient = MagicOnionClient.Create<ITimerWriteServiceV1>(_channel);
-        _clientBase = createdClient as MagicOnionClientBase<ITimerWriteServiceV1>
+        _clientBase = channel.CreateClient<ITimerWriteServiceV1>() as MagicOnionClientBase<ITimerWriteServiceV1>
                       ?? throw new InvalidOperationException(
                           "MagicOnion did not return a client proxy with call-option support.");
-
     }
 
     public async Task<SubmitRunResponse> SubmitRunAsync(SubmitRunRequest request, CancellationToken cancellationToken)
@@ -112,30 +104,12 @@ internal sealed class MagicOnionRunSubmissionTransport : IRunSubmissionTransport
     }
 
     public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
-        {
-            _channel.Dispose();
-        }
-    }
+        => Interlocked.Exchange(ref _disposed, 1);
 
     private ITimerWriteServiceV1 GetClientWithCancellation(CancellationToken cancellationToken)
     {
-        // WithCancellationToken clones only the MagicOnion proxy/call options; the
-        // underlying GrpcChannel remains the single channel created in this constructor.
+        // WithCancellationToken clones only the MagicOnion proxy/call options, not the shared channel.
         return _clientBase.WithCancellationToken(cancellationToken);
-    }
-
-    private static GrpcChannelOptions CreateChannelOptions(RunSubmissionSenderOptions options)
-    {
-        if (options.Endpoint is not null && options.Endpoint.Scheme == Uri.UriSchemeHttp)
-        {
-            // MagicOnion 7.10.2 pins a Grpc.Net.Client target that does not expose per-channel
-            // HTTP-version properties for this TFM. The documented h2c switch is global.
-            AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
-        }
-
-        return new GrpcChannelOptions();
     }
 
     private void ThrowIfDisposed()

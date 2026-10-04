@@ -1,6 +1,8 @@
 using Grpc.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
+using Source2Surf.Timer.Configuration;
+using Source2Surf.Timer.Managers.Request;
 using Source2Surf.Timer.Managers.Submission;
 using Xunit;
 
@@ -367,8 +369,8 @@ public sealed class RunSubmissionSenderTests : IDisposable
     [Fact]
     public void MagicOnionTransportCreatesOneReusableClientWithoutConnecting()
     {
-        using var transport = new MagicOnionRunSubmissionTransport(
-            RunSubmissionSenderOptions.CreateForTests(new Uri("https://127.0.0.1:65535")));
+        using var channel   = new BackendChannel(BackendOptions.CreateForTests(new Uri("https://127.0.0.1:65535")));
+        using var transport = new MagicOnionRunSubmissionTransport(channel);
 
         Assert.IsAssignableFrom<IRunSubmissionTransport>(transport);
     }
@@ -382,7 +384,7 @@ public sealed class RunSubmissionSenderTests : IDisposable
                                         legacyDatabasePath: "legacy-run-submissions.db",
                                         legacyDatabaseExists: _ => true);
         _sender = new RunSubmissionSender(_spool,
-                                          RunSubmissionSenderOptions.CreateForTests(new Uri("https://timer.test")),
+                                          BackendOptions.CreateForTests(new Uri("https://timer.test")),
                                           factory,
                                           CancellationToken.None,
                                           NullLogger<RunSubmissionSender>.Instance);
@@ -439,7 +441,7 @@ public sealed class RunSubmissionSenderTests : IDisposable
     {
         _spool = new RunSubmissionSpool(NullLogger<RunSubmissionSpool>.Instance);
         _sender = new RunSubmissionSender(_spool,
-                                          RunSubmissionSenderOptions.CreateForTests(new Uri("https://timer.test")),
+                                          BackendOptions.CreateForTests(new Uri("https://timer.test")),
                                           factory,
                                           CancellationToken.None,
                                           NullLogger<RunSubmissionSender>.Instance);
@@ -507,7 +509,7 @@ public sealed class RunSubmissionSenderTests : IDisposable
 
         public int CreateCalls { get; private set; }
 
-        public IRunSubmissionTransport Create(RunSubmissionSenderOptions options)
+        public IRunSubmissionTransport Create()
         {
             CreateCalls++;
             return _transport;

@@ -7,6 +7,8 @@
   <Folder Name="/Backend/">
     <Project Path="Backend/Timer.Backend.Contracts/Timer.Backend.Contracts.csproj" />
     <Project Path="Backend/Timer.Backend.Rpc.Contracts/Timer.Backend.Rpc.Contracts.csproj" />
+    <Project Path="Backend/Timer.Backend.Storage.Tests/Timer.Backend.Storage.Tests.csproj" />
+    <Project Path="Backend/Timer.Backend.Storage/Timer.Backend.Storage.csproj" />
     <Project Path="Backend/Timer.Backend.Tests/Timer.Backend.Tests.csproj" />
     <Project Path="Backend/Timer.Backend/Timer.Backend.csproj" />
   </Folder>
@@ -14,8 +16,6 @@
     <Project Path="Plugin/Timer.Benchmarks/Timer.Benchmarks.csproj" />
     <Project Path="Plugin/Timer.Localization/Timer.Localization.csproj" />
     <Project Path="Plugin/Timer.MapChooser/Timer.MapChooser.csproj" />
-    <Project Path="Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj" />
-    <Project Path="Plugin/Timer.RequestManager/Timer.RequestManager.csproj" />
     <Project Path="Plugin/Timer.Shared/Timer.Shared.csproj" />
     <Project Path="Plugin/Timer.Tests/Timer.Tests.csproj" />
     <Project Path="Plugin/Timer/Timer.csproj">

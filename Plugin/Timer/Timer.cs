@@ -88,12 +88,17 @@ public class Timer : IModSharpModule
         services.AddSingleton(factory);
         services.AddSingleton(shared);
         services.AddSingleton(gameData);
-        // Remote score-write mode is selected in timer.jsonc's score_write section.
+        // Every record, zone and map read or write goes to Timer.Backend, set in timer.jsonc's backend section.
         var configuration = TimerConfiguration.Load(Path.Combine(sharpPath, "configs", "timer.jsonc"));
-        var scoreWrite    = ScoreWriteModeOptions.FromConfiguration(configuration);
+        var backend       = BackendOptions.FromConfiguration(configuration);
         services.AddSingleton(configuration);
-        services.AddSingleton(scoreWrite);
-        logger.LogInformation("Score write mode: {mode}", scoreWrite.Mode);
+        services.AddSingleton(backend);
+        logger.LogInformation("Timer.Backend: {endpoint}", backend.Endpoint);
+
+        if (configuration.GetSection("database").Exists())
+        {
+            logger.LogWarning("timer.jsonc's database section is no longer read: Timer.Backend owns the database. Remove it.");
+        }
         /*ConfigureDebugServices(services, bridge);*/
         ConfigureServices(services);
 
@@ -176,7 +181,6 @@ public class Timer : IModSharpModule
 
     public void PostInit()
     {
-        RefreshRequestManager();
         RefreshCommandManager();
         RefreshReplayProvider();
         RefreshPermissionProvider();
@@ -187,6 +191,10 @@ public class Timer : IModSharpModule
         _serviceProvider.GetRequiredService<ISharedSystem>()
                         .GetSharpModuleManager()
                         .RegisterSharpModuleInterface<ITimerStyles>(this, ITimerStyles.Identity, _serviceProvider.GetRequiredService<ITimerStyles>());
+
+        _serviceProvider.GetRequiredService<ISharedSystem>()
+                        .GetSharpModuleManager()
+                        .RegisterSharpModuleInterface<IRequestManager>(this, IRequestManager.Identity, _serviceProvider.GetRequiredService<IRequestManager>());
     }
 
     public void OnLibraryConnected(string moduleIdentity)
@@ -194,11 +202,7 @@ public class Timer : IModSharpModule
         RefreshMovementExtension();
         _serviceProvider.GetService<CommandManager>()?.ConnectAdminManager();
 
-        if (moduleIdentity.Equals(IRequestManager.Identity, StringComparison.Ordinal))
-        {
-            RefreshRequestManager();
-        }
-        else if (moduleIdentity.Equals(IReplayProvider.Identity, StringComparison.Ordinal))
+        if (moduleIdentity.Equals(IReplayProvider.Identity, StringComparison.Ordinal))
         {
             RefreshReplayProvider();
         }
@@ -225,11 +229,7 @@ public class Timer : IModSharpModule
         _serviceProvider.GetService<MovementExtensionProxy>()?.OnModuleUnloading(moduleIdentity);
         _serviceProvider.GetService<CommandManager>()?.OnLibraryDisconnect(moduleIdentity);
 
-        if (moduleIdentity.Equals(IRequestManager.Identity, StringComparison.Ordinal))
-        {
-            SwitchRequestManagerToUnavailable();
-        }
-        else if (moduleIdentity.Equals(IReplayProvider.Identity, StringComparison.Ordinal))
+        if (moduleIdentity.Equals(IReplayProvider.Identity, StringComparison.Ordinal))
         {
             // RefreshProvider re-resolves; with the module gone it clears the provider
             // instead of holding a dead reference.
@@ -255,13 +255,6 @@ public class Timer : IModSharpModule
 
     public void OnAllModulesLoaded()
     {
-        RefreshRequestManager();
-        if (_serviceProvider.GetService<IRequestManager>() is RequestManagerProxy { IsAvailable: false })
-        {
-            _logger.LogError(
-                "No external IRequestManager was registered after modules loaded. Timer reads and non-score writes will fail closed; install/configure Timer.RequestManager or a complete remote read provider.");
-        }
-
         RefreshCommandManager();
         if (_serviceProvider.GetService<CommandManager>() is { } commands && !commands.ConnectAdminManager())
         {
@@ -362,30 +355,6 @@ public class Timer : IModSharpModule
 
         services.AddManagerService();
         services.AddModuleService();
-    }
-
-    private void RefreshRequestManager()
-    {
-        if (_serviceProvider.GetService<IRequestManager>() is RequestManagerProxy proxy)
-        {
-            proxy.RefreshManager();
-
-            return;
-        }
-
-        _logger.LogWarning("IRequestManager is not RequestManagerProxy, skip refresh.");
-    }
-
-    private void SwitchRequestManagerToUnavailable()
-    {
-        if (_serviceProvider.GetService<IRequestManager>() is RequestManagerProxy proxy)
-        {
-            proxy.UseFallback();
-
-            return;
-        }
-
-        _logger.LogWarning("IRequestManager is not RequestManagerProxy, cannot mark the external provider unavailable.");
     }
 
     private void RefreshCommandManager()

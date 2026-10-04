@@ -235,6 +235,8 @@ Replay 文件不放入 `SubmitRun`，否则会扩大 RPC 消息、事务和失�
 
 当前进度：LiteDB 的权威成绩 fallback 已移除；sender 已改为有界内存队列，`remote-write` 显式模式与本地 SQL 模式隔离，登录经远端建档，主图/阶段成绩先入队，得到后端权威 ACK 才触发保存事件及缓存投影。其他 `IRequestManager` 读写仍依赖外部 SQL provider，这是成绩切片而非完整无数据库凭据的插件。
 
+2026-10-04：`local-sql` 模式已移除。SQL 存储移至 `Backend/Timer.Backend.Storage`，`Timer.RequestManager` 模块删除；插件的 `IRequestManager` 与回放 URL 均经 `ITimerStorageServiceV1` 访问后端，游戏服不再持有数据库凭据。
+
 插件 canary 的最简配置：
 
 ```json

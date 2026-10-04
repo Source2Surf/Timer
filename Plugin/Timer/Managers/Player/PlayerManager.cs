@@ -27,7 +27,6 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
-using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
@@ -52,8 +51,6 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
     public int ListenerPriority => 1;
 
     private readonly InterfaceBridge        _bridge;
-    private readonly IRequestManager        _requestManager;
-    private readonly ScoreWriteModeOptions  _scoreWriteMode;
     private readonly RunSubmissionSender    _runSubmissionSender;
     private readonly ILogger<PlayerManager> _logger;
 
@@ -76,14 +73,10 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
     private readonly ListenerHub<IPlayerManagerListener> _listenerHub;
 
     public PlayerManager(InterfaceBridge        bridge,
-                         IRequestManager        requestManager,
-                         ScoreWriteModeOptions  scoreWriteMode,
                          RunSubmissionSender    runSubmissionSender,
                          ILogger<PlayerManager> logger)
     {
         _bridge         = bridge;
-        _requestManager = requestManager;
-        _scoreWriteMode = scoreWriteMode;
         _runSubmissionSender = runSubmissionSender;
         _logger         = logger;
 
@@ -336,16 +329,6 @@ internal class PlayerManager : IManager, IPlayerManager, IClientListener
                                                               string name,
                                                               CancellationToken cancellationToken)
     {
-        if (_scoreWriteMode.Mode != ScoreWriteMode.RemoteWrite)
-        {
-            return await RetryHelper.RetryAsync(() => _requestManager.GetPlayerProfile(steamId, name),
-                                                RetryHelper.IsTransient,
-                                                _logger,
-                                                "GetPlayerProfile",
-                                                cancellationToken: cancellationToken)
-                                    .ConfigureAwait(false);
-        }
-
         var steamIdValue = checked((long)steamId.AsPrimitive());
         var safeName = NormalizeRemotePlayerName(name, steamIdValue);
         var retryDelay = TimeSpan.FromMilliseconds(500);

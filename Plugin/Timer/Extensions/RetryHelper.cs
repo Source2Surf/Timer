@@ -18,6 +18,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Grpc.Core;
 using Microsoft.Extensions.Logging;
 
 namespace Source2Surf.Timer.Extensions;
@@ -83,13 +84,14 @@ internal static class RetryHelper
 
     /// <summary>
     /// Returns true for transient exceptions that are worth retrying
-    /// (network errors, timeouts, transient DB failures).
+    /// (network errors, timeouts, the backend or its database being unreachable).
     /// Does NOT retry <see cref="OperationCanceledException"/>.
     /// </summary>
     public static bool IsTransient(Exception ex) =>
         ex is TimeoutException
             or System.Net.Http.HttpRequestException
             or System.IO.IOException
+            or RpcException { StatusCode: StatusCode.Unavailable or StatusCode.DeadlineExceeded }
         || (ex is not OperationCanceledException
             && ex.InnerException is not null
             && IsTransient(ex.InnerException));

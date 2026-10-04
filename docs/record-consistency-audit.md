@@ -27,7 +27,7 @@ SteamId 条件占位符，却没有相应参数。改为 `long` 后，实库的�
 Storageable 均通过。因此保留项目原版本 5.1.4.211，没有将升级当作修复。
 
 所有数据库操作均改为 SqlSugar API，包括原来的索引创建和旧回放字段迁移；没有手写 SQL、
-SQL 拼接或修改 ORM 生成 SQL。该约束已写入 `Plugin/Timer.RequestManager/AGENTS.md`。
+SQL 拼接或修改 ORM 生成 SQL。该约束已写入 `Backend/Timer.Backend.Storage/AGENTS.md`。
 
 并发规则如下：
 

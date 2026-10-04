@@ -1,14 +1,15 @@
 # Timer.Backend
 
-`Timer.Backend` is the first independently hosted migration slice for Timer's
-SQL data path. It is an ASP.NET Core 10 read API backed by the existing,
-strongly typed SQLSugar storage implementation. It does not expose write
-commands unless the default-off MagicOnion write role is explicitly enabled.
+`Timer.Backend` owns Timer's database. It is an ASP.NET Core 10 host over the
+strongly typed SQLSugar storage in `Timer.Backend.Storage`. Its HTTP API is
+read-only; game servers use its MagicOnion gRPC API, which is served only when
+the default-off write role is enabled. Game servers never connect to the
+database themselves.
 
 ## First setup
 
-For RequestManager installation, fresh-database initialization, and game/backend
-configuration together, follow the [repository setup guide](../../README.md#timer-setup).
+For fresh-database initialization and game/backend configuration together,
+follow the [repository setup guide](../../README.md#timer-setup).
 
 Build a Release once (`dotnet build Backend/Timer.Backend/Timer.Backend.csproj -c Release`),
 then make `Backend/Timer.Backend/appsettings.Production.json` from
@@ -21,22 +22,20 @@ until the master SQL migration has been run.
 
 For an existing master SQL database, run the migration below before enabling
 `WriteApi:Enabled=true`. The backend defaults to ruleset v1 and a factor of
-1.0 for main style 0. In addition to its SQL provider, a canary plugin needs these
-remote-write settings in `{CS2}/game/sharp/configs/timer.jsonc`:
+1.0 for main style 0. Each game server points at the gRPC port in
+`{CS2}/game/sharp/configs/timer.jsonc`:
 
 ```jsonc
-"score_write": {
-  "mode": "remote-write",
+"backend": {
   "endpoint": "http://127.0.0.1:5082"
 }
 ```
 
-The sender's other settings go there too, in snake_case
+The plugin's other backend settings go there too, in snake_case
 (`rpc_deadline_milliseconds`, `batch_size`, ...). ModSharp's `core.json` is not
 read for them.
 
-An endpoint alone enables the sender in remote-write mode; no server ID, API
-key or TLS proxy is required. Submission IDs are globally unique GUIDs, so
+An endpoint alone is enough; no server ID, API key or TLS proxy is required. Submission IDs are globally unique GUIDs, so
 several game servers can send the same map/style/track to one backend.
 For a separate game-server host, replace the loopback addresses on the gRPC
 listener and plugin endpoint with addresses on your private network. Start the
@@ -145,14 +144,10 @@ earlier backend test bundles use the additive update described below.
    atomic transaction.
 5. Start the new backend with `InitializeSchema=false`,
    `AllowReadRepair=false` and the appropriate read/write role. Upgrade the
-   game-server binaries and set `database.initialize_schema` to `false` in each
-   `sharp/configs/timer.jsonc` (`Timer:InitializeSchema=false` when using
-   `IConfiguration` instead). This avoids plugin-side CodeFirst on every
-   startup. The flag defaults to `true` to preserve fresh-install bootstrap.
-   Canary-switch only the intended servers to `remote-write`; never dual-write
-   scores. Keep database DDL privileges off ordinary backend and game-server
-   accounts. The plugin still needs SQL access for its other `IRequestManager`
-   operations during this migration slice.
+   game-server binaries, delete their `sharp/modules/Timer.RequestManager`, and
+   replace the `database` and `score_write` sections of each
+   `sharp/configs/timer.jsonc` with `backend`. Game servers no longer need any
+   database account. Keep database DDL privileges off ordinary backend accounts.
 
 The date conversion and additive migration use only typed SQLSugar queries,
 writes, and schema-maintenance APIs; neither contains hand-written SQL. The
@@ -236,7 +231,9 @@ both ports to loopback; deployment and network access policy are operator-owned.
   player tables. The SQL lease makes multiple enabled workers safe, but a
   dedicated worker deployment keeps API connection budgets predictable; if write
   replicas also serve workers, include both workloads in their connection budget.
-- `WriteApi:Enabled` is `false` by default. When enabled without other write
+- `WriteApi:Enabled` is `false` by default. It serves the game servers' gRPC
+  API: `ITimerWriteServiceV1` for run submissions and `ITimerStorageServiceV1`
+  for everything else they read and write. When enabled without other write
   settings, ruleset v1 and factor 1.0 for style 0 apply. Only configured styles
   accept remote submissions; an omitted style is treated as disabled.
 - `WriteApi:LocalPorts` lists the local listener ports that serve write RPCs,
@@ -256,9 +253,11 @@ tables.
 
 ## Backend-only score administration
 
-Score policy is intentionally not exposed as an unauthenticated HTTP or gRPC
-admin API. Run these one-shot commands locally on a host with the existing
-write-capable database configuration; they create a short-lived storage scope,
+Score policy is intentionally not exposed as an HTTP or gRPC API: game servers'
+`!set_tier` and `timer_recalc_scores` reach the same operations over gRPC, but
+always under this instance's `WriteApi:StyleFactors`. Run these one-shot
+commands locally on a host with the existing write-capable database
+configuration; they create a short-lived storage scope,
 do not bind a web port, and do not start a score worker. The normal worker picks
 up the durable Outbox work after the command exits. They require the already
 migrated Inbox/Outbox schema and idempotency index; unlike `migrate`, they never
@@ -332,14 +331,11 @@ to `9999-12-31T23:59:59.500Z` (exclusive), the shared storage range for Inbox an
 checkpoint date-time columns. Values outside this range return `InvalidArgument`
 before any SQL runs, consistently across both database providers.
 
-## Current migration boundary
+## Storage and gRPC boundary
 
-This slice intentionally reuses `Timer.RequestManager`'s SQLSugar store to keep
-query behavior consistent while the protocol is introduced. That assembly
-still exposes ModSharp types in its metadata, so the backend currently carries
-`Sharp.Shared.dll` as an explicit transitional runtime dependency. The next
-extraction should move the persistence entities/read store behind a game-neutral
-application port.
+The SQLSugar store lives in `Timer.Backend.Storage`, which only the backend
+references. It still exposes ModSharp types in its metadata, so the backend
+carries `Sharp.Shared.dll` as a runtime dependency.
 
 The write foundation consists of a separately packaged, numeric-keyed
 MagicOnion v1 contract, a transport-neutral `TimerBackendWriteStorage` facade,
@@ -360,18 +356,14 @@ the original acknowledgement even if that run was later deleted; it never
 recreates the wiped record. A receipt proves the original commit, not continued
 existence of the run. Intentionally resubmitted runs need a new submission ID.
 
-The legacy `IRequestManager.AddPlayerRecord` API still requires callers to load
-the player profile first with `GetPlayerProfile`. Unlike backend submission
-validation, that legacy method does not enforce the precondition; custom plugin
-callers must preserve it to avoid scores without a corresponding player total.
-
-When `WriteApi:Enabled=true`, the host maps `ITimerWriteServiceV1` without
-built-in API-key authentication. Anyone who can reach the write port can submit
+When `WriteApi:Enabled=true`, the host maps `ITimerWriteServiceV1` and
+`ITimerStorageServiceV1` without built-in API-key authentication. Anyone who can reach the write port can submit
 data; the operator is responsible for restricting network access, and should set
 `WriteApi:LocalPorts` so the read port cannot serve writes. The backend still
 owns `StyleFactor` and the accepted ruleset, never accepting client-supplied
-score policy. Incoming and outgoing gRPC messages are limited to 64 KiB and
-detailed framework errors remain disabled. The sender confirms ambiguous
+score policy. Incoming gRPC messages are limited to 64 KiB and responses to
+64 MiB (a whole map's leaderboards), and detailed framework errors remain
+disabled. The sender confirms ambiguous
 outcomes by replaying the original payload and submission ID: a status lookup
 alone cannot prove that an existing row contains the same payload.
 
@@ -391,10 +383,8 @@ keep the lightweight map-table readiness probe and do not require the two write
 tables. Maps must already exist; login uses
 `EnsurePlayerProfileAsync` to create/update the player over the backend
 channel, while a run transaction deliberately rejects a missing player rather than
-implicitly creating one. The plugin-side bounded in-memory sender and score-write
-call site are available behind explicit `remote-write` mode; a database-neutral
-read adapter and generic versioned `RunCommitted` event Outbox remain future
-slices. Direct Kestrel h2c and TLS are covered by opt-in loopback tests; the deployment-specific reverse proxy still needs its own smoke test.
+implicitly creating one. A generic versioned `RunCommitted` event Outbox remains
+a future slice. Direct Kestrel h2c and TLS are covered by opt-in loopback tests; the deployment-specific reverse proxy still needs its own smoke test.
 
 ## Request deadlines and worker monitoring
 
@@ -453,14 +443,15 @@ missing.
 
 ## Replay upload consistency
 
-The shared legacy replay provider uses a unique object key for every main/stage
-upload attempt. Failed or interrupted retries cannot overwrite or remove an
-object already referenced by a successful replay row. Existing replay URLs stay
-valid; the backend write RPC still does not expose replay uploads.
+The plugin uploads replay files straight to the replay store, then records
+their URLs through `ITimerStorageServiceV1.SaveReplayUrlAsync`. It uses a
+unique object key for every main/stage upload attempt. Failed or interrupted
+retries cannot overwrite or remove an object already referenced by a successful
+replay row. Existing replay URLs stay valid.
 
-When SQL reports an error after upload, the provider retains the object because
-the metadata transaction may already have committed. It deletes an unused upload
-only after SQL definitively confirms its run is gone. Failed uploads and replaced
+When saving the URL fails, the plugin retains the object because the metadata
+transaction may already have committed. It deletes an unused upload only after
+the backend definitively confirms its run is gone. Failed uploads and replaced
 versions may leave unreferenced objects. Reconcile these against SQL replay URLs
 with uploads stopped before deleting them; an eager delete on an uncertain SQL
 result can destroy an acknowledged replay.

@@ -81,8 +81,8 @@ try {
 
     # Migration acceptance recreates the published master schema and upgrades it through
     # the real CLI. Running it first also provisions the schema needed by concurrency tests.
-    Invoke-AcceptancePhase 'migration' 'Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj' 'FullyQualifiedName~MasterSqlMigrationAcceptanceTests'
-    Invoke-AcceptancePhase 'storage' 'Plugin/Timer.RequestManager.Tests/Timer.RequestManager.Tests.csproj' 'FullyQualifiedName!~MasterSqlMigrationAcceptanceTests'
+    Invoke-AcceptancePhase 'migration' 'Backend/Timer.Backend.Storage.Tests/Timer.Backend.Storage.Tests.csproj' 'FullyQualifiedName~MasterSqlMigrationAcceptanceTests'
+    Invoke-AcceptancePhase 'storage' 'Backend/Timer.Backend.Storage.Tests/Timer.Backend.Storage.Tests.csproj' 'FullyQualifiedName!~MasterSqlMigrationAcceptanceTests'
     Invoke-AcceptancePhase 'backend' 'Backend/Timer.Backend.Tests/Timer.Backend.Tests.csproj' ''
     if (!$BackendOnly) {
         Invoke-AcceptancePhase 'plugin' 'Plugin/Timer.Tests/Timer.Tests.csproj' ''

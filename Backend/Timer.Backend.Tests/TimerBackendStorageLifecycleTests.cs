@@ -1,6 +1,6 @@
 using System;
 using Microsoft.Extensions.Logging;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 using Xunit;
 
 namespace Timer.Backend.Tests;

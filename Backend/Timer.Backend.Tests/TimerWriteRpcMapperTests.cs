@@ -6,7 +6,7 @@ using Source2Surf.Timer.Backend.Rpc.Contracts;
 using Source2Surf.Timer.Shared;
 using Timer.Backend.Configuration;
 using Timer.Backend.WriteApi;
-using Timer.RequestManager.Backend;
+using Timer.Backend.Storage;
 using Xunit;
 
 namespace Timer.Backend.Tests;

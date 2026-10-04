@@ -95,7 +95,7 @@ public sealed class BackendAdministrativeCliTests
     public void CompletionListsMapsThatWereNotRequeued()
     {
         var invocation = BackendAdministrativeCli.Parse(["recalc-scores", "all"]);
-        var result = new Timer.RequestManager.Backend.TimerBackendScoreAdministrationResult
+        var result = new Timer.Backend.Storage.TimerBackendScoreAdministrationResult
         {
             MapFound = true,
             MapsAffected = 1,

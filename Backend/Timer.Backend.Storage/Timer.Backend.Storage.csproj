@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AssemblyName>Timer.Backend.Storage</AssemblyName>
+		<RootNamespace>Timer.Backend.Storage</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="ModSharp.Sharp.Shared" Version="*" />
+		<PackageReference Include="MySqlConnector" Version="2.6.2" />
+		<PackageReference Include="Npgsql" Version="10.0.3" />
+		<PackageReference Include="SqlSugarCoreNoDrive" Version="5.1.4.221" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Plugin\Timer.Shared\Timer.Shared.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Timer.Backend.Storage.Tests" />
+		<InternalsVisibleTo Include="Timer.Backend.Tests" />
+	</ItemGroup>
+</Project>
