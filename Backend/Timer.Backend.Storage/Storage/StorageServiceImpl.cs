@@ -17,6 +17,7 @@ namespace Timer.Backend.Storage;
 internal sealed partial class StorageServiceImpl
 {
     private readonly SqlSugarScope               _rootDb;
+    private readonly AopEvents                   _sqlHooks;
     private ISqlSugarClient _db => _operationDb.Value ?? (ISqlSugarClient)_rootDb;
     private readonly ILogger<StorageServiceImpl> _logger;
     private readonly ConcurrentDictionary<string, ulong> _mapIdCache = new (StringComparer.Ordinal);
@@ -40,8 +41,9 @@ internal sealed partial class StorageServiceImpl
                               ILogger<StorageServiceImpl> logger,
                               bool                        enableScoreRecalcWorker = true)
     {
-        _logger = logger;
-        _rootDb = CreateClient(dbType, connectionString);
+        _logger   = logger;
+        _sqlHooks = CreateSqlHooks();
+        _rootDb   = CreateClient(dbType, connectionString);
 
         if (enableScoreRecalcWorker)
         {
@@ -171,6 +173,7 @@ internal sealed partial class StorageServiceImpl
         }
         _scoreRecalcScheduler?.Dispose();
         if (_scoreRecalcWorkerStorage is not null) _ = DisposeWorkerStorageAfterCompletionAsync();
+        DisposeIdleClients();
         _rootDb.Dispose();
     }
 

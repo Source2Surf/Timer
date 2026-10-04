@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 
@@ -10,21 +9,26 @@ internal sealed partial class StorageServiceImpl
     internal TimeSpan SlowSqlThreshold { get; set; } = TimeSpan.FromSeconds(1);
     private const int MaxLoggedSqlLength = 4096;
 
-    // SqlSugarScope runs this for each per-flow client it creates. SqlSugarScope.CopyNew does not:
-    // it copies the source client's AOP delegates, so RunOperationAsync rebinds the slow-SQL hook.
+    // Every client of this storage, per-flow and pooled, shares one set of hooks: SqlSugar reads them per
+    // command, so a hook added through Db reaches operations too.
+    private AopEvents CreateSqlHooks()
+        => new () { OnError = LogSqlError, OnLogExecuted = LogSlowSql };
+
+    // SqlSugarScope runs this for each per-flow client it creates. Hooks run only while log events are on.
     private void ConfigureSqlLogging(SqlSugarClient client)
     {
-        client.Aop.OnError = LogSqlError;
-        AttachSlowSqlHook(client);
+        client.CurrentConnectionConfig.AopEvents = _sqlHooks;
+        client.Ado.IsEnableLogEvent = true;
     }
 
-    private void AttachSlowSqlHook(SqlSugarClient client)
+    private void LogSlowSql(string sql, SugarParameter[] parameters)
     {
-        // Keep handlers attached by someone else, but never a hook timing another client.
-        var inherited = client.CurrentConnectionConfig.AopEvents?.OnLogExecuted?.GetInvocationList()
-                              .Where(handler => handler.Target is not SlowSqlHook) ?? [];
-        Action<string, SugarParameter[]> hook = new SlowSqlHook(this, client).OnExecuted;
-        client.Aop.OnLogExecuted = (Action<string, SugarParameter[]>?)Delegate.Combine([.. inherited, hook]);
+        // An operation's own client ran the command; outside one, the flow's scoped client did.
+        var elapsed = (_operationDb.Value?.Ado ?? _rootDb.Ado).SqlExecutionTime;
+        if (elapsed < SlowSqlThreshold) return;
+
+        _logger.LogWarning("Slow SQL took {ElapsedMs} ms:{Sql}", (long) elapsed.TotalMilliseconds,
+                           FormatSqlForLog(sql, parameters));
     }
 
     private void LogSqlError(SqlSugarException error)
@@ -52,17 +56,5 @@ internal sealed partial class StorageServiceImpl
     {
         var text = UtilMethods.GetNativeSql(sql ?? string.Empty, parameters);
         return text.Length <= MaxLoggedSqlLength ? text : $"{text[..MaxLoggedSqlLength]}... ({text.Length} chars)";
-    }
-
-    private sealed class SlowSqlHook(StorageServiceImpl storage, SqlSugarClient client)
-    {
-        public void OnExecuted(string sql, SugarParameter[] parameters)
-        {
-            var elapsed = client.Ado.SqlExecutionTime;
-            if (elapsed < storage.SlowSqlThreshold) return;
-
-            storage._logger.LogWarning("Slow SQL took {ElapsedMs} ms:{Sql}", (long) elapsed.TotalMilliseconds,
-                                       FormatSqlForLog(sql, parameters));
-        }
     }
 }

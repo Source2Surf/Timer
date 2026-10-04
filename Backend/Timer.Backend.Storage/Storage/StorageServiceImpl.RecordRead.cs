@@ -115,38 +115,25 @@ internal sealed partial class StorageServiceImpl
         }
 
         var steamIdValue = unchecked((long)steamId);
-        var query = QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
-                                   .Where((best, run) => best.MapId == mapId.Value
-                                                         && best.RunType == runType
-                                                         && best.SteamId == steamIdValue);
+        var query = QueryBoard().Where((best, run, player) => best.MapId == mapId.Value
+                                                          && best.RunType == runType
+                                                          && best.SteamId == steamIdValue);
 
         if (stageRecords)
         {
-            query = query.Where((best, run) => best.Stage > 0)
-                         .OrderBy((best, run) => best.Stage)
-                         .OrderBy((best, run) => best.BestTime)
-                         .OrderBy((best, run) => best.RunId);
+            query = query.Where((best, run, player) => best.Stage > 0)
+                         .OrderBy((best, run, player) => best.Stage)
+                         .OrderBy((best, run, player) => best.BestTime)
+                         .OrderBy((best, run, player) => best.RunId);
         }
         else
         {
-            query = query.Where((best, run) => best.Stage == 0)
-                         .OrderBy((best, run) => best.BestTime)
-                         .OrderBy((best, run) => best.RunId);
+            query = query.Where((best, run, player) => best.Stage == 0)
+                         .OrderBy((best, run, player) => best.BestTime)
+                         .OrderBy((best, run, player) => best.RunId);
         }
 
-        var runs = await query.Select((best, run) => run)
-                              .Take(NormalizeLimit(limit))
-                              .ToListAsync(OperationCancellation);
-        var result = new List<RunRecord>(runs.Count);
-
-        foreach (var run in runs)
-        {
-            result.Add(ToRunRecord(run));
-        }
-
-        await PopulatePlayerNamesAsync(result);
-
-        return result;
+        return await ReadBoardAsync(query, NormalizeLimit(limit));
     }
 
     public async Task<PlayerProfile> GetPlayerProfile(SteamID steamId, string name)

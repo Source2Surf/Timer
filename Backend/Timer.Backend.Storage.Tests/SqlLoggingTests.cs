@@ -57,17 +57,29 @@ public sealed class SqlLoggingTests : IDisposable
     {
         _storage.SlowSqlThreshold = TimeSpan.Zero;
         var foreignCalls = 0;
-        _storage.Db.Aop.OnLogExecuted = (_, _) => Interlocked.Increment(ref foreignCalls);
+        Action<string, SugarParameter[]> foreign = (_, _) => Interlocked.Increment(ref foreignCalls);
+        var hooks = _storage.Db.CurrentConnectionConfig.AopEvents;
+        hooks.OnLogExecuted += foreign;
         try
         {
             await _storage.RunOperationAsync(() => _storage.GetMapInfo($"surf_logging_{Guid.NewGuid():N}"),
                                              CancellationToken.None);
         }
-        finally { _storage.Db.Aop.OnLogExecuted = null; }
+        finally { hooks.OnLogExecuted -= foreign; }
 
         var slow = _logger.Entries.Count(x => x.Message.StartsWith("Slow SQL", StringComparison.Ordinal));
         Assert.True(foreignCalls > 0);
         Assert.Equal(foreignCalls, slow);
+    }
+
+    [Fact]
+    public async Task SlowSqlOnTheSharedScopeIsLogged()
+    {
+        // Startup, migrations and readiness checks run on the shared scope, outside any operation.
+        _storage.SlowSqlThreshold = TimeSpan.Zero;
+        await _storage.GetMapInfo($"surf_logging_scope_{Guid.NewGuid():N}");
+
+        Assert.Contains(_logger.Entries, x => x.Message.StartsWith("Slow SQL", StringComparison.Ordinal));
     }
 
     [Fact]

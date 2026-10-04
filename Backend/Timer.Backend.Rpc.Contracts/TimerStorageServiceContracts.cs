@@ -57,6 +57,9 @@ public sealed class MapInfoDto
     public int PlayCount { get; set; }
 }
 
+/// <summary>
+/// One leaderboard row, flat so that a board of thousands is one object per record on each side.
+/// </summary>
 [MessagePackObject]
 public sealed class RecordDto
 {
@@ -97,13 +100,31 @@ public sealed class RecordDto
     public float Sync { get; set; }
 
     [Key(12)]
-    public VectorDto StartVelocity { get; set; } = new VectorDto();
+    public float StartX { get; set; }
 
     [Key(13)]
-    public VectorDto AverageVelocity { get; set; } = new VectorDto();
+    public float StartY { get; set; }
 
     [Key(14)]
-    public VectorDto EndVelocity { get; set; } = new VectorDto();
+    public float StartZ { get; set; }
+
+    [Key(15)]
+    public float AverageX { get; set; }
+
+    [Key(16)]
+    public float AverageY { get; set; }
+
+    [Key(17)]
+    public float AverageZ { get; set; }
+
+    [Key(18)]
+    public float EndX { get; set; }
+
+    [Key(19)]
+    public float EndY { get; set; }
+
+    [Key(20)]
+    public float EndZ { get; set; }
 }
 
 [MessagePackObject]

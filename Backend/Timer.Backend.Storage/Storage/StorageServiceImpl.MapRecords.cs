@@ -115,110 +115,90 @@ internal sealed partial class StorageServiceImpl
 
         var normalizedLimit = NormalizeLimit(limit);
 
-        var query = QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
-                                  .Where((best, run) => best.MapId == mapId.Value
-                                                        && best.RunType == runType);
+        var query = QueryBoard().Where((best, run, player) => best.MapId == mapId.Value
+                                                          && best.RunType == runType);
 
         if (style.HasValue)
         {
-            query = query.Where((best, run) => best.Style == style.Value);
+            query = query.Where((best, run, player) => best.Style == style.Value);
         }
 
         if (track.HasValue)
         {
-            query = query.Where((best, run) => best.Track == track.Value);
+            query = query.Where((best, run, player) => best.Track == track.Value);
         }
 
         if (stage.HasValue)
         {
-            query = query.Where((best, run) => best.Stage == stage.Value);
+            query = query.Where((best, run, player) => best.Stage == stage.Value);
         }
         else if (runType == RunType.Main)
         {
-            query = query.Where((best, run) => best.Stage == 0);
+            query = query.Where((best, run, player) => best.Stage == 0);
         }
         else
         {
-            query = query.Where((best, run) => best.Stage > 0);
+            query = query.Where((best, run, player) => best.Stage > 0);
         }
 
         if (orderByStageThenTime)
         {
-            query = query.OrderBy((best, run) => best.Stage)
-                         .OrderBy((best, run) => best.BestTime)
-                         .OrderBy((best, run) => best.RunId);
+            query = query.OrderBy((best, run, player) => best.Stage)
+                         .OrderBy((best, run, player) => best.BestTime)
+                         .OrderBy((best, run, player) => best.RunId);
         }
         else
         {
-            query = query.OrderBy((best, run) => best.BestTime)
-                         .OrderBy((best, run) => best.RunId);
+            query = query.OrderBy((best, run, player) => best.BestTime)
+                         .OrderBy((best, run, player) => best.RunId);
         }
 
-        var runs = await query.Select((best, run) => run)
-                              .Take(normalizedLimit)
+        return await ReadBoardAsync(query, normalizedLimit);
+    }
+
+    // Best runs with their run and player, so a board's names come in the same query.
+    private ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> QueryBoard()
+        => QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
+                          .LeftJoin<PlayerEntity>((best, run, player) => player.SteamId == run.SteamId);
+
+    private async Task<IReadOnlyList<RunRecord>> ReadBoardAsync(ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> query,
+                                                                int limit)
+    {
+        var rows = await query.Select((best, run, player) => new BoardRow
+                              {
+                                  Id                       = SqlFunc.ToInt64(run.Id),
+                                  DateUnixTimeMilliseconds = run.DateUnixTimeMilliseconds,
+                                  SteamId                  = run.SteamId,
+                                  PlayerName               = player.Name,
+                                  MapId                    = SqlFunc.ToInt64(run.MapId),
+                                  Style                    = run.Style,
+                                  Track                    = SqlFunc.ToInt32(run.Track),
+                                  Stage                    = SqlFunc.ToInt32(run.Stage),
+                                  Time                     = run.Time,
+                                  Jumps                    = SqlFunc.ToInt64(run.Jumps),
+                                  Strafes                  = SqlFunc.ToInt64(run.Strafes),
+                                  Sync                     = run.Sync,
+                                  VelocityStartX           = run.VelocityStartX,
+                                  VelocityStartY           = run.VelocityStartY,
+                                  VelocityStartZ           = run.VelocityStartZ,
+                                  VelocityAvgX             = run.VelocityAvgX,
+                                  VelocityAvgY             = run.VelocityAvgY,
+                                  VelocityAvgZ             = run.VelocityAvgZ,
+                                  VelocityEndX             = run.VelocityEndX,
+                                  VelocityEndY             = run.VelocityEndY,
+                                  VelocityEndZ             = run.VelocityEndZ,
+                              })
+                              .Take(limit)
                               .ToListAsync(OperationCancellation);
 
-        var result = new List<RunRecord>(runs.Count);
+        var result = new RunRecord[rows.Count];
 
-        foreach (var run in runs)
+        for (var i = 0; i < result.Length; i++)
         {
-            result.Add(ToRunRecord(run));
+            result[i] = ToRunRecord(rows[i]);
         }
-
-        await PopulatePlayerNamesAsync(result);
 
         return result;
-    }
-
-    /// <summary>
-    ///     Fills <see cref="RunRecord.PlayerName" /> from surf_players in one batched query.
-    ///     Run rows only store SteamId, but leaderboard output (!wr/!top) renders the name.
-    /// </summary>
-    private async Task PopulatePlayerNamesAsync(List<RunRecord> records)
-    {
-        if (records.Count == 0)
-        {
-            return;
-        }
-
-        var seen     = new HashSet<ulong>(records.Count);
-        var steamIds = new List<long>(records.Count);
-
-        foreach (var record in records)
-        {
-            if (seen.Add(record.SteamId))
-            {
-                steamIds.Add(unchecked((long)record.SteamId));
-            }
-        }
-
-        var rows = await _db.Queryable<PlayerEntity>()
-                            .Where(x => steamIds.Contains(x.SteamId))
-                            .Select(x => new PlayerNameRow { SteamId = x.SteamId, Name = x.Name })
-                            .ToListAsync(OperationCancellation);
-
-        var names = new Dictionary<ulong, string>(rows.Count);
-
-        foreach (var row in rows)
-        {
-            names[unchecked((ulong)row.SteamId)] = row.Name;
-        }
-
-        foreach (var record in records)
-        {
-            if (names.TryGetValue(record.SteamId, out var name))
-            {
-                record.PlayerName = name;
-            }
-        }
-    }
-
-    private sealed class PlayerNameRow
-    {
-        [SugarColumn(ColumnDataType = "bigint")]
-        public long SteamId { get; set; }
-
-        public string Name { get; set; } = string.Empty;
     }
 
     public Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10)

@@ -77,7 +77,9 @@ public sealed partial class TimerBackendStorage
         }
         try
         {
-            return await _storage.RunOperationAsync(operation, cancellationToken);
+            // Request tokens carry the request deadline; the CLI's default token has none.
+            return await _storage.RunOperationAsync(operation, cancellationToken,
+                                                    deadlineInToken: cancellationToken.CanBeCanceled);
         }
         catch (Exception exception) when (exception is not OperationCanceledException
                                               and not TimerBackendSubmissionException

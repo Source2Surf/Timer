@@ -79,7 +79,7 @@ public sealed class TimerStorageLoopbackTests : IAsyncLifetime
         var record = Assert.Single(board);
         Assert.Equal(saved.Id, record.Id);
         Assert.Equal(80f, record.Time);
-        Assert.Equal(250f, record.StartVelocity.X);
+        Assert.Equal(250f, record.StartX);
         Assert.Equal("Loopback", record.PlayerName);
         Assert.Single(await _client.GetMapRecordsAsync("surf_rpc", 0, RunKind.Main, false, 0, 0, 0, 10));
         Assert.Empty(await _client.GetMapRecordsAsync("surf_rpc", 0, RunKind.Stage, true, 0, 0, 0, 5000));

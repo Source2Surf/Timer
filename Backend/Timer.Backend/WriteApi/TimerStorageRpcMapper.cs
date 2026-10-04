@@ -50,9 +50,15 @@ internal static class TimerStorageRpcMapper
             Jumps                       = source.Jumps,
             Strafes                     = source.Strafes,
             Sync                        = source.Sync,
-            StartVelocity               = Vector(source.VelocityStartX, source.VelocityStartY, source.VelocityStartZ),
-            AverageVelocity             = Vector(source.VelocityAvgX, source.VelocityAvgY, source.VelocityAvgZ),
-            EndVelocity                 = Vector(source.VelocityEndX, source.VelocityEndY, source.VelocityEndZ),
+            StartX                      = source.VelocityStartX,
+            StartY                      = source.VelocityStartY,
+            StartZ                      = source.VelocityStartZ,
+            AverageX                    = source.VelocityAvgX,
+            AverageY                    = source.VelocityAvgY,
+            AverageZ                    = source.VelocityAvgZ,
+            EndX                        = source.VelocityEndX,
+            EndY                        = source.VelocityEndY,
+            EndZ                        = source.VelocityEndZ,
         };
 
     public static RecordDto[] ToDto(IReadOnlyList<RunRecord> source)
@@ -207,9 +213,6 @@ internal static class TimerStorageRpcMapper
             FailedMaps                 = failedMaps,
         };
     }
-
-    private static VectorDto Vector(float x, float y, float z)
-        => new () { X = x, Y = y, Z = z };
 
     private static VectorDto Vector(Vector source)
         => new () { X = source.X, Y = source.Y, Z = source.Z };
