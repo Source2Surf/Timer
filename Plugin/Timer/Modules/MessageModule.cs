@@ -21,6 +21,7 @@ using Sharp.Shared.Definition;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Shared.Events;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
@@ -35,17 +36,23 @@ internal interface IMessageModule
 
 internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, ITimerModuleListener
 {
-    private readonly InterfaceBridge _bridge;
-    private readonly IRecordModule   _recordModule;
-    private readonly ITimerModule    _timerModule;
+    private readonly InterfaceBridge       _bridge;
+    private readonly IRecordModule         _recordModule;
+    private readonly ITimerModule          _timerModule;
+    private readonly IStyleModule          _styleModule;
+    private readonly ILocalizationProvider _localization;
 
-    public MessageModule(InterfaceBridge bridge,
-                         IRecordModule   recordModule,
-                         ITimerModule    timerModule)
+    public MessageModule(InterfaceBridge       bridge,
+                         IRecordModule         recordModule,
+                         ITimerModule          timerModule,
+                         IStyleModule          styleModule,
+                         ILocalizationProvider localization)
     {
         _bridge       = bridge;
         _recordModule = recordModule;
         _timerModule  = timerModule;
+        _styleModule  = styleModule;
+        _localization = localization;
     }
 
     public bool Init()
@@ -68,28 +75,19 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
         {
             case EAttemptResult.NewPersonalRecord:
             {
-                PrintNewPersonalBestMessage(recordEvent.PlayerName,
-                                            recordEvent.SavedRecord,
-                                            recordEvent.PbRecord,
-                                            recordEvent.IsStageRecord);
+                PrintNewPersonalBestMessage(recordEvent);
 
                 break;
             }
             case EAttemptResult.NewServerRecord:
             {
-                PrintNewServerRecordMessage(recordEvent.PlayerName,
-                                            recordEvent.SavedRecord,
-                                            recordEvent.WrRecord,
-                                            recordEvent.IsStageRecord);
+                PrintNewServerRecordMessage(recordEvent);
 
                 break;
             }
             case EAttemptResult.NoNewRecord:
             {
-                PrintNoNewRecordMessage(recordEvent.SteamId,
-                                        recordEvent.SavedRecord,
-                                        recordEvent.PbRecord,
-                                        recordEvent.IsStageRecord);
+                PrintNoNewRecordMessage(recordEvent);
 
                 break;
             }
@@ -103,205 +101,105 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
                                   ITimerInfo        timerInfo,
                                   int               checkpoint)
     {
-        var sb = ZString.CreateStringBuilder(true);
-        try
+        var tr      = _localization.For(controller.PlayerSlot);
+        var message = tr.Format(ChatTexts.Checkpoint, checkpoint, Utils.ColoredTime(timerInfo.Time));
+
+        // WR checkpoint diff
+        var wrCheckpoints = _recordModule.GetWRCheckpoints(timerInfo.Style, timerInfo.Track);
+
+        if (wrCheckpoints is { Count: > 0 } && checkpoint >= 1 && checkpoint <= wrCheckpoints.Count)
         {
-            sb.Append("CP");
-            sb.Append(checkpoint);
-            sb.Append(": ");
-            Utils.AppendColoredTime(ref sb, timerInfo.Time);
-
-            // WR checkpoint diff
-            var wrCheckpoints = _recordModule.GetWRCheckpoints(timerInfo.Style, timerInfo.Track);
-
-            if (wrCheckpoints is { Count: > 0 } && checkpoint >= 1 && checkpoint <= wrCheckpoints.Count)
-            {
-                sb.Append(" | WR ");
-                Utils.AppendSignedDelta(ref sb, timerInfo.Time - wrCheckpoints[checkpoint - 1].Time);
-            }
-
-            // PB checkpoint comparison would require caching PB checkpoints separately.
-
-            pawn.PrintToChat(sb.ToString());
+            message = ZString.Concat(message, tr.Format(ChatTexts.VsSr, Utils.SignedDelta(timerInfo.Time - wrCheckpoints[checkpoint - 1].Time)));
         }
-        finally
+
+        // PB checkpoint comparison would require caching PB checkpoints separately.
+
+        pawn.PrintToChat(message);
+    }
+
+    // "New SR! Nuko finished Main - Normal in 25.421 (SR -02:18.093)"
+    private void PrintNewServerRecordMessage(PlayerRecordSavedEvent recordEvent)
+    {
+        var record = recordEvent.SavedRecord;
+        var style  = _styleModule.GetStyleSetting(record.Style).Name;
+        var delta  = recordEvent.WrRecord is { } sr ? Improvement(sr.Time, record.Time) : null;
+
+        _bridge.ClientManager.PrintToChatAll(_localization,
+                                             tr => ZString.Concat(ChatColor.Gold,
+                                                                  tr[ChatTexts.FinishSr],
+                                                                  ChatColor.White,
+                                                                  " ",
+                                                                  Finished(tr, recordEvent.PlayerName, record, style),
+                                                                  delta is null ? "" : tr.Format(ChatTexts.FinishVsSr, delta)));
+    }
+
+    // "Nuko finished Main - Normal in 01:02.345 (PB -0.512) #3/45"; a first finish has no PB to compare.
+    // A stage PB goes to its player only.
+    private void PrintNewPersonalBestMessage(PlayerRecordSavedEvent recordEvent)
+    {
+        var record        = recordEvent.SavedRecord;
+        var style         = _styleModule.GetStyleSetting(record.Style).Name;
+        var delta         = recordEvent.PbRecord is { } pb ? Improvement(pb.Time, record.Time) : null;
+        var (rank, total) = recordEvent.IsStageRecord ? (0, 0) : GetRank(record, recordEvent.PbRecord is null);
+
+        string Message(ChatTr tr)
+            => ZString.Concat(Finished(tr, recordEvent.PlayerName, record, style),
+                              delta is null ? "" : tr.Format(ChatTexts.FinishVsPb, delta),
+                              rank > 0 ? tr.Format(ChatTexts.FinishRank, rank, total) : "");
+
+        if (!recordEvent.IsStageRecord)
         {
-            sb.Dispose();
+            _bridge.ClientManager.PrintToChatAll(_localization, Message);
+        }
+        else if (FindPlayerControllerBySteamId(recordEvent.SteamId) is { IsValidEntity: true } controller)
+        {
+            controller.PrintToChat(Message(_localization.For(controller.PlayerSlot)));
         }
     }
 
-    private void PrintNewPersonalBestMessage(string    playerName,
-                                             RunRecord savedRecord,
-                                             RunRecord? pbRecord,
-                                             bool      isStageRecord)
+    // To its player only: "Nuko finished Main - Normal in 01:03.000 (PB +0.655)"
+    private void PrintNoNewRecordMessage(PlayerRecordSavedEvent recordEvent)
     {
-        var rank = TryGetCurrentRank(savedRecord);
-
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(playerName);
-            sb.Append(ChatColor.White);
-            sb.Append(" PB ");
-            AppendRecordScope(ref sb, savedRecord);
-            sb.Append(": ");
-            sb.Append(ChatColor.LightGreen);
-            Utils.FormatTime(ref sb, savedRecord.Time, true);
-            sb.Append(ChatColor.White);
-
-            if (pbRecord is not null)
-            {
-                var improvedBy = MathF.Max(pbRecord.Time - savedRecord.Time, 0f);
-                sb.Append(" (-");
-                Utils.FormatTime(ref sb, improvedBy, true);
-                sb.Append(')');
-            }
-
-            if (!isStageRecord)
-            {
-                AppendRankSuffix(ref sb, rank);
-            }
-
-            _bridge.ModSharp.PrintToChatWithPrefix(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
-    }
-
-    private void PrintNewServerRecordMessage(string    playerName,
-                                             RunRecord savedRecord,
-                                             RunRecord? wrRecord,
-                                             bool      isStageRecord)
-    {
-        _ = isStageRecord;
-
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(playerName);
-            sb.Append(ChatColor.White);
-            sb.Append(" WR ");
-            AppendRecordScope(ref sb, savedRecord);
-            sb.Append(": ");
-            sb.Append(ChatColor.LightGreen);
-            Utils.FormatTime(ref sb, savedRecord.Time, true);
-            sb.Append(ChatColor.White);
-
-            if (wrRecord is not null)
-            {
-                var improvedBy = MathF.Max(wrRecord.Time - savedRecord.Time, 0f);
-                sb.Append(" (-");
-                Utils.FormatTime(ref sb, improvedBy, true);
-                sb.Append(')');
-            }
-
-            _bridge.ModSharp.PrintToChatWithPrefix(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
-    }
-
-    private void PrintNoNewRecordMessage(SteamID   steamId,
-                                         RunRecord savedRecord,
-                                         RunRecord? pbRecord,
-                                         bool      isStageRecord)
-    {
-        // Find the client by SteamID through ClientManager
-        var controller = FindPlayerControllerBySteamId(steamId);
-
-        if (controller is not { IsValidEntity: true })
+        if (FindPlayerControllerBySteamId(recordEvent.SteamId) is not { IsValidEntity: true } controller)
         {
             return;
         }
 
-        _ = isStageRecord;
+        var record  = recordEvent.SavedRecord;
+        var tr      = _localization.For(controller.PlayerSlot);
+        var message = Finished(tr, recordEvent.PlayerName, record, _styleModule.GetStyleSetting(record.Style).Name);
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
+        if (recordEvent.PbRecord is { } pb)
         {
-            AppendRecordScope(ref sb, savedRecord);
-            sb.Append(": ");
-            sb.Append(ChatColor.LightGreen);
-            Utils.FormatTime(ref sb, savedRecord.Time, true);
-            sb.Append(ChatColor.White);
-
-            if (pbRecord is not null)
-            {
-                var delta = savedRecord.Time - pbRecord.Time;
-
-                sb.Append(" | PB ");
-                sb.Append(ChatColor.LightGreen);
-                Utils.FormatTime(ref sb, pbRecord.Time, true);
-                sb.Append(ChatColor.White);
-                sb.Append(" (");
-                sb.Append(delta >= 0f ? '+' : '-');
-                Utils.FormatTime(ref sb, MathF.Abs(delta), true);
-                sb.Append(')');
-            }
-
-            controller.PrintToChat(sb.ToString());
+            message += tr.Format(ChatTexts.FinishVsPb, Utils.SignedDelta(record.Time - pb.Time));
         }
-        finally
-        {
-            sb.Dispose();
-        }
+
+        controller.PrintToChat(message);
     }
 
-    private int TryGetCurrentRank(RunRecord record)
-    {
-        if (record.Stage > 0)
-        {
-            return 0;
-        }
+    private static string Finished(ChatTr tr, string playerName, RunRecord record, string style)
+        => tr.Format(ChatTexts.Finish, Utils.Highlight(playerName), Scope(tr, record), style, Utils.ColoredTime(record.Time));
 
+    private static string Scope(ChatTr tr, RunRecord record)
+        => record.Stage <= 0 ? tr.Track(record.Track)
+            : record.Track <= 0 ? tr.Format(ChatTexts.TrackStage, record.Stage)
+                                  : tr.Format(ChatTexts.TrackBonusStage, record.Track, record.Stage);
+
+    private static string Improvement(float previous, float time)
+        => ZString.Concat(ChatColor.LightGreen, '-', Utils.FormatTime(MathF.Max(previous - time, 0f), true), ChatColor.White);
+
+    // The leaderboard is refreshed after this message, so it doesn't hold the new run yet: a first finish adds one.
+    private (int rank, int total) GetRank(RunRecord record, bool firstFinish)
+    {
         try
         {
-            return _recordModule.GetRankForTime(record.Style, record.Track, record.Time);
+            return (_recordModule.GetRankForTime(record.Style, record.Track, record.Time),
+                    _recordModule.GetTotalRecordCount(record.Style, record.Track) + (firstFinish ? 1 : 0));
         }
         catch (Exception)
         {
             // GetRankForTime may throw on out-of-bounds style/track
-            return 0;
-        }
-    }
-
-    private static void AppendRecordScope(ref Utf16ValueStringBuilder sb, RunRecord record)
-    {
-        AppendTrackName(ref sb, record.Track);
-
-        if (record.Stage > 0)
-        {
-            sb.Append(" S");
-            sb.Append(record.Stage);
-        }
-    }
-
-    private static void AppendTrackName(ref Utf16ValueStringBuilder sb, int track)
-    {
-        if (track <= 0)
-        {
-            sb.Append("Main");
-        }
-        else
-        {
-            sb.Append("Bonus ");
-            sb.Append(track);
-        }
-    }
-
-    private static void AppendRankSuffix(ref Utf16ValueStringBuilder sb, int rank)
-    {
-        if (rank > 0)
-        {
-            sb.Append(" (#");
-            sb.Append(rank);
-            sb.Append(')');
+            return (0, 0);
         }
     }
 

@@ -137,7 +137,7 @@ internal static class HudTexts
     public static readonly HudText Pb           = new ("hud.pb", "PB");
     public static readonly HudText Run          = new ("hud.run", "Run");
     public static readonly HudText Rank         = new ("hud.rank", "#{0}");
-    public static readonly HudText RankOf       = new ("hud.rank_of", "#{0} of {1}");
+    public static readonly HudText RankOf       = new ("hud.rank_of", "#{0}/{1}");
     public static readonly HudText Loading      = new ("hud.loading", "Loading…");
 
     // ---- menu values and the Timer tab's lines
@@ -206,7 +206,7 @@ internal static class HudTexts
     public static readonly HudText Play            = new ("rm.button.play", "Play");
 
     // ---- profile card
-    public static readonly HudText ProfileRank    = new ("pf.rank", "#{0} of {1} · {2} points");
+    public static readonly HudText ProfileRank    = new ("pf.rank", "#{0}/{1} · {2} points");
     public static readonly HudText ProfilePoints  = new ("pf.points", "{0} points");
     public static readonly HudText Joined         = new ("pf.joined", "Joined {0}");
     public static readonly HudText Played         = new ("pf.played", " · Played {0}");
@@ -221,6 +221,8 @@ internal static class HudTexts
     public static readonly HudText Minutes        = new ("pf.duration.minutes", "{0} min");
     public static readonly HudText HoursMinutes   = new ("pf.duration.hours_minutes", "{0} h {1} min");
     public static readonly HudText Hours          = new ("pf.duration.hours", "{0} h");
+    public static readonly HudText FindNone       = new ("pf.find.none", "No player named \"{0}\" is on the server.");
+    public static readonly HudText FindMany       = new ("pf.find.many", "More than one player matches \"{0}\".");
 
     // ---- the layout's fixed labels (HudLabels)
     public static readonly HudText Close        = new ("ui.close", "Close");

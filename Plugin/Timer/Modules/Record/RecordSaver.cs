@@ -19,13 +19,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Cysharp.Text;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
 using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Events;
@@ -48,6 +48,7 @@ internal sealed class RecordSaver
     private readonly ScoreWriteMode                     _scoreWriteMode;
     private readonly RemoteRunSubmissionOptions         _remoteSubmissionOptions;
     private readonly RemoteRunSubmissionWriter          _remoteSubmissionWriter;
+    private readonly ILocalizationProvider              _localization;
     private IRecordModuleListener?                        _lateReplayListener;
 
     private bool UsesRemoteWrite => _scoreWriteMode == ScoreWriteMode.RemoteWrite;
@@ -61,6 +62,7 @@ internal sealed class RecordSaver
                         ScoreWriteModeOptions              scoreWriteMode,
                         RemoteRunSubmissionOptions         remoteSubmissionOptions,
                         RunSubmissionSender                remoteSubmissionSender,
+                        ILocalizationProvider              localization,
                         ILogger                            logger)
     {
         ArgumentNullException.ThrowIfNull(scoreWriteMode);
@@ -76,6 +78,7 @@ internal sealed class RecordSaver
         _scoreWriteMode           = scoreWriteMode.Mode;
         _remoteSubmissionOptions  = remoteSubmissionOptions;
         _remoteSubmissionWriter   = new RemoteRunSubmissionWriter(remoteSubmissionSender);
+        _localization             = localization;
         _logger                   = logger;
     }
 
@@ -372,8 +375,8 @@ internal sealed class RecordSaver
                 runKind, exception.SubmissionId, exception.Disposition);
             await NotifyPlayerAsync(steamId,
                 exception.Disposition == SubmissionSpoolEnqueueDisposition.CapacityExceeded
-                    ? "Remote submission queue is full; this run was not queued."
-                    : "Remote submission could not be queued; this run was not queued.",
+                    ? ChatTexts.SaveQueueFull
+                    : ChatTexts.SaveNotQueued,
                 ct).ConfigureAwait(false);
         }
         catch (RunSubmissionRejectedException exception)
@@ -381,8 +384,7 @@ internal sealed class RecordSaver
             _logger.LogWarning(exception,
                 "Remote {RunKind} submission {SubmissionId} was permanently rejected by the backend.",
                 runKind, exception.SubmissionId);
-            await NotifyPlayerAsync(steamId,
-                "Remote backend rejected this run; no record result was published.", ct).ConfigureAwait(false);
+            await NotifyPlayerAsync(steamId, ChatTexts.SaveRejected, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -393,8 +395,7 @@ internal sealed class RecordSaver
         catch (Exception exception)
         {
             _logger.LogError(exception, "Error when saving remote {RunKind} record for {SteamId}", runKind, steamId);
-            await NotifyPlayerAsync(steamId,
-                "Remote score result was not confirmed; no record result was published.", ct).ConfigureAwait(false);
+            await NotifyPlayerAsync(steamId, ChatTexts.SaveUnconfirmed, ct).ConfigureAwait(false);
         }
     }
 
@@ -420,7 +421,7 @@ internal sealed class RecordSaver
         var acknowledgementTask = _remoteSubmissionWriter.EnqueueAndWaitAsync(request, ct);
         if (!acknowledgementTask.IsCompleted)
         {
-            await NotifyRemoteSubmissionPendingAsync(steamId, request.SubmissionId, "main", ct).ConfigureAwait(false);
+            LogRemoteSubmissionPending(request.SubmissionId, "main");
         }
 
         var response = await acknowledgementTask.ConfigureAwait(false);
@@ -509,7 +510,7 @@ internal sealed class RecordSaver
         var acknowledgementTask = _remoteSubmissionWriter.EnqueueAndWaitAsync(request, ct);
         if (!acknowledgementTask.IsCompleted)
         {
-            await NotifyRemoteSubmissionPendingAsync(steamId, request.SubmissionId, "stage", ct).ConfigureAwait(false);
+            LogRemoteSubmissionPending(request.SubmissionId, "stage");
         }
 
         var response = await acknowledgementTask.ConfigureAwait(false);
@@ -584,23 +585,10 @@ internal sealed class RecordSaver
                                     mapLoad).ConfigureAwait(false);
     }
 
-    private async Task NotifyRemoteSubmissionPendingAsync(SteamID           steamId,
-                                                           Guid              submissionId,
-                                                           string            runKind,
-                                                           CancellationToken ct)
-    {
-        _logger.LogInformation("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
-                               runKind,
-                               submissionId);
-
-        await _bridge.ModSharp.InvokeFrameActionAsync(() =>
-        {
-            if (_bridge.ClientManager.GetGameClient(steamId) is { } client)
-            {
-                client.GetPlayerController()?.PrintToChat("Run is pending remote backend confirmation.");
-            }
-        }, ct).ConfigureAwait(false);
-    }
+    private void LogRemoteSubmissionPending(Guid submissionId, string runKind)
+        => _logger.LogInformation("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
+                                  runKind,
+                                  submissionId);
 
     /// <summary>
     /// A finished run that the database didn't take: tells its player, who would otherwise wait for a time or PB
@@ -608,16 +596,19 @@ internal sealed class RecordSaver
     /// </summary>
     private async Task NotifySaveFailedAsync(SteamID steamId, RecordRequest run, CancellationToken ct)
     {
-        var what = run.Track > 0 ? ZString.Concat("bonus ", run.Track, " run")
-            : run.Stage > 0      ? ZString.Concat("stage ", run.Stage, " run")
-                                   : "run";
+        var time = Utils.FormatTime(run.Time, true);
 
         try
         {
             await NotifyPlayerAsync(steamId,
-                                    ZString.Concat(ChatColor.Red, "Your ", what, " wasn't saved", ChatColor.White,
-                                                   " (", Utils.FormatTime(run.Time, true),
-                                                   "): the server couldn't write it to the database. Please tell an admin."),
+                                    tr =>
+                                    {
+                                        var what = run.Track > 0 ? tr.Format(ChatTexts.SaveRunBonus, run.Track)
+                                            : run.Stage > 0      ? tr.Format(ChatTexts.SaveRunStage, run.Stage)
+                                                                   : tr[ChatTexts.SaveRun];
+
+                                        return ChatColor.Red + tr.Format(ChatTexts.SaveFailed, what, time);
+                                    },
                                     ct)
                 .ConfigureAwait(false);
         }
@@ -627,15 +618,19 @@ internal sealed class RecordSaver
         }
     }
 
-    private async Task NotifyPlayerAsync(SteamID           steamId,
-                                         string            message,
-                                         CancellationToken ct)
+    private Task NotifyPlayerAsync(SteamID steamId, ChatText text, CancellationToken ct)
+        => NotifyPlayerAsync(steamId, tr => tr[text], ct);
+
+    // The message is made on the game thread, in the player's language.
+    private async Task NotifyPlayerAsync(SteamID              steamId,
+                                         Func<ChatTr, string> message,
+                                         CancellationToken    ct)
     {
         await _bridge.ModSharp.InvokeFrameActionAsync(() =>
         {
             if (_bridge.ClientManager.GetGameClient(steamId) is { } client)
             {
-                client.GetPlayerController()?.PrintToChat(message);
+                client.GetPlayerController()?.PrintToChat(message(_localization.For(client.Slot)));
             }
         }, ct).ConfigureAwait(false);
     }

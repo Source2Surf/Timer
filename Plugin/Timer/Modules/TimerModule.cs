@@ -26,6 +26,7 @@ using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Modules.Timer;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -93,6 +94,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 {
     private readonly InterfaceBridge      _bridge;
     private readonly ICommandManager      _commandManager;
+    private readonly ILocalizationProvider _localization;
     private readonly IEventHookManager    _eventHook;
     private readonly ILogger<TimerModule> _logger;
     private readonly ListenerHub<ITimerModuleListener> _listenerHub;
@@ -143,6 +145,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                        IStyleModule         styleModule,
                        IEventHookManager    eventHook,
                        ICommandManager      commandManager,
+                       ILocalizationProvider localization,
                        ILogger<TimerModule> logger)
     {
         _bridge         = bridge;
@@ -152,6 +155,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _styleModule    = styleModule;
         _eventHook      = eventHook;
         _commandManager = commandManager;
+        _localization   = localization;
 
         _logger      = logger;
         _listenerHub = new ListenerHub<ITimerModuleListener>(logger);
@@ -315,7 +319,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                     timerInfo.StopTimer();
                     stageTimer.StopTimer();
 
-                    controller.PrintToChat("Missing stages, stopping timer");
+                    controller.PrintToChat(_localization.For(controller.PlayerSlot)[ChatTexts.MissingStages]);
 
                     return;
                 }
@@ -367,7 +371,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                 if (newCheckpointIndex != timerInfo.Checkpoint + 1)
                 {
                     timerInfo.StopTimer();
-                    pawn.PrintToChat("Timer stopped: missing checkpoints");
+                    pawn.PrintToChat(_localization.For(controller.PlayerSlot)[ChatTexts.MissingCheckpoints]);
 
                     return;
                 }
@@ -467,7 +471,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
                 if (!_authenticated[controller.PlayerSlot])
                 {
-                    controller.PrintToChat("Your Steam account has not been verified yet. The server may not be connected to Steam. Please wait and try again.");
+                    controller.PrintToChat(_localization.For(controller.PlayerSlot)[ChatTexts.Unverified]);
                     return;
                 }
 

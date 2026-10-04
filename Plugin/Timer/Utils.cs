@@ -113,35 +113,26 @@ internal static class Utils
     }
 
     /// <summary>
-    ///     Appends a chat-colored (green) formatted time: <c>{green}01:05.500{white}</c>.
+    ///     A value in chat green, then back to white.
     /// </summary>
-    public static void AppendColoredTime(ref Utf16ValueStringBuilder sb, float time, bool precise = true)
-    {
-        sb.Append(ChatColor.LightGreen);
-        FormatTime(ref sb, time, precise);
-        sb.Append(ChatColor.White);
-    }
+    public static string Highlight<T>(T value)
+        => ZString.Concat(ChatColor.LightGreen, value, ChatColor.White);
 
     /// <summary>
-    ///     Appends a signed chat-colored time delta: red <c>+</c> when losing time,
+    ///     A chat-colored (green) formatted time: <c>{green}01:05.500{white}</c>.
+    /// </summary>
+    public static string ColoredTime(float time, bool precise = true)
+        => Highlight(FormatTime(time, precise));
+
+    /// <summary>
+    ///     A signed chat-colored time delta: red <c>+</c> when losing time,
     ///     green <c>-</c> when ahead, followed by |delta| and a reset to white.
     /// </summary>
-    public static void AppendSignedDelta(ref Utf16ValueStringBuilder sb, float delta, bool precise = true)
-    {
-        if (delta >= 0f)
-        {
-            sb.Append(ChatColor.Red);
-            sb.Append('+');
-        }
-        else
-        {
-            sb.Append(ChatColor.LightGreen);
-            sb.Append('-');
-        }
-
-        FormatTime(ref sb, MathF.Abs(delta), precise);
-        sb.Append(ChatColor.White);
-    }
+    public static string SignedDelta(float delta, bool precise = true)
+        => ZString.Concat(delta >= 0f ? ChatColor.Red : ChatColor.LightGreen,
+                          delta >= 0f ? '+' : '-',
+                          FormatTime(MathF.Abs(delta), precise),
+                          ChatColor.White);
 
     private static void AppendPadded2(ref Utf16ValueStringBuilder sb, int value)
     {

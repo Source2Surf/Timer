@@ -16,14 +16,12 @@
  */
 
 using System;
-using System.Threading.Tasks;
-using Cysharp.Text;
-using Microsoft.Extensions.Logging;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Utilities;
 
@@ -46,13 +44,14 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
         var stage = command.TryGetArg<byte>(1, out var s) ? s : 0;
 
         if (stage < 1)
         {
-            controller.PrintToChat("Usage: !swr <stage>");
+            controller.PrintToChat(tr[ChatTexts.UsageSwr]);
             return ECommandAction.Handled;
         }
 
@@ -60,28 +59,11 @@ internal partial class RecordModule
 
         if (wr is null)
         {
-            controller.PrintToChat($"No WR found for stage {stage}.");
+            controller.PrintToChat(tr.Format(ChatTexts.SrStageNone, stage));
             return ECommandAction.Handled;
         }
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("Stage ");
-            sb.Append(stage);
-            sb.Append(" WR: ");
-            Utils.AppendColoredTime(ref sb, wr.Time);
-            sb.Append(" by ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(wr.PlayerName);
-            sb.Append(ChatColor.White);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.SrStage, stage, Utils.ColoredTime(wr.Time), Utils.Highlight(wr.PlayerName)));
 
         return ECommandAction.Handled;
     }
@@ -93,13 +75,14 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr         = _localization.For(slot);
         var (style, _) = GetStyleTrack(slot);
 
         var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
         if (bonus < 1)
         {
-            controller.PrintToChat("Usage: !btop [bonus]");
+            controller.PrintToChat(tr[ChatTexts.UsageBtop]);
             return ECommandAction.Handled;
         }
 
@@ -107,35 +90,19 @@ internal partial class RecordModule
 
         if (records.Count == 0)
         {
-            controller.PrintToChat($"No records found for bonus {bonus}.");
+            controller.PrintToChat(tr.Format(ChatTexts.TopBonusNone, bonus));
             return ECommandAction.Handled;
         }
 
-        controller.PrintToChat($"Top records for Bonus {bonus}:");
+        controller.PrintToChat(tr.Format(ChatTexts.TopBonus, bonus));
 
         var count = Math.Min(records.Count, 10);
 
         for (var i = 0; i < count; i++)
         {
             var rec = records[i];
-            var sb  = ZString.CreateStringBuilder(true);
-            try
-            {
-                sb.Append('#');
-                sb.Append(i + 1);
-                sb.Append(": ");
-                Utils.AppendColoredTime(ref sb, rec.Time);
-                sb.Append(" - ");
-                sb.Append(ChatColor.LightGreen);
-                sb.Append(rec.PlayerName);
-                sb.Append(ChatColor.White);
 
-                controller.PrintToChat(sb.ToString());
-            }
-            finally
-            {
-                sb.Dispose();
-            }
+            controller.PrintToChat(tr.Format(ChatTexts.TopRow, i + 1, Utils.ColoredTime(rec.Time), Utils.Highlight(rec.PlayerName)));
         }
 
         return ECommandAction.Handled;
@@ -148,13 +115,14 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr         = _localization.For(slot);
         var (style, _) = GetStyleTrack(slot);
 
         var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
         if (bonus < 1)
         {
-            controller.PrintToChat("Usage: !bwr [bonus]");
+            controller.PrintToChat(tr[ChatTexts.UsageBwr]);
             return ECommandAction.Handled;
         }
 
@@ -162,28 +130,11 @@ internal partial class RecordModule
 
         if (wr is null)
         {
-            controller.PrintToChat($"No WR found for bonus {bonus}.");
+            controller.PrintToChat(tr.Format(ChatTexts.SrBonusNone, bonus));
             return ECommandAction.Handled;
         }
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("Bonus ");
-            sb.Append(bonus);
-            sb.Append(" WR: ");
-            Utils.AppendColoredTime(ref sb, wr.Time);
-            sb.Append(" by ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(wr.PlayerName);
-            sb.Append(ChatColor.White);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.SrBonus, bonus, Utils.ColoredTime(wr.Time), Utils.Highlight(wr.PlayerName)));
 
         return ECommandAction.Handled;
     }
@@ -195,13 +146,14 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr         = _localization.For(slot);
         var (style, _) = GetStyleTrack(slot);
 
         var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
         if (bonus < 1 || bonus >= TimerConstants.MAX_TRACK)
         {
-            controller.PrintToChat("Usage: !bpb [bonus]");
+            controller.PrintToChat(tr[ChatTexts.UsageBpb]);
             return ECommandAction.Handled;
         }
 
@@ -209,32 +161,14 @@ internal partial class RecordModule
 
         if (pb is null)
         {
-            controller.PrintToChat($"No PB found for bonus {bonus}.");
+            controller.PrintToChat(tr.Format(ChatTexts.PbBonusNone, bonus));
             return ECommandAction.Handled;
         }
 
         var records = _mapCache.GetRecords(style, bonus);
         var rank    = _mapCache.GetRankForTime(style, bonus, pb.Time);
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("Bonus ");
-            sb.Append(bonus);
-            sb.Append(" PB: ");
-            Utils.AppendColoredTime(ref sb, pb.Time);
-            sb.Append(" (#");
-            sb.Append(rank);
-            sb.Append('/');
-            sb.Append(records.Count);
-            sb.Append(')');
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.PbBonus, bonus, Utils.ColoredTime(pb.Time), rank, records.Count));
 
         return ECommandAction.Handled;
     }
@@ -246,13 +180,14 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
         var stage = command.TryGetArg<byte>(1, out var s) ? s : 0;
 
         if (stage < 1)
         {
-            controller.PrintToChat("Usage: !spb <stage>");
+            controller.PrintToChat(tr[ChatTexts.UsageSpb]);
             return ECommandAction.Handled;
         }
 
@@ -260,33 +195,19 @@ internal partial class RecordModule
 
         if (pb is null)
         {
-            controller.PrintToChat($"No PB found for stage {stage}.");
+            controller.PrintToChat(tr.Format(ChatTexts.PbStageNone, stage));
             return ECommandAction.Handled;
         }
 
-        var wr = _mapCache.GetWR(style, track, stage);
+        var wr      = _mapCache.GetWR(style, track, stage);
+        var message = tr.Format(ChatTexts.PbStage, stage, Utils.ColoredTime(pb.Time));
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
+        if (wr is not null)
         {
-            sb.Append("Stage ");
-            sb.Append(stage);
-            sb.Append(" PB: ");
-            Utils.AppendColoredTime(ref sb, pb.Time);
-
-            if (wr is not null)
-            {
-                sb.Append(" (WR ");
-                Utils.AppendSignedDelta(ref sb, pb.Time - wr.Time);
-                sb.Append(')');
-            }
-
-            controller.PrintToChat(sb.ToString());
+            message += tr.Format(ChatTexts.PbVsSr, Utils.SignedDelta(pb.Time - wr.Time));
         }
-        finally
-        {
-            sb.Dispose();
-        }
+
+        controller.PrintToChat(message);
 
         return ECommandAction.Handled;
     }
@@ -308,28 +229,12 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
         var wr = GetWR(style, track);
 
-        if (wr is null)
-        {
-            controller.PrintToChat($"No WR found for this track.");
-            return ECommandAction.Handled;
-        }
-
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("WR: ");
-            Utils.AppendColoredTime(ref sb, wr.Time);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(wr is null ? tr[ChatTexts.SrNone] : tr.Format(ChatTexts.Sr, Utils.ColoredTime(wr.Time)));
 
         return ECommandAction.Handled;
     }
@@ -341,36 +246,21 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
         var pb = GetPlayerRecord(slot, style, track);
 
         if (pb is null)
         {
-            controller.PrintToChat($"No personal best found for this track.");
+            controller.PrintToChat(tr[ChatTexts.PbNone]);
             return ECommandAction.Handled;
         }
 
         var rank  = GetRankForTime(style, track, pb.Time);
         var total = GetTotalRecordCount(style, track);
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("PB: ");
-            Utils.AppendColoredTime(ref sb, pb.Time);
-            sb.Append(" (#");
-            sb.Append(rank);
-            sb.Append('/');
-            sb.Append(total);
-            sb.Append(')');
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.Pb, Utils.ColoredTime(pb.Time), rank, total));
 
         return ECommandAction.Handled;
     }
@@ -382,38 +272,21 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
         var pb = GetPlayerRecord(slot, style, track);
 
         if (pb is null)
         {
-            controller.PrintToChat($"No record found. Complete the map first.");
+            controller.PrintToChat(tr[ChatTexts.RankNone]);
             return ECommandAction.Handled;
         }
 
         var rank  = GetRankForTime(style, track, pb.Time);
         var total = GetTotalRecordCount(style, track);
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("Rank: ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append('#');
-            sb.Append(rank);
-            sb.Append(ChatColor.White);
-            sb.Append('/');
-            sb.Append(total);
-            sb.Append(" | PB: ");
-            Utils.AppendColoredTime(ref sb, pb.Time);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.Rank, Utils.Highlight(rank), total, Utils.ColoredTime(pb.Time)));
 
         return ECommandAction.Handled;
     }
@@ -425,33 +298,20 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
         var wr = GetWR(style, track);
 
         if (wr is null)
         {
-            controller.PrintToChat($"No records found for this track.");
+            controller.PrintToChat(tr[ChatTexts.TopNone]);
             return ECommandAction.Handled;
         }
 
         var total = GetTotalRecordCount(style, track);
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("#1: ");
-            Utils.AppendColoredTime(ref sb, wr.Time);
-            sb.Append(" (");
-            sb.Append(total);
-            sb.Append(" records)");
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.Top, Utils.ColoredTime(wr.Time), total));
 
         return ECommandAction.Handled;
     }
@@ -463,13 +323,14 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
         var pb = GetPlayerRecord(slot, style, track);
 
         if (pb is null)
         {
-            controller.PrintToChat("No personal best found for this track.");
+            controller.PrintToChat(tr[ChatTexts.PbNone]);
             return ECommandAction.Handled;
         }
 
@@ -477,7 +338,7 @@ internal partial class RecordModule
 
         if (wrCheckpoints is not { Count: > 0 })
         {
-            controller.PrintToChat("No WR checkpoints available.");
+            controller.PrintToChat(tr[ChatTexts.CprNoSr]);
             return ECommandAction.Handled;
         }
 
@@ -487,36 +348,22 @@ internal partial class RecordModule
                              {
                                  if (pbCheckpoints.Count == 0)
                                  {
-                                     ctrl.PrintToChat("No checkpoint data for your PB.");
+                                     ctrl.PrintToChat(tr[ChatTexts.CprNoPb]);
 
                                      return;
                                  }
 
                                  var count = Math.Min(pbCheckpoints.Count, wrCheckpoints.Count);
 
-                                 ctrl.PrintToChat("PB vs WR checkpoints:");
+                                 ctrl.PrintToChat(tr[ChatTexts.CprTitle]);
 
                                  for (var i = 0; i < count; i++)
                                  {
                                      var pbCp = pbCheckpoints[i];
                                      var wrCp = wrCheckpoints[i];
 
-                                     var sb = ZString.CreateStringBuilder(true);
-                                     try
-                                     {
-                                         sb.Append("CP");
-                                         sb.Append(i + 1);
-                                         sb.Append(": ");
-                                         Utils.AppendColoredTime(ref sb, pbCp.Time);
-                                         sb.Append(" | WR ");
-                                         Utils.AppendSignedDelta(ref sb, pbCp.Time - wrCp.Time);
-
-                                         ctrl.PrintToChat(sb.ToString());
-                                     }
-                                     finally
-                                     {
-                                         sb.Dispose();
-                                     }
+                                     ctrl.PrintToChat(tr.Format(ChatTexts.Checkpoint, i + 1, Utils.ColoredTime(pbCp.Time))
+                                                      + tr.Format(ChatTexts.VsSr, Utils.SignedDelta(pbCp.Time - wrCp.Time)));
                                  }
 
                                  // Final time diff
@@ -525,20 +372,8 @@ internal partial class RecordModule
                                      return;
                                  }
 
-                                 var sb2 = ZString.CreateStringBuilder(true);
-                                 try
-                                 {
-                                     sb2.Append("Final: ");
-                                     Utils.AppendColoredTime(ref sb2, pb.Time);
-                                     sb2.Append(" | WR ");
-                                     Utils.AppendSignedDelta(ref sb2, pb.Time - wr.Time);
-
-                                     ctrl.PrintToChat(sb2.ToString());
-                                 }
-                                 finally
-                                 {
-                                     sb2.Dispose();
-                                 }
+                                 ctrl.PrintToChat(tr.Format(ChatTexts.CprFinal, Utils.ColoredTime(pb.Time))
+                                                  + tr.Format(ChatTexts.VsSr, Utils.SignedDelta(pb.Time - wr.Time)));
                              });
 
         return ECommandAction.Handled;
@@ -551,6 +386,7 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        var tr      = _localization.For(slot);
         var mapName = _bridge.CurrentMapName;
         var steamId = client.SteamId;
 
@@ -560,37 +396,21 @@ internal partial class RecordModule
                              {
                                  if (records.Count == 0)
                                  {
-                                     ctrl.PrintToChat("No recent records.");
+                                     ctrl.PrintToChat(tr[ChatTexts.RecentNone]);
 
                                      return;
                                  }
 
-                                 ctrl.PrintToChat("Recent records:");
+                                 ctrl.PrintToChat(tr[ChatTexts.RecentTitle]);
 
                                  foreach (var record in records)
                                  {
-                                     var sb = ZString.CreateStringBuilder(true);
-                                     try
-                                     {
-                                         Utils.AppendColoredTime(ref sb, record.Time);
+                                     var time = Utils.ColoredTime(record.Time);
+                                     var date = string.Concat(ChatColor.Grey, record.RunDate.ToString("MM-dd HH:mm"), ChatColor.White);
 
-                                         if (record.Track > 0)
-                                         {
-                                             sb.Append(" B");
-                                             sb.Append(record.Track);
-                                         }
-
-                                         sb.Append(" | ");
-                                         sb.Append(ChatColor.Grey);
-                                         sb.Append(record.RunDate.ToString("MM-dd HH:mm"));
-                                         sb.Append(ChatColor.White);
-
-                                         ctrl.PrintToChat(sb.ToString());
-                                     }
-                                     finally
-                                     {
-                                         sb.Dispose();
-                                     }
+                                     ctrl.PrintToChat(record.Track > 0
+                                                          ? tr.Format(ChatTexts.RecentRowBonus, time, record.Track, date)
+                                                          : tr.Format(ChatTexts.RecentRow, time, date));
                                  }
                              });
 

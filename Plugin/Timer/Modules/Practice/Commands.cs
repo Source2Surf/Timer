@@ -24,6 +24,7 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 
 namespace Source2Surf.Timer.Modules.Practice;
 
@@ -123,7 +124,7 @@ internal sealed partial class PracticeManager
 
         if (!command.TryGetArg<int>(1, out var n) || n < 1)
         {
-            controller.PrintToChat("Usage: !tele <n>  (1-based loc index)");
+            controller.PrintToChat(_localization.For(slot)[ChatTexts.UsageTele]);
 
             return ECommandAction.Handled;
         }
@@ -161,32 +162,18 @@ internal sealed partial class PracticeManager
             return ECommandAction.Handled;
         }
 
+        var tr   = _localization.For(slot);
         var locs = _locs[slot];
 
         if (locs is null || locs.Count == 0)
         {
-            controller.PrintToChat("No saved locations.");
+            controller.PrintToChat(tr[ChatTexts.LocNone]);
             return ECommandAction.Handled;
         }
 
         var cursor = _cursor[slot];
 
-        var sb = ZString.CreateStringBuilder(true);
-
-        try
-        {
-            sb.Append("Saved locations: ");
-            sb.Append(locs.Count);
-            sb.Append(" (current #");
-            sb.Append(cursor + 1);
-            sb.Append(')');
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.LocList, locs.Count, cursor + 1));
 
         // Show the most recent few entries so chat doesn't get spammed.
         var start = locs.Count > 5 ? locs.Count - 5 : 0;
@@ -195,33 +182,9 @@ internal sealed partial class PracticeManager
         {
             var loc = locs[i];
 
-            var line = ZString.CreateStringBuilder(true);
-
-            try
-            {
-                line.Append('#');
-                line.Append(i + 1);
-                line.Append(": track ");
-                line.Append(loc.Track);
-
-                if (loc.Segmented)
-                {
-                    line.Append(ChatColor.Grey);
-                    line.Append(" (segmented)");
-                    line.Append(ChatColor.White);
-                }
-
-                if (i == cursor)
-                {
-                    line.Append(" <- current");
-                }
-
-                controller.PrintToChat(line.ToString());
-            }
-            finally
-            {
-                line.Dispose();
-            }
+            controller.PrintToChat(ZString.Concat(tr.Format(ChatTexts.LocListRow, i + 1, tr.Track(loc.Track)),
+                                                  loc.Segmented ? ZString.Concat(ChatColor.Grey, tr[ChatTexts.LocListSegmented], ChatColor.White) : "",
+                                                  i == cursor ? tr[ChatTexts.LocListCurrent] : ""));
         }
 
         return ECommandAction.Handled;

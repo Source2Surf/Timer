@@ -63,7 +63,7 @@ internal partial class HudModule
                 OpenProfile(p, slot);
             }
         }
-        else if (FindPlayer(name, out var target) is { } problem)
+        else if (FindPlayer(p, name, out var target) is { } problem)
         {
             if (_bridge.TryGetController(slot, out var controller))
             {
@@ -84,7 +84,7 @@ internal partial class HudModule
     ///     The player on the server called <paramref name="name" />: an exact match (ignoring case), else the only
     ///     one whose name contains it. Returns why there's none, or null.
     /// </summary>
-    private string? FindPlayer(string name, out PlayerSlot found)
+    private string? FindPlayer(HudPlayer p, string name, out PlayerSlot found)
     {
         found = default;
         var matches = 0;
@@ -113,8 +113,8 @@ internal partial class HudModule
         return matches switch
         {
             1 => null,
-            0 => ZString.Concat("No player named \"", name, "\" is on the server."),
-            _ => ZString.Concat("More than one player matches \"", name, "\"."),
+            0 => p.Tr.Format(HudTexts.FindNone, name),
+            _ => p.Tr.Format(HudTexts.FindMany, name),
         };
     }
 

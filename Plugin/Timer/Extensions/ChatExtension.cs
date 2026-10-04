@@ -15,10 +15,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-using Sharp.Shared;
+using System;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
+using Sharp.Shared.Managers;
+using Sharp.Shared.Objects;
+using Sharp.Shared.Units;
+using Source2Surf.Timer.Managers.Localization;
+using Source2Surf.Timer.Shared.Interfaces;
 
 namespace Source2Surf.Timer.Extensions;
 
@@ -32,6 +37,26 @@ internal static class ChatExtension
     public static void PrintToChat(this IPlayerPawn pawn, string msg)
         => pawn.Print(HudPrintChannel.Chat, $"{Tag}{msg}");
 
-    public static void PrintToChatWithPrefix(this IModSharp sharp, string msg)
-        => sharp.PrintToChatAll($"{Tag}{msg}");
+    public static void PrintToChat(this IGameClient client, string msg)
+        => client.Print(HudPrintChannel.Chat, $"{Tag}{msg}");
+
+    /// <summary>
+    ///     The chat texts the player in <paramref name="slot" /> reads.
+    /// </summary>
+    public static ChatTr For(this ILocalizationProvider localization, PlayerSlot slot)
+        => new (localization, slot);
+
+    /// <summary>
+    ///     A message to every player, each in their own language.
+    /// </summary>
+    public static void PrintToChatAll(this IClientManager clients, ILocalizationProvider localization, Func<ChatTr, string> message)
+    {
+        foreach (var client in clients.GetGameClients(true))
+        {
+            if (!client.IsFakeClient && !client.IsHltv)
+            {
+                client.PrintToChat(message(localization.For(client.Slot)));
+            }
+        }
+    }
 }

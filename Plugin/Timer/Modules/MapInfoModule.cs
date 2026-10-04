@@ -20,7 +20,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Cysharp.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Definition;
@@ -30,6 +29,7 @@ using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Configuration;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Modules.MapInfo;
 using Source2Surf.Timer.Utilities;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -64,6 +64,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     private readonly IRequestManager _requestManager;
     private readonly ICommandManager _commandManager;
     private readonly ScoreWriteMode _scoreWriteMode;
+    private readonly ILocalizationProvider _localization;
 
     private readonly ILogger<MapInfoModule>          _logger;
     private readonly TaskTracker                     _taskTracker;
@@ -133,12 +134,14 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
                          IRequestManager        requestManager,
                          ICommandManager        commandManager,
                          ScoreWriteModeOptions  scoreWriteMode,
+                         ILocalizationProvider  localization,
                          ILogger<MapInfoModule> logger)
     {
         _bridge         = bridge;
         _requestManager = requestManager;
         _commandManager = commandManager;
         _scoreWriteMode = scoreWriteMode.Mode;
+        _localization   = localization;
         _logger         = logger;
         _taskTracker    = new TaskTracker(logger);
 
@@ -294,21 +297,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             return ECommandAction.Handled;
         }
 
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append(_bridge.CurrentMapName);
-            sb.Append(" | Tier: ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(_currentMapProfileInfo.Tier[0]);
-            sb.Append(ChatColor.White);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(_localization.For(slot).Format(ChatTexts.MapTier, _bridge.CurrentMapName, Utils.Highlight(_currentMapProfileInfo.Tier[0])));
 
         return ECommandAction.Handled;
     }
@@ -320,6 +309,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             return ECommandAction.Handled;
         }
 
+        var tr             = _localization.For(slot);
         var steamId        = client.SteamId;
         var mapName        = _bridge.CurrentMapName;
         var currentSession = _recordModule.GetSessionTime(slot);
@@ -331,46 +321,21 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
                                  var (dbPlayTime, playCount) = stats;
                                  var totalTime               = dbPlayTime + currentSession;
 
-                                 var sb = ZString.CreateStringBuilder(true);
-                                 try
-                                 {
-                                     sb.Append("Playtime on ");
-                                     sb.Append(ChatColor.LightGreen);
-                                     sb.Append(mapName);
-                                     sb.Append(ChatColor.White);
-                                     sb.Append(": ");
-                                     sb.Append(ChatColor.LightGreen);
-                                     AppendPlaytime(ref sb, totalTime);
-                                     sb.Append(ChatColor.White);
-                                     sb.Append(" | Plays: ");
-                                     sb.Append(ChatColor.LightGreen);
-                                     sb.Append(playCount + 1);
-                                     sb.Append(ChatColor.White);
-
-                                     ctrl.PrintToChat(sb.ToString());
-                                 }
-                                 finally
-                                 {
-                                     sb.Dispose();
-                                 }
+                                 ctrl.PrintToChat(tr.Format(ChatTexts.MapPlaytime,
+                                                            Utils.Highlight(mapName),
+                                                            Utils.Highlight(Playtime(tr, totalTime)),
+                                                            Utils.Highlight(playCount + 1)));
                              });
 
         return ECommandAction.Handled;
     }
 
-    private static void AppendPlaytime(ref Utf16ValueStringBuilder sb, float totalSeconds)
+    private static string Playtime(ChatTr tr, float totalSeconds)
     {
         var hours   = (int) (totalSeconds / 3600f);
         var minutes = (int) ((totalSeconds % 3600f) / 60f);
 
-        if (hours > 0)
-        {
-            sb.Append(hours);
-            sb.Append("h ");
-        }
-
-        sb.Append(minutes);
-        sb.Append("m");
+        return hours > 0 ? tr.Format(ChatTexts.Hours, hours, minutes) : tr.Format(ChatTexts.Minutes, minutes);
     }
 
     private ECommandAction OnCommandMapInfo(PlayerSlot slot, StringCommand command)
@@ -381,129 +346,54 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             return ECommandAction.Handled;
         }
 
+        var tr       = _localization.For(slot);
         var profile  = _currentMapProfileInfo;
         var gameMode = _currentGameMode;
 
         // Line 1: Map name, tier, mode
-        var sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(_bridge.CurrentMapName);
-            sb.Append(ChatColor.White);
-            sb.Append(" | Tier: ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(profile.Tier[0]);
-            sb.Append(ChatColor.White);
-            sb.Append(" | Mode: ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(gameMode);
-            sb.Append(ChatColor.White);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.MapInfo,
+                                         Utils.Highlight(_bridge.CurrentMapName),
+                                         Utils.Highlight(profile.Tier[0]),
+                                         Utils.Highlight(gameMode)));
 
         // Line 2: Track layout — stages, checkpoints, bonuses, linear
-        sb = ZString.CreateStringBuilder(true);
-        try
+        var totalStages      = _zoneModule.GetTotalStages(0);
+        var totalCheckpoints = _zoneModule.GetCurrentTrackCheckpointCount(0);
+        var isLinear         = _zoneModule.IsCurrentTrackLinear(0);
+
+        var layout = tr.Format(ChatTexts.MapType, Utils.Highlight(tr[isLinear ? ChatTexts.MapLinear : ChatTexts.MapStaged]));
+
+        if (totalStages > 0)
         {
-            var totalStages      = _zoneModule.GetTotalStages(0);
-            var totalCheckpoints = _zoneModule.GetCurrentTrackCheckpointCount(0);
-            var isLinear         = _zoneModule.IsCurrentTrackLinear(0);
-
-            sb.Append("Type: ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(isLinear ? "Linear" : "Staged");
-            sb.Append(ChatColor.White);
-
-            if (totalStages > 0)
-            {
-                sb.Append(" | Stages: ");
-                sb.Append(ChatColor.LightGreen);
-                sb.Append(totalStages);
-                sb.Append(ChatColor.White);
-            }
-
-            if (totalCheckpoints > 0)
-            {
-                sb.Append(" | Checkpoints: ");
-                sb.Append(ChatColor.LightGreen);
-                sb.Append(totalCheckpoints);
-                sb.Append(ChatColor.White);
-            }
-
-            if (profile.Bonuses > 0)
-            {
-                sb.Append(" | Bonuses: ");
-                sb.Append(ChatColor.LightGreen);
-                sb.Append(profile.Bonuses);
-                sb.Append(ChatColor.White);
-            }
-
-            controller.PrintToChat(sb.ToString());
+            layout += tr.Format(ChatTexts.MapStages, Utils.Highlight(totalStages));
         }
-        finally
+
+        if (totalCheckpoints > 0)
         {
-            sb.Dispose();
+            layout += tr.Format(ChatTexts.MapCheckpoints, Utils.Highlight(totalCheckpoints));
         }
+
+        if (profile.Bonuses > 0)
+        {
+            layout += tr.Format(ChatTexts.MapBonuses, Utils.Highlight(profile.Bonuses));
+        }
+
+        controller.PrintToChat(layout);
 
         // Line 3: WR and completions
-        sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            var wr    = _recordModule.GetWR(0, 0);
-            var total = _recordModule.GetTotalRecordCount(0, 0);
+        var wr    = _recordModule.GetWR(0, 0);
+        var total = _recordModule.GetTotalRecordCount(0, 0);
 
-            sb.Append("WR: ");
-
-            if (wr is not null)
-            {
-                sb.Append(ChatColor.LightGreen);
-                Utils.FormatTime(ref sb, wr.Time, true);
-                sb.Append(ChatColor.White);
-            }
-            else
-            {
-                sb.Append(ChatColor.Red);
-                sb.Append("None");
-                sb.Append(ChatColor.White);
-            }
-
-            sb.Append(" | Completions: ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(total);
-            sb.Append(ChatColor.White);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.MapSr,
+                                         wr is not null
+                                             ? Utils.ColoredTime(wr.Time)
+                                             : string.Concat(ChatColor.Red, tr[ChatTexts.MapNoSr], ChatColor.White),
+                                         Utils.Highlight(total)));
 
         // Line 4: Play count and total play time
-        sb = ZString.CreateStringBuilder(true);
-        try
-        {
-            sb.Append("Played: ");
-            sb.Append(ChatColor.LightGreen);
-            sb.Append(profile.PlayCount);
-            sb.Append(ChatColor.White);
-            sb.Append(" times | Total: ");
-            sb.Append(ChatColor.LightGreen);
-            AppendPlaytime(ref sb, profile.TotalPlayTime);
-            sb.Append(ChatColor.White);
-
-            controller.PrintToChat(sb.ToString());
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        controller.PrintToChat(tr.Format(ChatTexts.MapPlayed,
+                                         Utils.Highlight(profile.PlayCount),
+                                         Utils.Highlight(Playtime(tr, profile.TotalPlayTime))));
 
         return ECommandAction.Handled;
     }

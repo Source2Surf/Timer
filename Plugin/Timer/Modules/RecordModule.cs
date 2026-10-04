@@ -29,6 +29,7 @@ using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Modules.Practice;
@@ -84,6 +85,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     private readonly IRequestManager       _request;
     private readonly IMapInfoModule        _mapInfo;
     private readonly IPracticeModule       _practiceModule;
+    private readonly ILocalizationProvider _localization;
     private readonly ScoreWriteMode         _scoreWriteMode;
     private readonly ILogger<RecordModule> _logger;
 
@@ -111,6 +113,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                         ScoreWriteModeOptions scoreWriteMode,
                         IConfiguration        configuration,
                         RunSubmissionSender   remoteSubmissionSender,
+                        ILocalizationProvider localization,
                         ILogger<RecordModule> logger)
     {
         _bridge         = bridge;
@@ -121,6 +124,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         _commandManager = commandManager;
         _mapInfo        = mapInfoModule;
         _practiceModule = practiceModule;
+        _localization   = localization;
         _scoreWriteMode = scoreWriteMode.Mode;
         _logger         = logger;
 
@@ -136,6 +140,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                                        scoreWriteMode,
                                        RemoteRunSubmissionOptions.FromConfiguration(configuration, scoreWriteMode),
                                        remoteSubmissionSender,
+                                       localization,
                                        logger);
         _taskTracker = new TaskTracker(logger);
     }
@@ -306,7 +311,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
         if (_practiceModule.IsInPractice(slot))
         {
-            controller.PrintToChat("Practice run — not saved.");
+            controller.PrintToChat(_localization.For(slot)[ChatTexts.PracticeRun]);
             return;
         }
 

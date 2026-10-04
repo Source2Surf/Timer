@@ -184,8 +184,8 @@
     "zh-cn": "#{0}"
   },
   "hud.rank_of": {
-    "en-us": "#{0} of {1}",
-    "zh-cn": "第 {0} 名 / 共 {1}"
+    "en-us": "#{0}/{1}",
+    "zh-cn": "#{0}/{1}"
   },
   "hud.loading": {
     "en-us": "Loading…",
@@ -424,8 +424,8 @@
     "zh-cn": "播放"
   },
   "pf.rank": {
-    "en-us": "#{0} of {1} · {2} points",
-    "zh-cn": "第 {0} 名 / 共 {1} · {2} 分"
+    "en-us": "#{0}/{1} · {2} points",
+    "zh-cn": "#{0}/{1} · {2} 分"
   },
   "pf.points": {
     "en-us": "{0} points",
@@ -482,6 +482,14 @@
   "pf.duration.hours": {
     "en-us": "{0} h",
     "zh-cn": "{0} 小时"
+  },
+  "pf.find.none": {
+    "en-us": "No player named \"{0}\" is on the server.",
+    "zh-cn": "服务器上没有名为“{0}”的玩家。"
+  },
+  "pf.find.many": {
+    "en-us": "More than one player matches \"{0}\".",
+    "zh-cn": "有多名玩家匹配“{0}”。"
   },
   "ui.close": {
     "en-us": "Close",
@@ -1150,5 +1158,365 @@
   "hud.nominate.closed": {
     "en-us": "Nominations are closed.",
     "zh-cn": "提名已关闭。"
+  },
+  "chat.track.main": {
+    "en-us": "Main",
+    "zh-cn": "主线"
+  },
+  "chat.track.bonus": {
+    "en-us": "Bonus {0}",
+    "zh-cn": "奖励关 {0}"
+  },
+  "chat.track.stage": {
+    "en-us": "Stage {0}",
+    "zh-cn": "关卡 {0}"
+  },
+  "chat.track.bonus_stage": {
+    "en-us": "Bonus {0} Stage {1}",
+    "zh-cn": "奖励关 {0} 关卡 {1}"
+  },
+  "chat.checkpoint": {
+    "en-us": "CP{0}: {1}",
+    "zh-cn": "检查点 {0}：{1}"
+  },
+  "chat.vs_sr": {
+    "en-us": " | SR {0}",
+    "zh-cn": " | SR {0}"
+  },
+  "chat.duration.hours": {
+    "en-us": "{0}h {1}m",
+    "zh-cn": "{0} 小时 {1} 分钟"
+  },
+  "chat.duration.minutes": {
+    "en-us": "{0}m",
+    "zh-cn": "{0} 分钟"
+  },
+  "chat.finish": {
+    "en-us": "{0} finished {1} - {2} in {3}",
+    "zh-cn": "{0} 完成了 {1} - {2}，用时 {3}"
+  },
+  "chat.finish.sr": {
+    "en-us": "New SR!",
+    "zh-cn": "新服务器纪录！"
+  },
+  "chat.finish.vs_sr": {
+    "en-us": " (SR {0})",
+    "zh-cn": "（SR {0}）"
+  },
+  "chat.finish.vs_pb": {
+    "en-us": " (PB {0})",
+    "zh-cn": "（PB {0}）"
+  },
+  "chat.finish.rank": {
+    "en-us": " #{0}/{1}",
+    "zh-cn": " #{0}/{1}"
+  },
+  "chat.record.practice": {
+    "en-us": "Practice run — not saved.",
+    "zh-cn": "练习模式的成绩不会保存。"
+  },
+  "chat.save.queue_full": {
+    "en-us": "Remote submission queue is full; this run was not queued.",
+    "zh-cn": "远程提交队列已满，本次成绩未能提交。"
+  },
+  "chat.save.not_queued": {
+    "en-us": "Remote submission could not be queued; this run was not queued.",
+    "zh-cn": "远程提交无法排队，本次成绩未能提交。"
+  },
+  "chat.save.rejected": {
+    "en-us": "Remote backend rejected this run; no record result was published.",
+    "zh-cn": "远程服务器拒绝了本次成绩，纪录结果未公布。"
+  },
+  "chat.save.unconfirmed": {
+    "en-us": "Remote score result was not confirmed; no record result was published.",
+    "zh-cn": "远程成绩结果未得到确认，纪录结果未公布。"
+  },
+  "chat.save.failed": {
+    "en-us": "Your {0} wasn't saved ({1}): the server couldn't write it to the database. Please tell an admin.",
+    "zh-cn": "你的{0}没有保存（{1}）：服务器无法将其写入数据库。请告知管理员。"
+  },
+  "chat.save.run": {
+    "en-us": "run",
+    "zh-cn": "成绩"
+  },
+  "chat.save.run_bonus": {
+    "en-us": "bonus {0} run",
+    "zh-cn": "奖励关 {0} 成绩"
+  },
+  "chat.save.run_stage": {
+    "en-us": "stage {0} run",
+    "zh-cn": "关卡 {0} 成绩"
+  },
+  "chat.timer.missing_stages": {
+    "en-us": "Missing stages, stopping timer",
+    "zh-cn": "跳过了关卡，计时已停止"
+  },
+  "chat.timer.missing_checkpoints": {
+    "en-us": "Timer stopped: missing checkpoints",
+    "zh-cn": "计时已停止：跳过了检查点"
+  },
+  "chat.timer.unverified": {
+    "en-us": "Your Steam account has not been verified yet. The server may not be connected to Steam. Please wait and try again.",
+    "zh-cn": "你的 Steam 账号尚未通过验证，服务器可能没有连接到 Steam。请稍后再试。"
+  },
+  "chat.usage.swr": {
+    "en-us": "Usage: !swr <stage>",
+    "zh-cn": "用法：!swr <关卡>"
+  },
+  "chat.usage.spb": {
+    "en-us": "Usage: !spb <stage>",
+    "zh-cn": "用法：!spb <关卡>"
+  },
+  "chat.usage.btop": {
+    "en-us": "Usage: !btop [bonus]",
+    "zh-cn": "用法：!btop [奖励关]"
+  },
+  "chat.usage.bwr": {
+    "en-us": "Usage: !bwr [bonus]",
+    "zh-cn": "用法：!bwr [奖励关]"
+  },
+  "chat.usage.bpb": {
+    "en-us": "Usage: !bpb [bonus]",
+    "zh-cn": "用法：!bpb [奖励关]"
+  },
+  "chat.sr": {
+    "en-us": "SR: {0}",
+    "zh-cn": "SR：{0}"
+  },
+  "chat.sr.none": {
+    "en-us": "No SR found for this track.",
+    "zh-cn": "这条路线还没有 SR。"
+  },
+  "chat.sr.stage": {
+    "en-us": "Stage {0} SR: {1} by {2}",
+    "zh-cn": "关卡 {0} SR：{1}，保持者 {2}"
+  },
+  "chat.sr.stage_none": {
+    "en-us": "No SR found for stage {0}.",
+    "zh-cn": "关卡 {0} 还没有 SR。"
+  },
+  "chat.sr.bonus": {
+    "en-us": "Bonus {0} SR: {1} by {2}",
+    "zh-cn": "奖励关 {0} SR：{1}，保持者 {2}"
+  },
+  "chat.sr.bonus_none": {
+    "en-us": "No SR found for bonus {0}.",
+    "zh-cn": "奖励关 {0} 还没有 SR。"
+  },
+  "chat.pb": {
+    "en-us": "PB: {0} (#{1}/{2})",
+    "zh-cn": "PB：{0}（#{1}/{2}）"
+  },
+  "chat.pb.none": {
+    "en-us": "No personal best found for this track.",
+    "zh-cn": "你在这条路线还没有个人最佳。"
+  },
+  "chat.pb.stage": {
+    "en-us": "Stage {0} PB: {1}",
+    "zh-cn": "关卡 {0} PB：{1}"
+  },
+  "chat.pb.stage_none": {
+    "en-us": "No PB found for stage {0}.",
+    "zh-cn": "你在关卡 {0} 还没有 PB。"
+  },
+  "chat.pb.vs_sr": {
+    "en-us": " (SR {0})",
+    "zh-cn": "（SR {0}）"
+  },
+  "chat.pb.bonus": {
+    "en-us": "Bonus {0} PB: {1} (#{2}/{3})",
+    "zh-cn": "奖励关 {0} PB：{1}（#{2}/{3}）"
+  },
+  "chat.pb.bonus_none": {
+    "en-us": "No PB found for bonus {0}.",
+    "zh-cn": "你在奖励关 {0} 还没有 PB。"
+  },
+  "chat.rank": {
+    "en-us": "Rank: #{0}/{1} | PB: {2}",
+    "zh-cn": "排名：#{0}/{1} | PB：{2}"
+  },
+  "chat.rank.none": {
+    "en-us": "No record found. Complete the map first.",
+    "zh-cn": "还没有成绩，请先完成地图。"
+  },
+  "chat.top": {
+    "en-us": "#1: {0} ({1} records)",
+    "zh-cn": "#1：{0}（共 {1} 个成绩）"
+  },
+  "chat.top.none": {
+    "en-us": "No records found for this track.",
+    "zh-cn": "这条路线还没有成绩。"
+  },
+  "chat.top.row": {
+    "en-us": "#{0}: {1} - {2}",
+    "zh-cn": "#{0}：{1} - {2}"
+  },
+  "chat.top.bonus": {
+    "en-us": "Top records for Bonus {0}:",
+    "zh-cn": "奖励关 {0} 排行榜："
+  },
+  "chat.top.bonus_none": {
+    "en-us": "No records found for bonus {0}.",
+    "zh-cn": "奖励关 {0} 还没有成绩。"
+  },
+  "chat.cpr.title": {
+    "en-us": "PB vs SR checkpoints:",
+    "zh-cn": "PB 与 SR 检查点对比："
+  },
+  "chat.cpr.final": {
+    "en-us": "Final: {0}",
+    "zh-cn": "最终：{0}"
+  },
+  "chat.cpr.no_sr": {
+    "en-us": "No SR checkpoints available.",
+    "zh-cn": "SR 没有检查点数据。"
+  },
+  "chat.cpr.no_pb": {
+    "en-us": "No checkpoint data for your PB.",
+    "zh-cn": "你的 PB 没有检查点数据。"
+  },
+  "chat.recent.title": {
+    "en-us": "Recent records:",
+    "zh-cn": "最近的成绩："
+  },
+  "chat.recent.none": {
+    "en-us": "No recent records.",
+    "zh-cn": "没有最近的成绩。"
+  },
+  "chat.recent.row": {
+    "en-us": "{0} | {1}",
+    "zh-cn": "{0} | {1}"
+  },
+  "chat.recent.row_bonus": {
+    "en-us": "{0} B{1} | {2}",
+    "zh-cn": "{0} 奖励关 {1} | {2}"
+  },
+  "chat.map.tier": {
+    "en-us": "{0} | Tier: {1}",
+    "zh-cn": "{0} | 难度：{1}"
+  },
+  "chat.map.playtime": {
+    "en-us": "Playtime on {0}: {1} | Plays: {2}",
+    "zh-cn": "{0} 游戏时长：{1} | 游玩次数：{2}"
+  },
+  "chat.map.info": {
+    "en-us": "{0} | Tier: {1} | Mode: {2}",
+    "zh-cn": "{0} | 难度：{1} | 玩法：{2}"
+  },
+  "chat.map.type": {
+    "en-us": "Type: {0}",
+    "zh-cn": "类型：{0}"
+  },
+  "chat.map.linear": {
+    "en-us": "Linear",
+    "zh-cn": "线性"
+  },
+  "chat.map.staged": {
+    "en-us": "Staged",
+    "zh-cn": "分关"
+  },
+  "chat.map.stages": {
+    "en-us": " | Stages: {0}",
+    "zh-cn": " | 关卡：{0}"
+  },
+  "chat.map.checkpoints": {
+    "en-us": " | Checkpoints: {0}",
+    "zh-cn": " | 检查点：{0}"
+  },
+  "chat.map.bonuses": {
+    "en-us": " | Bonuses: {0}",
+    "zh-cn": " | 奖励关：{0}"
+  },
+  "chat.map.sr": {
+    "en-us": "SR: {0} | Completions: {1}",
+    "zh-cn": "SR：{0} | 完成次数：{1}"
+  },
+  "chat.map.no_sr": {
+    "en-us": "None",
+    "zh-cn": "无"
+  },
+  "chat.map.played": {
+    "en-us": "Played: {0} times | Total: {1}",
+    "zh-cn": "游玩次数：{0} | 总时长：{1}"
+  },
+  "chat.usage.tele": {
+    "en-us": "Usage: !tele <n>  (1-based loc index)",
+    "zh-cn": "用法：!tele <n>（存点编号，从 1 开始）"
+  },
+  "chat.loc.dead": {
+    "en-us": "You must be alive to use practice commands.",
+    "zh-cn": "你必须存活才能使用练习指令。"
+  },
+  "chat.loc.noclip": {
+    "en-us": "Cannot saveloc while noclipping or spectating.",
+    "zh-cn": "穿墙或观战时无法存点。"
+  },
+  "chat.loc.save_paused": {
+    "en-us": "Cannot saveloc while the timer is paused.",
+    "zh-cn": "计时暂停时无法存点。"
+  },
+  "chat.loc.saved": {
+    "en-us": "Saved location #{0}.",
+    "zh-cn": "已保存存点 #{0}。"
+  },
+  "chat.loc.none": {
+    "en-us": "No saved locations.",
+    "zh-cn": "没有存点。"
+  },
+  "chat.loc.bad_index": {
+    "en-us": "Invalid loc index. Valid: 1..{0}",
+    "zh-cn": "存点编号无效，有效范围：1..{0}"
+  },
+  "chat.loc.tele_paused": {
+    "en-us": "Cannot teleport while the timer is paused.",
+    "zh-cn": "计时暂停时无法读点。"
+  },
+  "chat.loc.other_style": {
+    "en-us": "That location was saved on a different style.",
+    "zh-cn": "这个存点是在其他模式下保存的。"
+  },
+  "chat.loc.replay_busy": {
+    "en-us": "Saving a stage replay, try again in a moment.",
+    "zh-cn": "正在保存关卡回放，请稍后再试。"
+  },
+  "chat.loc.replay_lost": {
+    "en-us": "This location's replay is gone, so the run continues as practice.",
+    "zh-cn": "这个存点的回放已丢失，本次计时将以练习模式继续。"
+  },
+  "chat.loc.teleported": {
+    "en-us": "Teleported to loc #{0}/{1}.",
+    "zh-cn": "已读点 #{0}/{1}。"
+  },
+  "chat.loc.at_last": {
+    "en-us": "Already at the last loc.",
+    "zh-cn": "已经是最后一个存点。"
+  },
+  "chat.loc.at_first": {
+    "en-us": "Already at the first loc.",
+    "zh-cn": "已经是第一个存点。"
+  },
+  "chat.loc.cleared": {
+    "en-us": "Cleared all saved locations.",
+    "zh-cn": "已清除全部存点。"
+  },
+  "chat.loc.clear_confirm": {
+    "en-us": "Clear all {0} saved locations? Clear again within {1} seconds to confirm.",
+    "zh-cn": "要清除全部 {0} 个存点吗？请在 {1} 秒内再次清除以确认。"
+  },
+  "chat.loc.list": {
+    "en-us": "Saved locations: {0} (current #{1})",
+    "zh-cn": "存点：{0} 个（当前 #{1}）"
+  },
+  "chat.loc.list_row": {
+    "en-us": "#{0}: {1}",
+    "zh-cn": "#{0}：{1}"
+  },
+  "chat.loc.list_segmented": {
+    "en-us": " (segmented)",
+    "zh-cn": "（分段）"
+  },
+  "chat.loc.list_current": {
+    "en-us": " <- current",
+    "zh-cn": " <- 当前"
   }
 }

@@ -713,7 +713,7 @@ public sealed class HudLocaleTests
         = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(File.ReadAllText(HudAssets.Locale()))!;
 
     private static string Placeholders(string text)
-        => string.Join(",", Regex.Matches(text, @"{(d+)}").Select(m => m.Groups[1].Value).Order());
+        => string.Join(",", Regex.Matches(text, @"{(\d+)}").Select(m => m.Groups[1].Value).Order());
 
     [Fact]
     public void EveryHudTextIsInTheLocaleFileWithItsEnglish()
@@ -726,7 +726,8 @@ public sealed class HudLocaleTests
             Assert.Equal(text.English, translations["en-us"]);
         }
 
-        Assert.Empty(Locale.Keys.Except(HudTexts.All.Select(t => t.Key)).Except(global::Timer.MapChooser.ChooserTexts.All.Select(t => t.Key)));
+        Assert.Empty(Locale.Keys.Except(HudTexts.All.Select(t => t.Key)).Except(global::Timer.MapChooser.ChooserTexts.All.Select(t => t.Key))
+                                .Except(Source2Surf.Timer.Managers.Localization.ChatTexts.All.Select(t => t.Key)));
     }
 
     [Fact]
@@ -785,7 +786,7 @@ public sealed class HudLocaleTests
     [InlineData("of 2 · 50%", false)]
     [InlineData("共 2 · 50%", true)]
     [InlineData("10 次游玩", true)]
-    [InlineData("#3 of 12", false)]
+    [InlineData("#3/12", false)]
     [InlineData("", false)]
     public void TellsNotesInAFallbackScript(string note, bool cjk)
         => Assert.Equal(cjk, HudFormat.HasCjk(note));

@@ -25,6 +25,7 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -55,6 +56,7 @@ internal sealed partial class PracticeManager : IModule,
     private readonly IStyleModule               _styleModule;
     private readonly IPlayerManager             _playerManager;
     private readonly ICommandManager            _commandManager;
+    private readonly ILocalizationProvider      _localization;
     private readonly ILogger<PracticeManager>   _logger;
 
     // Resolved in OnPostInit: the recorder takes IPracticeModule in its constructor.
@@ -72,6 +74,7 @@ internal sealed partial class PracticeManager : IModule,
                            IStyleModule             styleModule,
                            IPlayerManager           playerManager,
                            ICommandManager          commandManager,
+                           ILocalizationProvider    localization,
                            ILogger<PracticeManager> logger)
     {
         _bridge         = bridge;
@@ -79,6 +82,7 @@ internal sealed partial class PracticeManager : IModule,
         _styleModule    = styleModule;
         _playerManager  = playerManager;
         _commandManager = commandManager;
+        _localization   = localization;
         _logger         = logger;
     }
 
@@ -122,13 +126,13 @@ internal sealed partial class PracticeManager : IModule,
 
         if (moveType is MoveType.NoClip or MoveType.Observer)
         {
-            controller.PrintToChat("Cannot saveloc while noclipping or spectating.");
+            controller.PrintToChat(_localization.For(client.Slot)[ChatTexts.LocNoclip]);
             return false;
         }
 
         if (_timerModule.GetTimerInfo(client.Slot) is { Status: ETimerStatus.Paused })
         {
-            controller.PrintToChat("Cannot saveloc while the timer is paused.");
+            controller.PrintToChat(_localization.For(client.Slot)[ChatTexts.LocSavePaused]);
 
             return false;
         }
@@ -172,7 +176,7 @@ internal sealed partial class PracticeManager : IModule,
 
         _state[slot] |= segmented ? EPracticeFlags.Segmented : EPracticeFlags.Practice;
 
-        controller.PrintToChat($"Saved location #{locs.Count}.");
+        controller.PrintToChat(_localization.For(slot).Format(ChatTexts.LocSaved, locs.Count));
         return true;
     }
 
@@ -187,7 +191,7 @@ internal sealed partial class PracticeManager : IModule,
 
         if (_locs[slot] is not { Count: > 0 } locs)
         {
-            controller.PrintToChat("No saved locations.");
+            controller.PrintToChat(_localization.For(slot)[ChatTexts.LocNone]);
             return false;
         }
 
@@ -198,7 +202,7 @@ internal sealed partial class PracticeManager : IModule,
 
         if ((uint) index >= (uint) locs.Count)
         {
-            controller.PrintToChat($"Invalid loc index. Valid: 1..{locs.Count}");
+            controller.PrintToChat(_localization.For(slot).Format(ChatTexts.LocBadIndex, locs.Count));
             return false;
         }
 
@@ -209,7 +213,7 @@ internal sealed partial class PracticeManager : IModule,
             // Restoring would resume the timer while TimerModule still holds the pause state.
             if (timerInfo.Status == ETimerStatus.Paused)
             {
-                controller.PrintToChat("Cannot teleport while the timer is paused.");
+                controller.PrintToChat(_localization.For(slot)[ChatTexts.LocTelePaused]);
                 return false;
             }
 
@@ -217,7 +221,7 @@ internal sealed partial class PracticeManager : IModule,
             // movement cvars to the client (StyleModule), which a restore would skip.
             if (loc.Timer is { } savedTimer && savedTimer.State.Style != timerInfo.Style)
             {
-                controller.PrintToChat("That location was saved on a different style.");
+                controller.PrintToChat(_localization.For(slot)[ChatTexts.LocOtherStyle]);
                 return false;
             }
         }
@@ -236,13 +240,13 @@ internal sealed partial class PracticeManager : IModule,
 
                     break;
                 case ReplayRewindResult.Busy:
-                    controller.PrintToChat("Saving a stage replay, try again in a moment.");
+                    controller.PrintToChat(_localization.For(slot)[ChatTexts.LocReplayBusy]);
 
                     return false;
                 default:
                     loc.ReplayLost = true;
                     forcePractice  = true;
-                    controller.PrintToChat("This location's replay is gone, so the run continues as practice.");
+                    controller.PrintToChat(_localization.For(slot)[ChatTexts.LocReplayLost]);
 
                     break;
             }
@@ -276,7 +280,7 @@ internal sealed partial class PracticeManager : IModule,
 
         _cursor[slot] = index;
 
-        controller.PrintToChat($"Teleported to loc #{index + 1}/{locs.Count}.");
+        controller.PrintToChat(_localization.For(slot).Format(ChatTexts.LocTeleported, index + 1, locs.Count));
         return true;
     }
 
@@ -293,7 +297,7 @@ internal sealed partial class PracticeManager : IModule,
 
         if (nextIndex >= locs.Count)
         {
-            client.GetPlayerController()?.PrintToChat("Already at the last loc.");
+            client.GetPlayerController()?.PrintToChat(_localization.For(slot)[ChatTexts.LocAtLast]);
             return false;
         }
 
@@ -313,7 +317,7 @@ internal sealed partial class PracticeManager : IModule,
 
         if (prevIndex < 0)
         {
-            client.GetPlayerController()?.PrintToChat("Already at the first loc.");
+            client.GetPlayerController()?.PrintToChat(_localization.For(slot)[ChatTexts.LocAtFirst]);
             return false;
         }
 
@@ -334,7 +338,7 @@ internal sealed partial class PracticeManager : IModule,
         _cursor[slot]            = 0;
         _clearConfirmUntil[slot] = 0;
 
-        client.GetPlayerController()?.PrintToChat("Cleared all saved locations.");
+        client.GetPlayerController()?.PrintToChat(_localization.For(slot)[ChatTexts.LocCleared]);
     }
 
     public bool RequestClearLocs(IGameClient client)
@@ -343,7 +347,7 @@ internal sealed partial class PracticeManager : IModule,
 
         if (_locs[slot] is not { Count: > 0 } locs)
         {
-            client.GetPlayerController()?.PrintToChat("No saved locations.");
+            client.GetPlayerController()?.PrintToChat(_localization.For(slot)[ChatTexts.LocNone]);
             return false;
         }
 
@@ -356,7 +360,7 @@ internal sealed partial class PracticeManager : IModule,
         _clearConfirmUntil[slot] = _bridge.GlobalVars.CurTime + ClearConfirmSeconds;
 
         client.GetPlayerController()
-              ?.PrintToChat($"Clear all {locs.Count} saved locations? Clear again within {ClearConfirmSeconds:0} seconds to confirm.");
+              ?.PrintToChat(_localization.For(slot).Format(ChatTexts.LocClearConfirm, locs.Count, (int) ClearConfirmSeconds));
 
         return false;
     }
@@ -449,7 +453,7 @@ internal sealed partial class PracticeManager : IModule,
         pawn.SnapViewAngles(p.Angles);
     }
 
-    private static IPlayerController? TryResolveAlivePawn(IGameClient client, out IPlayerPawn pawn)
+    private IPlayerController? TryResolveAlivePawn(IGameClient client, out IPlayerPawn pawn)
     {
         pawn = null!;
 
@@ -460,7 +464,7 @@ internal sealed partial class PracticeManager : IModule,
 
         if (controller.GetPlayerPawn() is not { IsValidEntity: true, IsAlive: true } resolved)
         {
-            controller.PrintToChat("You must be alive to use practice commands.");
+            controller.PrintToChat(_localization.For(client.Slot)[ChatTexts.LocDead]);
             return null;
         }
 
