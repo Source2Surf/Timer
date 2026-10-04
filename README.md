@@ -18,6 +18,15 @@ dotnet publish Plugin/Timer.Localization/Timer.Localization.csproj -c Release -p
 ```
 
 Merge `sharp/` into `{CS2}/game/sharp/`, preserving existing configuration.
+
+The CI and release zips ship the configs as `configs/*.jsonc.example`, so extracting
+an update never touches your settings. On a fresh install, copy the ones you don't
+have yet to their real names, then fill in `timer.jsonc`:
+
+```sh
+cd sharp/configs
+for f in *.example; do [ -e "${f%.example}" ] || cp "$f" "${f%.example}"; done
+```
 Deploy all four published folders with their dependencies from the same build.
 Timer.Localization is optional (players read English without it) and needs
 ModSharp's LocalizerManager module; see [Localization](#localization).

@@ -84,6 +84,10 @@ jobs:
               -o backend/$rid
           done
 
+      # Extracting an update must never overwrite a server's own settings.
+      - name: Ship configs as examples
+        run: for f in sharp/configs/*.jsonc; do mv "$f" "$f.example"; done
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
