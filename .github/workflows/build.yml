@@ -61,6 +61,14 @@ jobs:
           -o sharp/modules/Timer.Localization
           --no-restore
 
+      - name: Publish Timer.MapChooser
+        run: >
+          dotnet publish Plugin/Timer.MapChooser/Timer.MapChooser.csproj
+          -c ${{ env.CONFIGURATION }}
+          -p:Platform=x64
+          -o sharp/modules/Timer.MapChooser
+          --no-restore
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
