@@ -23,6 +23,9 @@ internal sealed partial class StorageServiceImpl
                      .Where(x => x.SteamId == steamIdValue && x.MapId == mapId)
                      .AnyAsync(OperationCancellation))
         {
+            // Another request may have inserted the row after our update missed it.
+            if (await IncrementPlayerMapStatsRowAsync(steamIdValue, mapId, deltaSeconds) == 1) return;
+
             throw new InvalidOperationException("Player map counters are outside the supported range.");
         }
 

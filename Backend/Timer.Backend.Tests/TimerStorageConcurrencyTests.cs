@@ -68,6 +68,17 @@ public sealed class TimerStorageConcurrencyTests
                 await servers[s].Writes.EnsurePlayerProfileAsync(new EnsurePlayerProfileRequest { SteamId = steamId, Name = $"p{s}_{p}" });
             })));
 
+            // Players' first visits to the map, all at once: one request inserts each row, the rest add to it.
+            var newcomers = Enumerable.Range(0, 10)
+                                      .Select(_ => (ulong)(76_561_198_000_000_000L + Random.Shared.NextInt64(1, 1_000_000_000)))
+                                      .ToArray();
+            await Task.WhenAll(newcomers.SelectMany(newcomer => Enumerable.Range(0, 16).Select(i =>
+                servers[i % Servers].Storage.UpdatePlayerMapStatsAsync(newcomer, map, 0, 1).ResponseAsync)));
+            foreach (var newcomer in newcomers)
+            {
+                Assert.Equal(16, (await servers[0].Storage.GetPlayerMapStatsAsync(newcomer, map, 0)).PlayCount);
+            }
+
             var writing   = new CancellationTokenSource();
             var tornZones = 0;
             var reads     = 0;
