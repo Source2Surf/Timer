@@ -114,23 +114,47 @@ internal sealed partial class StorageServiceImpl
         }
 
         var normalizedLimit = NormalizeLimit(limit);
+        var shape = $"board:{runType}:{style.HasValue}:{track.HasValue}:{stage.HasValue}:{orderByStageThenTime}:{normalizedLimit}";
+        var read  = CachedShape(shape,
+                                () => BoardSql(runType, style.HasValue, track.HasValue, stage.HasValue, orderByStageThenTime, normalizedLimit),
+                                BoardArguments(Sentinel.MapId, style.HasValue ? Sentinel.Style : null,
+                                               track.HasValue ? Sentinel.Track : null, stage.HasValue ? Sentinel.Stage : null));
 
-        var query = QueryBoard().Where((best, run, player) => best.MapId == mapId.Value
-                                                          && best.RunType == runType);
+        return await ReadRunRecordsAsync(read, BoardArguments(mapId.Value, style, track, stage));
+    }
 
-        if (style.HasValue)
+    // In the order BoardSql binds them; a filter that isn't there has no argument.
+    private static object[] BoardArguments(ulong mapId, int? style, ushort? track, ushort? stage)
+    {
+        var arguments = new List<object>(4) { mapId };
+        if (style.HasValue) arguments.Add(style.Value);
+        if (track.HasValue) arguments.Add(track.Value);
+        if (stage.HasValue) arguments.Add(stage.Value);
+        return arguments.ToArray();
+    }
+
+    private KeyValuePair<string, List<SugarParameter>> BoardSql(RunType runType, bool byStyle, bool byTrack, bool byStage,
+                                                                 bool orderByStageThenTime, int limit)
+    {
+        var mapId = Sentinel.MapId;
+        var style = Sentinel.Style;
+        var track = Sentinel.Track;
+        var stage = Sentinel.Stage;
+        var query = QueryBoard().Where((best, run, player) => best.MapId == mapId && best.RunType == runType);
+
+        if (byStyle)
         {
-            query = query.Where((best, run, player) => best.Style == style.Value);
+            query = query.Where((best, run, player) => best.Style == style);
         }
 
-        if (track.HasValue)
+        if (byTrack)
         {
-            query = query.Where((best, run, player) => best.Track == track.Value);
+            query = query.Where((best, run, player) => best.Track == track);
         }
 
-        if (stage.HasValue)
+        if (byStage)
         {
-            query = query.Where((best, run, player) => best.Stage == stage.Value);
+            query = query.Where((best, run, player) => best.Stage == stage);
         }
         else if (runType == RunType.Main)
         {
@@ -153,7 +177,7 @@ internal sealed partial class StorageServiceImpl
                          .OrderBy((best, run, player) => best.RunId);
         }
 
-        return await ReadBoardAsync(query, normalizedLimit);
+        return SelectBoard(query).Take(limit).ToSql();
     }
 
     // Best runs with their run and player, so a board's names come in the same query.
@@ -161,45 +185,31 @@ internal sealed partial class StorageServiceImpl
         => QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
                           .LeftJoin<PlayerEntity>((best, run, player) => player.SteamId == run.SteamId);
 
-    private async Task<IReadOnlyList<RunRecord>> ReadBoardAsync(ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> query,
-                                                                int limit)
-    {
-        var rows = await query.Select((best, run, player) => new BoardRow
-                              {
-                                  Id                       = SqlFunc.ToInt64(run.Id),
-                                  DateUnixTimeMilliseconds = run.DateUnixTimeMilliseconds,
-                                  SteamId                  = run.SteamId,
-                                  PlayerName               = player.Name,
-                                  MapId                    = SqlFunc.ToInt64(run.MapId),
-                                  Style                    = run.Style,
-                                  Track                    = SqlFunc.ToInt32(run.Track),
-                                  Stage                    = SqlFunc.ToInt32(run.Stage),
-                                  Time                     = run.Time,
-                                  Jumps                    = SqlFunc.ToInt64(run.Jumps),
-                                  Strafes                  = SqlFunc.ToInt64(run.Strafes),
-                                  Sync                     = run.Sync,
-                                  VelocityStartX           = run.VelocityStartX,
-                                  VelocityStartY           = run.VelocityStartY,
-                                  VelocityStartZ           = run.VelocityStartZ,
-                                  VelocityAvgX             = run.VelocityAvgX,
-                                  VelocityAvgY             = run.VelocityAvgY,
-                                  VelocityAvgZ             = run.VelocityAvgZ,
-                                  VelocityEndX             = run.VelocityEndX,
-                                  VelocityEndY             = run.VelocityEndY,
-                                  VelocityEndZ             = run.VelocityEndZ,
-                              })
-                              .Take(limit)
-                              .ToListAsync(OperationCancellation);
-
-        var result = new RunRecord[rows.Count];
-
-        for (var i = 0; i < result.Length; i++)
+    private static ISugarQueryable<BoardRow> SelectBoard(ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> query)
+        => query.Select((best, run, player) => new BoardRow
         {
-            result[i] = ToRunRecord(rows[i]);
-        }
-
-        return result;
-    }
+            Id                       = SqlFunc.ToInt64(run.Id),
+            DateUnixTimeMilliseconds = run.DateUnixTimeMilliseconds,
+            SteamId                  = run.SteamId,
+            PlayerName               = player.Name,
+            MapId                    = SqlFunc.ToInt64(run.MapId),
+            Style                    = run.Style,
+            Track                    = SqlFunc.ToInt32(run.Track),
+            Stage                    = SqlFunc.ToInt32(run.Stage),
+            Time                     = run.Time,
+            Jumps                    = SqlFunc.ToInt64(run.Jumps),
+            Strafes                  = SqlFunc.ToInt64(run.Strafes),
+            Sync                     = run.Sync,
+            VelocityStartX           = run.VelocityStartX,
+            VelocityStartY           = run.VelocityStartY,
+            VelocityStartZ           = run.VelocityStartZ,
+            VelocityAvgX             = run.VelocityAvgX,
+            VelocityAvgY             = run.VelocityAvgY,
+            VelocityAvgZ             = run.VelocityAvgZ,
+            VelocityEndX             = run.VelocityEndX,
+            VelocityEndY             = run.VelocityEndY,
+            VelocityEndZ             = run.VelocityEndZ,
+        });
 
     public Task<IReadOnlyList<RunRecord>> GetRecentRecords(string mapName, SteamID steamId, int limit = 10)
         => GetPlayerRunsCoreAsync(mapName, steamId, null, limit, false);

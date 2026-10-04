@@ -8,6 +8,8 @@ namespace Timer.Backend.Storage;
 
 internal sealed partial class StorageServiceImpl
 {
+    private static readonly string[] MapStatsColumns = [nameof(PlayerMapStatsEntity.PlayTime), nameof(PlayerMapStatsEntity.PlayCount)];
+
     public async Task UpdatePlayerMapStatsAsync(SteamID steamId, string mapName, float deltaSeconds)
     {
         ValidatePlayTimeDelta(deltaSeconds);
@@ -77,15 +79,27 @@ internal sealed partial class StorageServiceImpl
             return (0f, 0);
         }
 
-        var stats = await _db.Queryable<PlayerMapStatsEntity>()
-                             .Where(x => x.SteamId == steamIdValue && x.MapId == mapId.Value)
-                             .FirstAsync(OperationCancellation);
+        var read = CachedShape("player-map-stats", () =>
+        {
+            var steamId = Sentinel.SteamId;
+            var map     = Sentinel.MapId;
 
-        if (stats is null)
+            return _db.Queryable<PlayerMapStatsEntity>()
+                      .Where(x => x.SteamId == steamId && x.MapId == map)
+                      .Select(x => new { x.PlayTime, x.PlayCount })
+                      .Take(1)
+                      .ToSql();
+        }, Sentinel.SteamId, Sentinel.MapId);
+
+        await using var reader = await ReadAsync(read, steamIdValue, mapId.Value);
+
+        if (!await reader.ReadAsync(OperationCancellation))
         {
             return (0f, 0);
         }
 
-        return (stats.PlayTime, stats.PlayCount);
+        var ordinals = read.Ordinals(reader, MapStatsColumns);
+
+        return (reader.GetFloat(ordinals[0]), (int)reader.GetInt64(ordinals[1]));
     }
 }
