@@ -69,20 +69,52 @@ jobs:
           -o sharp/modules/Timer.MapChooser
           --no-restore
 
+      # One self-contained executable per platform; trimming and AOT break SqlSugar and MagicOnion.
+      - name: Publish Timer.Backend
+        run: |
+          for rid in linux-x64 win-x64; do
+            dotnet publish Backend/Timer.Backend/Timer.Backend.csproj \
+              -c ${{ env.CONFIGURATION }} \
+              -r $rid \
+              --self-contained \
+              -p:PublishSingleFile=true \
+              -p:EnableCompressionInSingleFile=true \
+              -p:IncludeNativeLibrariesForSelfExtract=true \
+              -p:DebugType=embedded \
+              -o backend/$rid
+          done
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: SurfTimer
           path: sharp/
 
-      - name: Package release archive
+      - name: Upload backend artifact (linux-x64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimerBackend-linux-x64
+          path: backend/linux-x64/
+
+      - name: Upload backend artifact (win-x64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimerBackend-win-x64
+          path: backend/win-x64/
+
+      - name: Package release archives
         if: github.event_name == 'release'
         run: |
-          cd sharp
-          zip -r ../SurfTimer-${{ github.event.release.tag_name }}.zip .
+          tag=${{ github.event.release.tag_name }}
+          (cd sharp && zip -r ../SurfTimer-$tag.zip .)
+          (cd backend/linux-x64 && zip -r ../../TimerBackend-$tag-linux-x64.zip .)
+          (cd backend/win-x64 && zip -r ../../TimerBackend-$tag-win-x64.zip .)
 
       - name: Upload release assets
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: SurfTimer-${{ github.event.release.tag_name }}.zip
+          files: |
+            SurfTimer-${{ github.event.release.tag_name }}.zip
+            TimerBackend-${{ github.event.release.tag_name }}-linux-x64.zip
+            TimerBackend-${{ github.event.release.tag_name }}-win-x64.zip
