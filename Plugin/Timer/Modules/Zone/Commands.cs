@@ -16,107 +16,57 @@
  */
 
 using System;
-using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
-using Sharp.Shared.GameEntities;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Modules.Zone;
-using Source2Surf.Timer.Shared;
-using Source2Surf.Timer.Shared.Models.Zone;
 
 // ReSharper disable once CheckNamespace
 namespace Source2Surf.Timer.Modules;
 
 internal partial class ZoneModule
 {
+    // !zone opens the zone editor; !zone cancel; !zone <type> [number]; !zone b<track> <type> [number].
     private ECommandAction OnCommandZone(PlayerSlot slot, StringCommand command)
     {
         if (_bridge.ClientManager.GetGameClient(slot) is not { } client
-            || client.GetPlayerController() is not { IsValidEntity: true } controller
-            || controller.GetPlayerPawn() is not { IsValidEntity: true, IsAlive: true } pawn)
+            || client.GetPlayerController() is not { IsValidEntity: true })
         {
             return ECommandAction.Handled;
         }
+
+        _zoneEditors[slot] = true;
 
         if (command.ArgCount < 1)
         {
+            EditorRequested?.Invoke(slot);
+
             return ECommandAction.Handled;
         }
 
-        var zoneOrType = command.GetArg(1);
-
-        if (string.IsNullOrWhiteSpace(zoneOrType))
+        if (command.GetArg(1).Equals("cancel", StringComparison.OrdinalIgnoreCase))
         {
+            CancelZoneBuild(slot);
+
             return ECommandAction.Handled;
         }
 
-        var track = 0;
+        var args = new string[command.ArgCount];
 
-        var zoneOrTypeSpan = zoneOrType.AsSpan();
-
-        if (!Enum.TryParse<EZoneType>(zoneOrTypeSpan, true, out var type))
+        for (var i = 0; i < args.Length; i++)
         {
-            if (zoneOrTypeSpan[0] != 'b')
-            {
-                _logger.LogInformation("Invalid type");
-
-                return ECommandAction.Handled;
-            }
-
-            if (!int.TryParse(zoneOrTypeSpan[1..], out track) || track >= TimerConstants.MAX_TRACK)
-            {
-                return ECommandAction.Handled;
-            }
+            args[i] = command.GetArg(i + 1);
         }
 
-        if (track > 0)
+        if (!ZoneEdit.TryParse(args, out var track, out var type, out var number))
         {
-            if (command.ArgCount < 2)
-            {
-                return ECommandAction.Handled;
-            }
+            _logger.LogInformation("Invalid zone arguments: {Args}", string.Join(' ', args));
 
-            var zone = command.GetArg(2);
-
-            if (!Enum.TryParse(zone, true, out type))
-            {
-                return ECommandAction.Handled;
-            }
+            return ECommandAction.Handled;
         }
 
-        var buildInfo = new BuildZoneInfo
-        {
-            Step  = 0,
-            Track = track,
-            Zone  = type,
-        };
-
-        var kv = new Dictionary<string, KeyValuesVariantValueItem>
-        {
-            { "rendercolor", "255 255 255" },
-            { "BoltWidth", "6" },
-        };
-
-        if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is { IsValidEntity: true } directionBeam)
-        {
-            buildInfo.DirectionBeam = directionBeam;
-        }
-
-        kv["rendercolor"] = "255 0 0";
-
-        if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is { IsValidEntity: true } snapBeam1)
-        {
-            buildInfo.SnapBeams[0] = snapBeam1;
-        }
-
-        if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is { IsValidEntity: true } snapBeam2)
-        {
-            buildInfo.SnapBeams[1] = snapBeam2;
-        }
-
-        _buildZoneInfo[slot] = buildInfo;
+        StartZoneBuild(slot, track, type, number ?? NextZoneNumber(track, type));
 
         return ECommandAction.Handled;
     }

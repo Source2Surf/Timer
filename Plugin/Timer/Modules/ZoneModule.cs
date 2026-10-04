@@ -59,6 +59,33 @@ internal interface IZoneModule
     int GetCurrentTrackCheckpointCount(int track);
 
     bool TeleportToStage(IPlayerPawn pawn, int track, int stage);
+
+    // Raised when an admin runs !zone without arguments, to open the zone editor.
+    event Action<PlayerSlot>? EditorRequested;
+
+    // Changes whenever a zone is added or deleted, or a zone being placed starts, moves on or ends.
+    int EditVersion { get; }
+
+    // Whether the player opened the editor with !zone; the editing calls below refuse everyone else.
+    bool IsZoneEditor(PlayerSlot slot);
+
+    void CloseZoneEditor(PlayerSlot slot);
+
+    // Every zone, the map's own included, in display order.
+    IReadOnlyList<ZoneEntry> GetZones();
+
+    // The next free stage or checkpoint number on the track, 0 for other types.
+    int NextZoneNumber(int track, EZoneType type);
+
+    ZoneBuildState? GetZoneBuild(PlayerSlot slot);
+
+    // Starts placing a zone; the player sets both corners with E.
+    bool StartZoneBuild(PlayerSlot slot, int track, EZoneType type, int number);
+
+    bool CancelZoneBuild(PlayerSlot slot);
+
+    // Deletes a zone added in game and saves the rest; the map's own zones can't be deleted.
+    bool DeleteZone(PlayerSlot slot, uint id);
 }
 
 // TODO:
@@ -272,6 +299,8 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             _buildZoneInfo[slot] = null;
         }
 
+        Array.Fill(_zoneEditors, false);
+
         _zones.Clear();
 
         for (var t = 0; t < TimerConstants.MAX_TRACK; t++)
@@ -355,7 +384,10 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     }
 
     public void OnClientDisconnected(PlayerSlot slot)
-        => ClearBuildZoneInfo(slot);
+    {
+        ClearBuildZoneInfo(slot);
+        _zoneEditors[slot] = false;
+    }
 
     /// <summary>
     ///     Abandon a slot's in-progress zone build. Without this, the next player assigned
@@ -438,6 +470,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         if (_zones.TryAdd(ent.Handle.GetValue(), info))
         {
             IndexZone(info);
+            RecountStages(info.Track);
         }
 
         if (info.ZoneType is EZoneType.Start or EZoneType.End)

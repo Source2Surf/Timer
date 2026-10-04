@@ -36,6 +36,9 @@ internal class BuildZoneInfo
     public int       Track { get; init; } = 0;
     public EZoneType Zone  { get; init; } = EZoneType.Invalid;
 
+    // Stage or checkpoint number, 0 for other types.
+    public int Number { get; init; }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void KillBeams()
     {

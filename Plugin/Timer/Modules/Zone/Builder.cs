@@ -18,15 +18,12 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.HookParams;
 using Sharp.Shared.Types;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Modules.Zone;
-using ZLinq;
 
 // ReSharper disable once CheckNamespace
 namespace Source2Surf.Timer.Modules;
@@ -107,6 +104,7 @@ internal partial class ZoneModule
             }
 
             buildInfo.Step++;
+            EditVersion++;
         }
         else if (buildInfo.Step == 1)
         {
@@ -116,6 +114,7 @@ internal partial class ZoneModule
             {
                 Track    = buildInfo.Track,
                 ZoneType = buildInfo.Zone,
+                Data     = buildInfo.Number,
                 Prebuilt = false,
                 Corner1  = buildInfo.Points[0],
                 Corner2  = buildInfo.Points[1],
@@ -124,27 +123,9 @@ internal partial class ZoneModule
             buildInfo.KillBeams();
 
             _buildZoneInfo[client.Slot] = null;
+            EditVersion++;
 
-            var mapName = _bridge.CurrentMapName;
-            var zoneSnapshot = _zones.AsValueEnumerable()
-                                     .Where(i => i.Value.Prebuilt == false)
-                                     .Select(i => ZoneMapper.ToZoneData(i.Value))
-                                     .ToArray();
-
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await RetryHelper.RetryAsync(
-                        () => _requestManager.SaveZonesAsync(mapName, zoneSnapshot),
-                        RetryHelper.IsTransient, _logger, "SaveZonesAsync"
-                    );
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "Failed to save custom zones to database");
-                }
-            }, _bridge.CancellationToken);
+            SaveCustomZones();
         }
 
         return new ();
