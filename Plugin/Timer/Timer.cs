@@ -178,6 +178,10 @@ public class Timer : IModSharpModule
         RefreshPermissionProvider();
         RefreshLocalizationProvider();
         RefreshMapChooser();
+
+        _serviceProvider.GetRequiredService<ISharedSystem>()
+                        .GetSharpModuleManager()
+                        .RegisterSharpModuleInterface<ITimerStyles>(this, ITimerStyles.Identity, _serviceProvider.GetRequiredService<ITimerStyles>());
     }
 
     public void OnLibraryConnected(string moduleIdentity)

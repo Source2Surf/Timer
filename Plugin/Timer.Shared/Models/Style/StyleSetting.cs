@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Source2Surf.Timer.Shared.Models.Style;
@@ -86,4 +88,10 @@ public record StyleSetting
     /// </summary>
     [JsonPropertyName("score_factor")]
     public double ScoreFactor { get; init; } = 1.0;
+
+    /// <summary>
+    /// Keys this record doesn't define, kept for other modules to read.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
 }

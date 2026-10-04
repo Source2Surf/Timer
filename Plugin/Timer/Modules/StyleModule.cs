@@ -49,7 +49,7 @@ internal interface IStyleModule
     int GetStyleCount();
 }
 
-internal class StyleModule : IModule, IStyleModule, IGameListener, ITimerModuleListener, IZoneModuleListener
+internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener, ITimerModuleListener, IZoneModuleListener
 {
     private readonly InterfaceBridge _bridge;
 
@@ -502,6 +502,9 @@ internal class StyleModule : IModule, IStyleModule, IGameListener, ITimerModuleL
 
     private StyleSetting GetStyleOrDefault(int style)
         => GetStyleSetting(style);
+
+    public StyleSetting? GetPlayerStyle(PlayerSlot slot)
+        => _timerModule.GetTimerInfo(slot) is { } timer ? GetStyleSetting(timer.Style) : null;
 
     public int GetStyleCount()
         => _styles.Count;

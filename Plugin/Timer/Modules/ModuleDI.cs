@@ -18,6 +18,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Source2Surf.Timer.Modules.Practice;
 using Source2Surf.Timer.Modules.Replay;
+using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Modules;
 
 namespace Source2Surf.Timer.Modules;
@@ -32,6 +33,7 @@ internal static class ModuleDI
 
         services.ImplSingleton<ITimerModule, IModule, TimerModule>();
         services.ImplSingleton<IStyleModule, IModule, StyleModule>();
+        services.AddSingleton<ITimerStyles>(x => x.GetRequiredService<StyleModule>());
 
         services.ImplSingleton<IPracticeModule, IModule, PracticeManager>();
         services.ImplSingleton<IRecordModule, IModule, RecordModule>();
