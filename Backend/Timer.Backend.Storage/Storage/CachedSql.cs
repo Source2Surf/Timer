@@ -7,11 +7,11 @@ using SqlSugar;
 namespace Timer.Backend.Storage;
 
 /// <summary>
-/// A read whose SQL SqlSugar generates once per query shape, from the same typed query an ORM read would use.
-/// Later calls bind their own values to that statement and read rows with typed getters, skipping SqlSugar's
-/// query building (~0.3–0.45 ms a call) and row mapping (3–5 µs a row).
+/// A statement whose SQL SqlSugar generates once per shape, from the same typed query or update the ORM would run.
+/// Later calls bind their own values to it, skipping SqlSugar's statement building (~0.3–1 ms a call) and, for
+/// reads, its row mapping (3–5 µs a row).
 /// </summary>
-internal sealed class CachedRead
+internal sealed class CachedSql
 {
     private readonly SugarParameter[] _template;
     private readonly int[]            _argument;
@@ -19,7 +19,7 @@ internal sealed class CachedRead
 
     public string Sql { get; }
 
-    private CachedRead(string sql, SugarParameter[] template, int[] argument)
+    private CachedSql(string sql, SugarParameter[] template, int[] argument)
     {
         Sql       = sql;
         _template = template;
@@ -30,13 +30,13 @@ internal sealed class CachedRead
     /// The shape was generated with <paramref name="sentinels"/> as its arguments, so each parameter holding a
     /// sentinel takes that argument; every other parameter is a constant of the shape.
     /// </summary>
-    public static CachedRead Create(KeyValuePair<string, List<SugarParameter>> generated, object[] sentinels)
+    public static CachedSql Create(KeyValuePair<string, List<SugarParameter>> generated, object[] sentinels)
     {
         var (sql, parameters) = generated;
 
         foreach (var sentinel in sentinels)
         {
-            if (sql.Contains(Convert.ToString(sentinel, CultureInfo.InvariantCulture)!, StringComparison.Ordinal))
+            if (sql.Contains(Literal(sentinel), StringComparison.Ordinal))
             {
                 throw new InvalidOperationException($"SqlSugar wrote an argument into the SQL instead of a parameter: {sql}");
             }
@@ -60,7 +60,7 @@ internal sealed class CachedRead
             throw new InvalidOperationException($"No parameter holds argument {missing}: {sql}");
         }
 
-        return new CachedRead(sql, parameters.ToArray(), argument);
+        return new CachedSql(sql, parameters.ToArray(), argument);
     }
 
     public SugarParameter[] Bind(object[] arguments)
@@ -74,7 +74,23 @@ internal sealed class CachedRead
                                ? template.Value
                                : Convert.ChangeType(arguments[_argument[i]], template.Value.GetType(), CultureInfo.InvariantCulture);
 
-            bound[i] = new SugarParameter(template.ParameterName, value) { DbType = template.DbType };
+            // Everything the provider types the parameter by; Size is left to follow the new value.
+            bound[i] = new SugarParameter(template.ParameterName, value)
+            {
+                DbType       = template.DbType,
+                Direction    = template.Direction,
+                IsNullable   = template.IsNullable,
+                Scale        = template.Scale,
+                TypeName     = template.TypeName,
+                UdtTypeName  = template.UdtTypeName,
+                CustomDbType = template.CustomDbType,
+                IsJson       = template.IsJson,
+                IsArray      = template.IsArray,
+                IsRefCursor  = template.IsRefCursor,
+                IsClob       = template.IsClob,
+                IsNClob      = template.IsNClob,
+                IsNvarchar2  = template.IsNvarchar2,
+            };
         }
 
         return bound;
@@ -98,8 +114,16 @@ internal sealed class CachedRead
         return _ordinals = ordinals;
     }
 
+    private static string Literal(object sentinel)
+        => sentinel is DateTime date
+               ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+               : Convert.ToString(sentinel, CultureInfo.InvariantCulture)!;
+
     private static bool SameValue(object? value, object sentinel)
-        => value is IConvertible convertible
-           && convertible.GetTypeCode() is >= TypeCode.SByte and <= TypeCode.Decimal
-           && convertible.ToDecimal(CultureInfo.InvariantCulture) == Convert.ToDecimal(sentinel, CultureInfo.InvariantCulture);
+        => value is DateTime date
+               ? sentinel is DateTime other && date == other
+               : value is IConvertible convertible
+                 && sentinel is not DateTime
+                 && convertible.GetTypeCode() is >= TypeCode.SByte and <= TypeCode.Decimal
+                 && convertible.ToDecimal(CultureInfo.InvariantCulture) == Convert.ToDecimal(sentinel, CultureInfo.InvariantCulture);
 }

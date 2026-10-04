@@ -10,7 +10,7 @@ namespace Timer.Backend.Storage;
 
 internal sealed partial class StorageServiceImpl
 {
-    private readonly ConcurrentDictionary<string, CachedRead> _cachedReads = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, CachedSql> _cachedSql = new(StringComparer.Ordinal);
 
     // Arguments while SqlSugar generates a shape's SQL. No real value comes near them.
     private static class Sentinel
@@ -22,22 +22,33 @@ internal sealed partial class StorageServiceImpl
         public const ushort Stage   = 64_005;
         public const uint   Points  = 4_100_000_006;
         public const ulong  RunId   = 9_100_000_000_000_007;
+        public const double Factor  = 9_100_008.5;
+
+        public static readonly DateTime Now   = new(2099, 1, 2, 3, 4, 9, DateTimeKind.Utc);
+        public static readonly DateTime Later = new(2099, 1, 2, 3, 4, 10, DateTimeKind.Utc);
     }
 
-    private CachedRead CachedShape(string shape, Func<KeyValuePair<string, List<SugarParameter>>> generate, params object[] sentinels)
-        => _cachedReads.TryGetValue(shape, out var read)
-               ? read
-               : _cachedReads.GetOrAdd(shape, CachedRead.Create(generate(), sentinels));
+    private CachedSql CachedShape(string shape, Func<KeyValuePair<string, List<SugarParameter>>> generate, params object[] sentinels)
+        => _cachedSql.TryGetValue(shape, out var cached)
+               ? cached
+               : _cachedSql.GetOrAdd(shape, CachedSql.Create(generate(), sentinels));
 
     // Runs through SqlSugar's Ado, so logging, errors, cancellation and the operation's connection still apply.
-    private async Task<DbDataReader> ReadAsync(CachedRead read, params object[] arguments)
+    private async Task<DbDataReader> ReadAsync(CachedSql read, params object[] arguments)
     {
         _db.Ado.CancellationToken = OperationCancellation;
 
         return (DbDataReader) await _db.Ado.GetDataReaderAsync(read.Sql, read.Bind(arguments));
     }
 
-    private async Task<IReadOnlyList<RunRecord>> ReadRunRecordsAsync(CachedRead read, params object[] arguments)
+    private Task<int> ExecuteAsync(CachedSql statement, params object[] arguments)
+    {
+        _db.Ado.CancellationToken = OperationCancellation;
+
+        return _db.Ado.ExecuteCommandAsync(statement.Sql, statement.Bind(arguments));
+    }
+
+    private async Task<IReadOnlyList<RunRecord>> ReadRunRecordsAsync(CachedSql read, params object[] arguments)
     {
         await using var reader = await ReadAsync(read, arguments);
         var ordinals = read.Ordinals(reader, BoardColumns);

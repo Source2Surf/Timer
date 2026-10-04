@@ -9,14 +9,14 @@ using Xunit;
 
 namespace Timer.Backend.Storage.Tests;
 
-public sealed class CachedReadTests
+public sealed class CachedSqlTests
 {
     private const ulong Sentinel = 9_100_000_000_000_001;
 
     [Fact]
     public void ArgumentsBindToTheParametersThatHeldTheirSentinels()
     {
-        var read = CachedRead.Create(new("SELECT 1 WHERE a = @a AND b = @b AND c = @c",
+        var read = CachedSql.Create(new("SELECT 1 WHERE a = @a AND b = @b AND c = @c",
                                          [new("@a", Sentinel), new("@b", 3), new("@c", Sentinel)]),
                                      [Sentinel]);
 
@@ -28,23 +28,43 @@ public sealed class CachedReadTests
     [Fact]
     public void AnArgumentWrittenIntoTheSqlIsRejected()
         => Assert.Throws<InvalidOperationException>(() =>
-            CachedRead.Create(new($"SELECT 1 WHERE a = {Sentinel}", []), [Sentinel]));
+            CachedSql.Create(new($"SELECT 1 WHERE a = {Sentinel}", []), [Sentinel]));
+
+    [Fact]
+    public void DatesBindAndConstantsKeepTheirParameterTyping()
+    {
+        var sentinel = new DateTime(2099, 1, 2, 3, 4, 9, DateTimeKind.Utc);
+        var none = new SugarParameter("@b", null) { DbType = System.Data.DbType.DateTime, IsNullable = true, TypeName = "timestamp" };
+        var statement = CachedSql.Create(new("UPDATE t SET a = @a, b = @b", [new("@a", sentinel), none]), [sentinel]);
+        var now = DateTime.UtcNow;
+
+        var bound = statement.Bind([now]);
+
+        Assert.Equal(now, bound[0].Value);
+        Assert.Equal((null, System.Data.DbType.DateTime, true, "timestamp"),
+                     (bound[1].Value, bound[1].DbType, bound[1].IsNullable, bound[1].TypeName));
+    }
+
+    [Fact]
+    public void ADateWrittenIntoTheSqlIsRejected()
+        => Assert.Throws<InvalidOperationException>(() =>
+            CachedSql.Create(new("UPDATE t SET a = '2099-01-02 03:04:09'", []), [new DateTime(2099, 1, 2, 3, 4, 9)]));
 
     [Fact]
     public void AnArgumentNoParameterHoldsIsRejected()
         => Assert.Throws<InvalidOperationException>(() =>
-            CachedRead.Create(new("SELECT 1 WHERE a = @a", [new("@a", 5)]), [Sentinel]));
+            CachedSql.Create(new("SELECT 1 WHERE a = @a", [new("@a", 5)]), [Sentinel]));
 
     [Fact]
-    public Task SqliteReadsReuseTheirShapesWithNewValues() => RunSuite(DbType.Sqlite, null);
+    public Task SqliteStatementsReuseTheirShapesWithNewValues() => RunSuite(DbType.Sqlite, null);
 
     [DisposableDatabaseFact("TIMER_TEST_MYSQL")]
-    public Task MySqlReadsReuseTheirShapesWithNewValues() => RunSuite(DbType.MySql, "TIMER_TEST_MYSQL");
+    public Task MySqlStatementsReuseTheirShapesWithNewValues() => RunSuite(DbType.MySql, "TIMER_TEST_MYSQL");
 
     [DisposableDatabaseFact("TIMER_TEST_POSTGRES")]
-    public Task PostgreSqlReadsReuseTheirShapesWithNewValues() => RunSuite(DbType.PostgreSQL, "TIMER_TEST_POSTGRES");
+    public Task PostgreSqlStatementsReuseTheirShapesWithNewValues() => RunSuite(DbType.PostgreSQL, "TIMER_TEST_POSTGRES");
 
-    // Every read alternates between maps, players and runs, so a shape that kept its first values would show.
+    // Every statement alternates between maps, players, runs and boards, so a shape that kept its first values would show.
     private static async Task RunSuite(DbType type, string? variable)
     {
         var path       = Path.Combine(Path.GetTempPath(), $"timer-cached-read-{Guid.NewGuid():N}.db");
@@ -129,6 +149,32 @@ public sealed class CachedReadTests
         var (rankQ, totalQ) = await store.GetPlayerPointsRank(q);
         Assert.Equal(rankP + 1, rankQ);
         Assert.Equal(totalP, totalQ);
+
+        // Each record merges into its board's score queue through the one cached update.
+        var c = $"surf_cached_{Guid.NewGuid():N}";
+        var d = $"surf_cached_{Guid.NewGuid():N}";
+        await store.AddPlayerRecord(p, c, new RecordRequest { Time = 60 });
+        await store.AddPlayerRecord(q, d, new RecordRequest { Style = 1, Track = 2, Time = 70, StyleFactor = 0.5 });
+        var first = await Queue(store, c, 0, 0);
+        await store.AddPlayerRecord(p, c, new RecordRequest { Time = 50 });
+        await store.AddPlayerRecord(q, d, new RecordRequest { Style = 1, Track = 2, Time = 65, StyleFactor = 0.5 });
+        await store.AddPlayerRecord(p, c, new RecordRequest { Time = 40, StyleFactor = 2 });
+
+        var queueC = await Queue(store, c, 0, 0);
+        var queueD = await Queue(store, d, 1, 2);
+        Assert.Equal((3L, 2.0), (queueC.RequestedGeneration, queueC.StyleFactor));
+        Assert.Equal((2L, 0.5), (queueD.RequestedGeneration, queueD.StyleFactor));
+        Assert.Equal(first.AvailableAtUtc, queueC.AvailableAtUtc);
+        Assert.Equal(first.PendingSinceUtc, queueC.PendingSinceUtc);
+    }
+
+    private static async Task<ScoreRecalcOutboxEntity> Queue(StorageServiceImpl store, string map, int style, ushort track)
+    {
+        var mapId = (await store.GetMapInfo(map)).MapId;
+
+        return await store.Db.Queryable<ScoreRecalcOutboxEntity>()
+                          .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
+                          .SingleAsync();
     }
 
     private static RecordRequest Run(float time, int checkpoints)

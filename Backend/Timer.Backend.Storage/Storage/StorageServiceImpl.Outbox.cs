@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -50,11 +51,9 @@ internal sealed partial class StorageServiceImpl
             throw new InvalidOperationException("Score-recalc outbox writes require an active record transaction.");
         }
 
-        string? noError = null;
-        DateTime? noDeadLetteredAtUtc = null;
-        string? noLeaseOwner = null;
-        DateTime? noLeaseUntilUtc = null;
         var availableAtUtc = nowUtc.Add(ScoreRecalcDebounceDelay);
+        var merge = CachedShape("score-queue-merge", ScoreQueueMergeSql,
+                                Sentinel.MapId, Sentinel.Style, Sentinel.Track, Sentinel.Factor, Sentinel.Now, Sentinel.Later);
 
         // The surrounding map lock serializes all foreground enqueues for this key. Keep the
         // first request's deadline while work is already pending: moving it forward on every PB
@@ -65,29 +64,7 @@ internal sealed partial class StorageServiceImpl
         // an explicit administrative requeue blocked until an unrelated lease expires. Set
         // AvailableAt and PendingSince before the generation increment because MySQL evaluates
         // single-table assignments left-to-right. Pending age survives new generations and retries.
-        // (field, value) keeps this SET order (new Entity { } would not); NULLs stay on ==, which
-        // writes a literal NULL where PostgreSQL rejects a text-typed null parameter.
-        var updated = await _db.Updateable<ScoreRecalcOutboxEntity>()
-                               .SetColumns(x => x.AvailableAtUtc,
-                                           x => x.DeadLetteredAtUtc == null
-                                                && x.RequestedGeneration > x.ProcessedGeneration
-                                                && x.AvailableAtUtc <= availableAtUtc
-                                                    ? x.AvailableAtUtc
-                                                    : availableAtUtc)
-                               .SetColumns(x => x.PendingSinceUtc,
-                                           x => x.RequestedGeneration <= x.ProcessedGeneration
-                                                    ? nowUtc : SqlFunc.IsNull(x.PendingSinceUtc, x.CreatedAtUtc))
-                               .SetColumns(x => x.RequestedGeneration, x => x.RequestedGeneration + 1)
-                               .SetColumns(x => x.StyleFactor, x => styleFactor)
-                               .SetColumns(x => x.AttemptCount, x => 0)
-                               .SetColumns(x => x.LastError == noError)
-                               .SetColumns(x => x.LeaseOwner, x => x.DeadLetteredAtUtc != null ? noLeaseOwner : x.LeaseOwner)
-                               .SetColumns(x => x.LeaseUntilUtc, x => x.DeadLetteredAtUtc != null ? noLeaseUntilUtc : x.LeaseUntilUtc)
-                               .SetColumns(x => x.DeadLetteredAtUtc == noDeadLetteredAtUtc)
-                               .SetColumns(x => x.UpdatedAtUtc, x => nowUtc)
-                               .Where(x => x.MapId == mapId && x.Style == style && x.Track == track
-                                           && x.RequestedGeneration < long.MaxValue)
-                               .ExecuteCommandAsync(OperationCancellation);
+        var updated = await ExecuteAsync(merge, mapId, style, track, styleFactor, nowUtc, availableAtUtc);
 
         if (updated != 0)
         {
@@ -111,6 +88,45 @@ internal sealed partial class StorageServiceImpl
             CreatedAtUtc = nowUtc,
             UpdatedAtUtc = nowUtc,
         }).ExecuteCommandAsync(OperationCancellation);
+    }
+
+    // Generated once; arguments are bound in Sentinel order: map, style, track, factor, now, available at.
+    private KeyValuePair<string, List<SugarParameter>> ScoreQueueMergeSql()
+    {
+        var mapId = Sentinel.MapId;
+        var style = Sentinel.Style;
+        var track = Sentinel.Track;
+        var styleFactor = Sentinel.Factor;
+        var nowUtc = Sentinel.Now;
+        var availableAtUtc = Sentinel.Later;
+        string? noError = null;
+        DateTime? noDeadLetteredAtUtc = null;
+        string? noLeaseOwner = null;
+        DateTime? noLeaseUntilUtc = null;
+
+        // (field, value) keeps this SET order (new Entity { } would not); NULLs stay on ==, which
+        // writes a literal NULL where PostgreSQL rejects a text-typed null parameter.
+        return _db.Updateable<ScoreRecalcOutboxEntity>()
+                  .SetColumns(x => x.AvailableAtUtc,
+                              x => x.DeadLetteredAtUtc == null
+                                   && x.RequestedGeneration > x.ProcessedGeneration
+                                   && x.AvailableAtUtc <= availableAtUtc
+                                       ? x.AvailableAtUtc
+                                       : availableAtUtc)
+                  .SetColumns(x => x.PendingSinceUtc,
+                              x => x.RequestedGeneration <= x.ProcessedGeneration
+                                       ? nowUtc : SqlFunc.IsNull(x.PendingSinceUtc, x.CreatedAtUtc))
+                  .SetColumns(x => x.RequestedGeneration, x => x.RequestedGeneration + 1)
+                  .SetColumns(x => x.StyleFactor, x => styleFactor)
+                  .SetColumns(x => x.AttemptCount, x => 0)
+                  .SetColumns(x => x.LastError == noError)
+                  .SetColumns(x => x.LeaseOwner, x => x.DeadLetteredAtUtc != null ? noLeaseOwner : x.LeaseOwner)
+                  .SetColumns(x => x.LeaseUntilUtc, x => x.DeadLetteredAtUtc != null ? noLeaseUntilUtc : x.LeaseUntilUtc)
+                  .SetColumns(x => x.DeadLetteredAtUtc == noDeadLetteredAtUtc)
+                  .SetColumns(x => x.UpdatedAtUtc, x => nowUtc)
+                  .Where(x => x.MapId == mapId && x.Style == style && x.Track == track
+                              && x.RequestedGeneration < long.MaxValue)
+                  .ToSql();
     }
 
     /// <summary>
