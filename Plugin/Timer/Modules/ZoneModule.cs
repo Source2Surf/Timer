@@ -340,7 +340,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
 
-        _commandManager.AddAdminChatCommand("zone", [], OnCommandZone);
+        _commandManager.AddAdminChatCommand("zone", ["timer:zone"], OnCommandZone);
 
         return true;
     }

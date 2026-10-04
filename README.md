@@ -188,7 +188,15 @@ Chat messages are still English.
 
 ### Permissions
 
-The Timer has no admin system of its own. To connect yours, write a ModSharp
+Admin commands are checked by ModSharp's AdminManager. Grant these in
+`sharp/configs/admins.jsonc`, or `timer:*` for all of them:
+
+- `timer:zone`: `!zone`
+- `timer:tier`: `!set_tier`
+
+Without AdminManager, Release builds refuse these commands.
+
+Replay control is checked through `IPermissionProvider` instead. To connect your admin system, write a ModSharp
 module that implements `IPermissionProvider` from `Timer.Shared`, and register
 it under its identity:
 

@@ -158,7 +158,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
         _bridge.ModSharp.InstallGameListener(this);
 
-        _commandManager.AddAdminChatCommand("set_tier", [], OnCommandSetTier);
+        _commandManager.AddAdminChatCommand("set_tier", ["timer:tier"], OnCommandSetTier);
         _commandManager.AddClientChatCommand("mi", OnCommandMapInfo);
         _commandManager.AddClientChatCommand("mapinfo", OnCommandMapInfo);
         _commandManager.AddClientChatCommand("tier", OnCommandTier);

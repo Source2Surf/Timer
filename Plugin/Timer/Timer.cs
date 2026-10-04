@@ -191,6 +191,7 @@ public class Timer : IModSharpModule
     public void OnLibraryConnected(string moduleIdentity)
     {
         RefreshMovementExtension();
+        _serviceProvider.GetService<CommandManager>()?.ConnectAdminManager();
 
         if (moduleIdentity.Equals(IRequestManager.Identity, StringComparison.Ordinal))
         {
@@ -221,6 +222,7 @@ public class Timer : IModSharpModule
     public void OnLibraryDisconnect(string moduleIdentity)
     {
         _serviceProvider.GetService<MovementExtensionProxy>()?.OnModuleUnloading(moduleIdentity);
+        _serviceProvider.GetService<CommandManager>()?.OnLibraryDisconnect(moduleIdentity);
 
         if (moduleIdentity.Equals(IRequestManager.Identity, StringComparison.Ordinal))
         {
@@ -260,6 +262,10 @@ public class Timer : IModSharpModule
         }
 
         RefreshCommandManager();
+        if (_serviceProvider.GetService<CommandManager>() is { } commands && !commands.ConnectAdminManager())
+        {
+            _logger.LogWarning("ModSharp's AdminManager is not loaded: admin commands such as !zone are unavailable.");
+        }
         RefreshReplayProvider();
         RefreshPermissionProvider();
         RefreshLocalizationProvider();

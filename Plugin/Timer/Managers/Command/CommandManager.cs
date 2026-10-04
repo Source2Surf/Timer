@@ -19,7 +19,10 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.Extensions.Logging;
+using Sharp.Modules.AdminManager.Shared;
+using Sharp.Shared;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Managers;
@@ -32,8 +35,17 @@ namespace Source2Surf.Timer.Managers.Command;
 
 internal class CommandManager : IManager, ICommandManager, IClientListener
 {
-    private readonly Dictionary<string, ICommandManager.ClientCommandDelegate> _adminChatCommands;
-    private readonly InterfaceBridge                                           _bridge;
+    private const string AdminManagerLibrary  = "Sharp.Modules.AdminManager";
+    private const string CommandCenterLibrary = "Sharp.Modules.CommandCenter";
+
+    private static readonly string ModuleIdentity = typeof(CommandManager).Assembly.GetName().Name!;
+
+    private readonly Dictionary<string, AdminCommand> _adminChatCommands;
+    private readonly HashSet<string>                  _registeredAdminCommands;
+    private readonly InterfaceBridge                  _bridge;
+    private readonly ISharedSystem                    _shared;
+
+    private IModSharpModuleInterface<IAdminManager>? _adminManager;
 
     private readonly Dictionary<string, Func<StringCommand, ECommandAction>> _serverCommands;
 
@@ -43,9 +55,10 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
 
     private readonly ILogger<CommandManager> _logger;
 
-    public CommandManager(InterfaceBridge bridge, ILogger<CommandManager> logger)
+    public CommandManager(InterfaceBridge bridge, ISharedSystem shared, ILogger<CommandManager> logger)
     {
         _bridge        = bridge;
+        _shared        = shared;
         _logger        = logger;
 
         // OrdinalIgnoreCase enables allocation-free ReadOnlySpan<char> alternate lookups
@@ -54,6 +67,8 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
         _styleCommands      = new (StringComparer.OrdinalIgnoreCase);
         _adminChatCommands  = new (StringComparer.OrdinalIgnoreCase);
         _serverCommands     = [];
+
+        _registeredAdminCommands = new (StringComparer.OrdinalIgnoreCase);
 
         HashSet<char> set = ['!', '/', '.', '！', '．', '／', '。'];
         _commandTriggers = set.ToFrozenSet();
@@ -86,17 +101,20 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
             return callback(client.Slot, BuildCommand(commandSpan, text, spaceIndex));
         }
 
-        if (_adminChatCommands.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(commandSpan, out callback))
+        if (_adminChatCommands.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(commandSpan, out var admin))
         {
-            // The built-in CommandManager has no permission provider, so it cannot honor
-            // the permissions passed to AddAdminChatCommand.
+            // Registered with AdminManager: CommandCenter runs it after the permission check.
+            if (_registeredAdminCommands.Contains(admin.Name))
+            {
+                return ECommandAction.Skipped;
+            }
 #if DEBUG
-            _logger.LogWarning("Admin command '{cmd}' executed WITHOUT a permission check (built-in CommandManager, DEBUG builds only).",
+            _logger.LogWarning("Admin command '{cmd}' executed WITHOUT a permission check (AdminManager is not loaded, DEBUG builds only).",
                                commandSpan.ToString());
 
-            return callback(client.Slot, BuildCommand(commandSpan, text, spaceIndex));
+            return admin.Handler(client.Slot, BuildCommand(commandSpan, text, spaceIndex));
 #else
-            _logger.LogWarning("Admin command '{cmd}' ignored: the built-in CommandManager has no permission provider.",
+            _logger.LogWarning("Admin command '{cmd}' ignored: ModSharp's AdminManager is not loaded.",
                                commandSpan.ToString());
 
             return ECommandAction.Handled;
@@ -135,18 +153,78 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
     }
 
     /// <remarks>
-    /// The built-in CommandManager has no permission provider: <paramref name="permissions"/>
-    /// is ignored, and registered admin commands only execute in DEBUG builds (unchecked).
-    /// An external ICommandManager module is required for real admin-permission handling.
+    /// Checked by ModSharp's AdminManager: a player needs any one of <paramref name="permissions"/>.
+    /// Without AdminManager, admin commands only run in DEBUG builds, unchecked.
     /// </remarks>
     public void AddAdminChatCommand(string command, ImmutableArray<string> permissions, ICommandManager.ClientCommandDelegate handler)
     {
-        if (_adminChatCommands.TryAdd(command, handler))
+        if (_adminChatCommands.TryAdd(command, new (command, permissions, handler)))
         {
+            ConnectAdminManager();
+
             return;
         }
 
         _logger.LogWarning("{cmd} is already added in _adminChatCommands.", command);
+    }
+
+    /// <returns>Whether every admin command is registered with AdminManager.</returns>
+    public bool ConnectAdminManager()
+    {
+        if (_adminManager?.Instance is null)
+        {
+            _adminManager = _shared.GetSharpModuleManager()
+                                   .GetOptionalSharpModuleInterface<IAdminManager>(IAdminManager.Identity);
+        }
+
+        if (_registeredAdminCommands.Count == _adminChatCommands.Count)
+        {
+            return true;
+        }
+
+        if (_adminManager?.Instance is not { } admins)
+        {
+            return false;
+        }
+
+        try
+        {
+            var registry = admins.GetCommandRegistry(ModuleIdentity);
+            registry.RegisterPermissions([.. _adminChatCommands.Values.SelectMany(x => x.Permissions).Distinct()]);
+
+            foreach (var (name, permissions, handler) in _adminChatCommands.Values)
+            {
+                if (!_registeredAdminCommands.Add(name))
+                {
+                    continue;
+                }
+
+                registry.RegisterAdminCommand(name,
+                                              (client, command) =>
+                                              {
+                                                  if (client is not null)
+                                                  {
+                                                      handler(client.Slot, command);
+                                                  }
+                                              },
+                                              permissions);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // CommandCenter isn't up yet; retried when it connects.
+        }
+
+        return _registeredAdminCommands.Count == _adminChatCommands.Count;
+    }
+
+    public void OnLibraryDisconnect(string name)
+    {
+        if (name.Equals(AdminManagerLibrary, StringComparison.OrdinalIgnoreCase)
+            || name.Equals(CommandCenterLibrary, StringComparison.OrdinalIgnoreCase))
+        {
+            _registeredAdminCommands.Clear();
+        }
     }
 
     public void AddServerCommand(string command, Func<StringCommand, ECommandAction> handler)
@@ -179,6 +257,7 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
     public bool Init()
     {
         _bridge.ClientManager.InstallClientListener(this);
+        ConnectAdminManager();
 
         return true;
     }
@@ -193,4 +272,8 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
 
         _bridge.ClientManager.RemoveClientListener(this);
     }
+
+    private readonly record struct AdminCommand(string                                Name,
+                                                ImmutableArray<string>                Permissions,
+                                                ICommandManager.ClientCommandDelegate Handler);
 }

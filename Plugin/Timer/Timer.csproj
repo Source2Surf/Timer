@@ -44,6 +44,7 @@
         <PackageReference Include="MessagePack" Version="3.1.10" />
         <PackageReference Include="MemoryPack" Version="1.21.4" />
         <PackageReference Include="ModSharp.Sharp.Shared" Version="*" PrivateAssets="all" />
+        <PackageReference Include="ModSharp.Sharp.Modules.AdminManager.Shared" Version="*" PrivateAssets="all" ExcludeAssets="runtime" />
         <PackageReference Include="ZLinq" Version="1.5.6" />
         <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
         <PackageReference Include="ZString" Version="2.6.0" />
