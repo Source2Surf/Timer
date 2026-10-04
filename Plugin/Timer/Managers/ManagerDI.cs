@@ -74,6 +74,8 @@ internal static class ManagerDi
         services.ImplSingleton<IPatchManager, IManager, PatchManager>();
         services.ImplSingleton<IEventHookManager, IManager, EventHookManager>();
 
+        // After the sender: managers shut down in reverse, so login profile RPCs end before the sender
+        // drains scores and disposes the channel they share.
         services.ImplSingleton<IPlayerManager, IManager, PlayerManager>();
 
         services.AddSingleton<CommandManager>();

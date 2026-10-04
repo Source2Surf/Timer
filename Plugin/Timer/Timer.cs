@@ -17,6 +17,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
@@ -285,28 +286,23 @@ public class Timer : IModSharpModule
             _serviceProvider.GetRequiredService<IGameData>()
                             .Unregister("timer.games");
 
-            // Login profile RPCs share the sender's channel. Cancel those per-session calls
-            // before the sender drains scores and disposes that transport.
-            var playerManager = _serviceProvider.GetService<IPlayerManager>() as IManager;
-            if (playerManager is not null)
+            // Detours call into the modules, so remove them before the modules go.
+            var hookManager = _serviceProvider.GetService<IInlineHookManager>() as IManager;
+            if (hookManager is not null)
             {
                 try
                 {
-                    playerManager.Shutdown();
+                    hookManager.Shutdown();
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError(e, "An error occurred while shutting down the player manager.");
+                    _logger.LogError(e, "An error occurred while shutting down the inline hook manager.");
                 }
             }
 
-            foreach (var service in _serviceProvider.GetServices<IManager>())
+            // The modules use the managers, so they go next.
+            foreach (var service in _serviceProvider.GetServices<IModule>())
             {
-                if (ReferenceEquals(service, playerManager))
-                {
-                    continue;
-                }
-
                 try
                 {
                     service.Shutdown();
@@ -317,8 +313,14 @@ public class Timer : IModSharpModule
                 }
             }
 
-            foreach (var service in _serviceProvider.GetServices<IModule>())
+            // Reverse order: a manager may use the ones registered before it.
+            foreach (var service in _serviceProvider.GetServices<IManager>().Reverse())
             {
+                if (ReferenceEquals(service, hookManager))
+                {
+                    continue;
+                }
+
                 try
                 {
                     service.Shutdown();
