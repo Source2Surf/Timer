@@ -327,6 +327,27 @@
 			</Panel>
 		</Panel>
 
+		<!-- Zone placing prompt (admins), at the top while a zone is placed. No cursor, so the admin can aim; the cap is
+		     their use key. -->
+		<Panel id="ZnPrompt" class="ZnPrompt Hidden" hittest="false">
+			<Panel class="ZnPromptHead">
+				<Label id="ZnPromptTitle" class="ZnPromptTitle" text="{s:text}" />
+				<Label id="ZnPromptTrack" class="ZnPromptTrack" text="{s:text}" />
+			</Panel>
+			<Panel class="ZnSteps">
+				<Label id="ZnDot1" class="ZnDot on" text="{s:text}" />
+				<Panel class="ZnBar" />
+				<Label id="ZnDot2" class="ZnDot" text="2" />
+				<Label id="ZnStep" class="ZnStep" text="{s:text}" />
+			</Panel>
+			<Panel class="ZnDo">
+				<Label id="ZnPromptDo" class="ZnDoText" text="{s:text}" />
+				<Label id="ZnPromptKey" class="ZnCap" text="{g:csgo_key:editkey}{s:nonce}" />
+			</Panel>
+			<Label id="LZnTall" class="ZnPromptNote Hidden" text="{s:text}" />
+			<Label id="LZnHelp" class="ZnPromptNote" text="{s:text}" />
+		</Panel>
+
 		<!-- HUD settings, opened with !hud. Option rows are Buttons whose id is an option in HudOptions.cs and whose
 		     <id>Value label shows it; size steppers are <id>Down / <id>Up. -->
 		<Panel id="MenuPos" class="DragPos" hittest="false">
@@ -913,6 +934,107 @@
 			<Panel class="MenuFooter">
 				<Button id="McNomClose" class="MenuButton MenuButton--primary NomClose">
 					<Label id="LNomClose" text="{s:text}" />
+				</Button>
+			</Panel>
+		</Panel>
+
+		<!-- Zone panel (admins), opened by !zone. Cursor mode, in the replay menu's spot. It steps aside while a zone is
+		     placed (the prompt above takes over) and comes back when it's done. 8 zones a page; a row past the end is blank. -->
+		<Panel id="ZnMenu" class="Menu ZnMenu Closed">
+			<Panel class="MenuHeader RMenuHeader">
+				<Label id="LZnTitle" class="MenuTitle" text="{s:text}" />
+				<Label id="ZnCount" class="NomCount" text="{s:text}" />
+			</Panel>
+			<Panel class="MenuRow static">
+				<Label id="LZnTrack" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="ZnTrackPrev" class="Step"><Label text="‹" /></Button>
+					<Label id="ZnTrackValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="ZnTrackNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+			<Panel class="RmList">
+				<Panel class="RmRows">
+					<Panel id="ZnRow0" class="RmRow ZnRow blank">
+						<Label id="ZnRow0Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow0Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel0" class="ZnDel Hidden"><Label id="ZnDel0Label" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="ZnRow1" class="RmRow ZnRow blank">
+						<Label id="ZnRow1Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow1Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel1" class="ZnDel Hidden"><Label id="ZnDel1Label" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="ZnRow2" class="RmRow ZnRow blank">
+						<Label id="ZnRow2Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow2Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel2" class="ZnDel Hidden"><Label id="ZnDel2Label" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="ZnRow3" class="RmRow ZnRow blank">
+						<Label id="ZnRow3Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow3Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel3" class="ZnDel Hidden"><Label id="ZnDel3Label" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="ZnRow4" class="RmRow ZnRow blank">
+						<Label id="ZnRow4Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow4Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel4" class="ZnDel Hidden"><Label id="ZnDel4Label" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="ZnRow5" class="RmRow ZnRow blank">
+						<Label id="ZnRow5Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow5Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel5" class="ZnDel Hidden"><Label id="ZnDel5Label" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="ZnRow6" class="RmRow ZnRow blank">
+						<Label id="ZnRow6Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow6Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel6" class="ZnDel Hidden"><Label id="ZnDel6Label" text="{s:text}" /></Button>
+					</Panel>
+					<Panel id="ZnRow7" class="RmRow ZnRow blank">
+						<Label id="ZnRow7Name" class="RmName" text="{s:text}" />
+						<Label id="ZnRow7Map" class="ZnMapTag Hidden" text="{s:text}" />
+						<Button id="ZnDel7" class="ZnDel Hidden"><Label id="ZnDel7Label" text="{s:text}" /></Button>
+					</Panel>
+				</Panel>
+				<Label id="ZnEmpty" class="RmEmpty Hidden" text="{s:text}" />
+			</Panel>
+			<Panel class="RmPager">
+				<Button id="ZnPrev" class="Step"><Label text="‹" /></Button>
+				<Label id="ZnPage" class="RmPage" text="{s:text}" />
+				<Button id="ZnNext" class="Step"><Label text="›" /></Button>
+			</Panel>
+			<Panel id="ZnAdd" class="ZnSection">
+				<Panel class="MenuSection"><Label id="LZnAdd" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+				<Panel class="NomChips">
+					<Button id="ZnType0" class="NomChip"><Label id="ZnType0Label" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnType1" class="NomChip"><Label id="ZnType1Label" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnType2" class="NomChip"><Label id="ZnType2Label" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnType3" class="NomChip"><Label id="ZnType3Label" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnType4" class="NomChip"><Label id="ZnType4Label" class="NomChipLabel" text="{s:text}" /></Button>
+				</Panel>
+				<Panel class="MenuRow static">
+					<Label id="LZnNumber" class="MenuName" text="{s:text}" />
+					<Panel class="Stepper RmStepper">
+						<Button id="ZnNumPrev" class="Step"><Label text="‹" /></Button>
+						<Label id="ZnNumberValue" class="MenuValue RmValue" text="{s:value}" />
+						<Button id="ZnNumNext" class="Step"><Label text="›" /></Button>
+					</Panel>
+				</Panel>
+			</Panel>
+			<Panel id="ZnStatus" class="ZnSection Hidden">
+				<Panel class="MenuSection"><Label id="LZnPlacing" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+				<Panel class="ZnStatusBox">
+					<Label id="ZnStatusName" class="ZnStatusName" text="{s:text}" />
+					<Label id="ZnStatusSub" class="ZnStatusSub" text="{s:text}" />
+				</Panel>
+			</Panel>
+			<Label id="ZnNote" class="NomNote" text="{s:text}" />
+			<Panel class="MenuFooter">
+				<Button id="ZnClose" class="MenuButton">
+					<Label id="LZnClose" text="{s:text}" />
+				</Button>
+				<Button id="ZnPlace" class="MenuButton MenuButton--primary">
+					<Label id="ZnPlaceLabel" text="{s:text}" />
 				</Button>
 			</Panel>
 		</Panel>

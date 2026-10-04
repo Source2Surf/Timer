@@ -521,6 +521,22 @@ public sealed class HudLayoutContractTests
     }
 
     [Fact]
+    public void EveryZonePanelExists()
+    {
+        var ids = HudModule.ZoneRowIds.Concat(HudModule.ZoneNameIds).Concat(HudModule.ZoneMapIds).Concat(HudModule.ZoneDelIds)
+                           .Concat(HudModule.ZoneDelLabel).Concat(HudModule.ZoneTypeIds).Concat(HudModule.ZoneTypeLabel)
+                           .Concat(["ZnMenu", "ZnCount", "ZnTrackPrev", "ZnTrackValue", "ZnTrackNext", "ZnEmpty", "ZnPrev", "ZnPage", "ZnNext",
+                                    "ZnAdd", "ZnNumPrev", "ZnNumberValue", "ZnNumNext", "ZnStatus", "ZnStatusName", "ZnStatusSub", "ZnNote",
+                                    "ZnClose", "ZnPlace", "ZnPlaceLabel", "ZnPrompt", "ZnPromptTitle", "ZnPromptTrack", "ZnDot1", "ZnDot2",
+                                    "ZnStep", "ZnPromptDo", "ZnPromptKey", "LZnTall", "LZnHelp"]);
+
+        foreach (var id in ids)
+        {
+            Assert.Contains(id, Ids);
+        }
+    }
+
+    [Fact]
     public void EveryLineSlotRowTabAndPanelExists()
     {
         for (var i = 0; i < HudLines.Count; i++)

@@ -1159,6 +1159,146 @@
     "en-us": "Nominations are closed.",
     "zh-cn": "提名已关闭。"
   },
+  "zn.title": {
+    "en-us": "Zones",
+    "zh-cn": "区域"
+  },
+  "zn.count": {
+    "en-us": "{0} zones",
+    "zh-cn": "{0} 个区域"
+  },
+  "zn.count_one": {
+    "en-us": "1 zone",
+    "zh-cn": "1 个区域"
+  },
+  "zn.track": {
+    "en-us": "Track",
+    "zh-cn": "路线"
+  },
+  "zn.map": {
+    "en-us": "MAP",
+    "zh-cn": "地图"
+  },
+  "zn.delete": {
+    "en-us": "Delete",
+    "zh-cn": "删除"
+  },
+  "zn.confirm": {
+    "en-us": "Confirm",
+    "zh-cn": "确认"
+  },
+  "zn.empty": {
+    "en-us": "No zones on this track yet.",
+    "zh-cn": "此路线还没有区域。"
+  },
+  "zn.add": {
+    "en-us": "Add a zone",
+    "zh-cn": "添加区域"
+  },
+  "zn.number": {
+    "en-us": "Number",
+    "zh-cn": "编号"
+  },
+  "zn.type.start": {
+    "en-us": "Start",
+    "zh-cn": "起点"
+  },
+  "zn.type.end": {
+    "en-us": "End",
+    "zh-cn": "终点"
+  },
+  "zn.type.stage": {
+    "en-us": "Stage",
+    "zh-cn": "关卡"
+  },
+  "zn.type.checkpoint": {
+    "en-us": "Checkpoint",
+    "zh-cn": "检查点"
+  },
+  "zn.type.stop": {
+    "en-us": "Stop timer",
+    "zh-cn": "停止计时"
+  },
+  "zn.name.stage": {
+    "en-us": "Stage {0}",
+    "zh-cn": "关卡 {0}"
+  },
+  "zn.name.checkpoint": {
+    "en-us": "Checkpoint {0}",
+    "zh-cn": "检查点 {0}"
+  },
+  "zn.place": {
+    "en-us": "Place {0}",
+    "zh-cn": "放置{0}"
+  },
+  "zn.cancel": {
+    "en-us": "Cancel placing",
+    "zh-cn": "取消放置"
+  },
+  "zn.placing_section": {
+    "en-us": "Placing",
+    "zh-cn": "正在放置"
+  },
+  "zn.status": {
+    "en-us": "Corner {0} of 2. Close the panel to carry on placing.",
+    "zh-cn": "第 {0} 个角，共 2 个。关闭面板继续放置。"
+  },
+  "zn.hint": {
+    "en-us": "Aim and press your use key at two corners; zones are 128 units tall. The map's own zones can't be deleted.",
+    "zh-cn": "瞄准并按使用键确定两个角；区域高 128 单位。地图自带的区域无法删除。"
+  },
+  "zn.taken": {
+    "en-us": "{0} already has {1}. This adds another area that also counts as {1}.",
+    "zh-cn": "{0}已有{1}。这会再添加一个同样算作{1}的区域。"
+  },
+  "zn.confirm_ask": {
+    "en-us": "Click Confirm to delete {0}. It's removed from the map and the database.",
+    "zh-cn": "点击确认删除{0}。它会从地图和数据库中移除。"
+  },
+  "zn.deleted": {
+    "en-us": "{0} deleted.",
+    "zh-cn": "已删除{0}。"
+  },
+  "zn.delete_failed": {
+    "en-us": "Couldn't delete {0}.",
+    "zh-cn": "无法删除{0}。"
+  },
+  "zn.added": {
+    "en-us": "{0} added to {1}.",
+    "zh-cn": "已将{0}添加到{1}。"
+  },
+  "zn.cancelled": {
+    "en-us": "Placing cancelled.",
+    "zh-cn": "已取消放置。"
+  },
+  "zn.start_failed": {
+    "en-us": "Couldn't start placing. You need to be alive.",
+    "zh-cn": "无法开始放置。你需要处于存活状态。"
+  },
+  "zn.prompt.title": {
+    "en-us": "Placing {0}",
+    "zh-cn": "正在放置{0}"
+  },
+  "zn.prompt.corner": {
+    "en-us": "Corner {0} of 2",
+    "zh-cn": "第 {0} 个角，共 2 个"
+  },
+  "zn.prompt.aim_first": {
+    "en-us": "Aim at a corner and press",
+    "zh-cn": "瞄准一个角并按"
+  },
+  "zn.prompt.aim_second": {
+    "en-us": "Aim at the opposite corner and press",
+    "zh-cn": "瞄准对角并按"
+  },
+  "zn.prompt.tall": {
+    "en-us": "The zone is 128 units tall.",
+    "zh-cn": "区域高 128 单位。"
+  },
+  "zn.prompt.help": {
+    "en-us": "!zone cancel to stop · !zone opens the panel",
+    "zh-cn": "!zone cancel 停止 · !zone 打开面板"
+  },
   "chat.track.main": {
     "en-us": "Main",
     "zh-cn": "主线"

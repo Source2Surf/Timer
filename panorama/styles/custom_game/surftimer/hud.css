@@ -1882,3 +1882,209 @@
 .Menu .NomNote.warn {
     color: #ffa94d;
 }
+
+/* ---- Zone panel (admins, !zone) ---- */
+
+/* Collapsed when closed, so its buttons can't take another menu's clicks. */
+.ZnMenu.Closed {
+    visibility: collapse;
+}
+
+.ZnSection {
+    width: 100%;
+    height: fit-children;
+    flow-children: down;
+}
+
+/* Rows aren't buttons here: only Delete is. */
+.ZnRow:hover {
+    background-color: #00000000;
+}
+
+.ZnRow.new {
+    background-color: #7ce27c1f;
+}
+
+.Menu .RmName.map {
+    color: #ffffffb8;
+}
+
+.Menu .ZnMapTag {
+    vertical-align: center;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: mutedColor;
+}
+
+.ZnDel {
+    height: 22px;
+    vertical-align: center;
+    padding: 0px 9px;
+    border-radius: 4px;
+    background-color: #ffffff12;
+
+    transition-property: background-color;
+    transition-duration: .1s;
+}
+
+.ZnDel:hover {
+    background-color: #ff6b5e2e;
+}
+
+.ZnDel.confirm {
+    background-color: #ff6b5ed9;
+}
+
+.ZnDel Label {
+    vertical-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: mutedColor;
+}
+
+.ZnDel.confirm Label {
+    color: white;
+}
+
+.ZnStatusBox {
+    width: 100%;
+    height: fit-children;
+    margin-top: 4px;
+    padding: 10px 12px;
+    flow-children: down;
+    border-radius: 4px;
+    border-left: 2px solid accentColor;
+    background-color: #5ab4ff1a;
+}
+
+.Menu .ZnStatusName {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.Menu .ZnStatusSub {
+    width: 100%;
+    margin-top: 2px;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+/* The placing prompt, top centre. No cursor. */
+.ZnPrompt {
+    horizontal-align: center;
+    vertical-align: top;
+    margin-top: 150px;
+    width: 360px;
+    height: fit-children;
+    padding: 12px 16px 12px 16px;
+    flow-children: down;
+    border-radius: 6px;
+    background-color: #0a0e139e;
+}
+
+.ZnPrompt Label {
+    font-family: timerFont;
+    font-weight: bold;
+    color: white;
+    text-shadow: textShadow;
+}
+
+.ZnPromptHead {
+    width: 100%;
+    height: fit-children;
+    margin-bottom: 8px;
+    flow-children: right;
+}
+
+.ZnPrompt .ZnPromptTitle {
+    width: fill-parent-flow( 1 );
+    font-size: 16px;
+}
+
+.ZnPrompt .ZnPromptTrack {
+    vertical-align: center;
+    font-size: 13px;
+    color: #ffffff99;
+}
+
+.ZnSteps {
+    width: 100%;
+    height: fit-children;
+    margin-bottom: 8px;
+    flow-children: right;
+}
+
+.ZnPrompt .ZnDot {
+    width: 18px;
+    height: 18px;
+    vertical-align: center;
+    text-align: center;
+    font-size: 11px;
+    border: 1px solid #ffffff59;
+    border-radius: 9px;
+}
+
+.ZnPrompt .ZnDot.on {
+    color: #0b1520;
+    background-color: accentColor;
+    border: 1px solid accentColor;
+    text-shadow: none;
+}
+
+.ZnPrompt .ZnDot.done {
+    color: #0b1520;
+    background-color: #7ce27cd9;
+    border: 1px solid #00000000;
+    text-shadow: none;
+}
+
+.ZnBar {
+    width: 22px;
+    height: 1px;
+    vertical-align: center;
+    margin: 0px 6px;
+    background-color: #ffffff40;
+}
+
+.ZnPrompt .ZnStep {
+    vertical-align: center;
+    margin-left: 8px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #ffffff99;
+}
+
+.ZnDo {
+    width: 100%;
+    height: fit-children;
+    flow-children: right-wrap;
+}
+
+.ZnPrompt .ZnDoText {
+    vertical-align: center;
+    margin-right: 6px;
+    font-size: 15px;
+}
+
+.ZnPrompt .ZnCap {
+    min-width: 30px;
+    vertical-align: center;
+    padding: 3px 6px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-align: center;
+    color: #ffffffd9;
+    background-color: #0d121880;
+    border: 1px solid #ffffff66;
+    border-radius: 4px;
+}
+
+.ZnPrompt .ZnPromptNote {
+    width: 100%;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: normal;
+    color: #ffffff8c;
+}

@@ -157,6 +157,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
 
         _timerModule.RegisterListener(this);
         _zoneModule.RegisterListener(this);
+        _zoneModule.EditorRequested += OnZoneEditorRequested;
         _playerManager.RegisterListener(this);
 
         _commandManager.AddClientChatCommand("hud", OnCommandHud);
@@ -173,6 +174,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     {
         _timerModule.UnregisterListener(this);
         _zoneModule.UnregisterListener(this);
+        _zoneModule.EditorRequested -= OnZoneEditorRequested;
         _playerManager.UnregisterListener(this);
 
         _panorama.RemoveClickListener(OnHudClicked);
@@ -639,6 +641,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
             p.Replays.Open = false;
             p.Profile.Open = false;
             CloseNominateMenu(p);
+            CloseZonePanel(p);
         }
         else
         {
@@ -662,6 +665,10 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         else if (buttonId.StartsWith("Mc", StringComparison.Ordinal))
         {
             ClickMapChooser(p, buttonId);
+        }
+        else if (buttonId.StartsWith("Zn", StringComparison.Ordinal))
+        {
+            ClickZonePanel(p, buttonId);
         }
         else if (buttonId.StartsWith("Pf", StringComparison.Ordinal))
         {

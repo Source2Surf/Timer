@@ -132,6 +132,7 @@ internal partial class HudModule
 
         p.Replays.Open = false;
         CloseNominateMenu(p);
+        CloseZonePanel(p);
 
         var f = p.Profile;
         f.Open            = true;

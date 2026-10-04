@@ -168,6 +168,15 @@ menu (through `IMapChooser`; without the module none of this appears):
   tier or to maps the player hasn't finished, with their best time on each.
 - The game's round timer shows the time left on the map, extensions included.
 
+### Zone panel
+
+Admins (`timer:zone`) open it with `!zone`. It lists each track's zones; zones
+added in game can be deleted (the map's own can't), and new ones are added by
+type and number (the next free one by default). Placing a zone hides the panel
+and shows a prompt: aim and press the use key at two corners. The panel comes
+back once the zone is placed. The typed forms (`!zone stage 3`,
+`!zone cancel` and so on) still work and show the same prompt.
+
 ### Localization
 
 All of the HUD's text can be translated per player: the timer, records and splits,

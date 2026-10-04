@@ -328,6 +328,43 @@ internal static class HudTexts
     public static readonly HudText TimeHere     = new ("ui.profile.time_here", "Time here");
     public static readonly HudText PersonalBest = new ("ui.profile.pb", "Personal best");
 
+    // ---- zone panel
+    public static readonly HudText ZnTitle          = new ("zn.title", "Zones");
+    public static readonly HudText ZnCount          = new ("zn.count", "{0} zones");
+    public static readonly HudText ZnCountOne       = new ("zn.count_one", "1 zone");
+    public static readonly HudText ZnTrack          = new ("zn.track", "Track");
+    public static readonly HudText ZnMap            = new ("zn.map", "MAP");
+    public static readonly HudText ZnDelete         = new ("zn.delete", "Delete");
+    public static readonly HudText ZnConfirm        = new ("zn.confirm", "Confirm");
+    public static readonly HudText ZnEmpty          = new ("zn.empty", "No zones on this track yet.");
+    public static readonly HudText ZnAddSection     = new ("zn.add", "Add a zone");
+    public static readonly HudText ZnNumber         = new ("zn.number", "Number");
+    public static readonly HudText ZnStart          = new ("zn.type.start", "Start");
+    public static readonly HudText ZnEnd            = new ("zn.type.end", "End");
+    public static readonly HudText ZnStage          = new ("zn.type.stage", "Stage");
+    public static readonly HudText ZnCheckpoint     = new ("zn.type.checkpoint", "Checkpoint");
+    public static readonly HudText ZnStopTimer      = new ("zn.type.stop", "Stop timer");
+    public static readonly HudText ZnStageN         = new ("zn.name.stage", "Stage {0}");
+    public static readonly HudText ZnCheckpointN    = new ("zn.name.checkpoint", "Checkpoint {0}");
+    public static readonly HudText ZnPlace          = new ("zn.place", "Place {0}");
+    public static readonly HudText ZnCancel         = new ("zn.cancel", "Cancel placing");
+    public static readonly HudText ZnPlacingSection = new ("zn.placing_section", "Placing");
+    public static readonly HudText ZnStatus         = new ("zn.status", "Corner {0} of 2. Close the panel to carry on placing.");
+    public static readonly HudText ZnHint           = new ("zn.hint", "Aim and press your use key at two corners; zones are 128 units tall. The map's own zones can't be deleted.");
+    public static readonly HudText ZnTaken          = new ("zn.taken", "{0} already has {1}. This adds another area that also counts as {1}.");
+    public static readonly HudText ZnConfirmAsk     = new ("zn.confirm_ask", "Click Confirm to delete {0}. It's removed from the map and the database.");
+    public static readonly HudText ZnDeleted        = new ("zn.deleted", "{0} deleted.");
+    public static readonly HudText ZnDeleteFailed   = new ("zn.delete_failed", "Couldn't delete {0}.");
+    public static readonly HudText ZnAdded          = new ("zn.added", "{0} added to {1}.");
+    public static readonly HudText ZnCancelled      = new ("zn.cancelled", "Placing cancelled.");
+    public static readonly HudText ZnStartFailed    = new ("zn.start_failed", "Couldn't start placing. You need to be alive.");
+    public static readonly HudText ZnPlacing        = new ("zn.prompt.title", "Placing {0}");
+    public static readonly HudText ZnCorner         = new ("zn.prompt.corner", "Corner {0} of 2");
+    public static readonly HudText ZnAimFirst       = new ("zn.prompt.aim_first", "Aim at a corner and press");
+    public static readonly HudText ZnAimSecond      = new ("zn.prompt.aim_second", "Aim at the opposite corner and press");
+    public static readonly HudText ZnTall           = new ("zn.prompt.tall", "The zone is 128 units tall.");
+    public static readonly HudText ZnHelp           = new ("zn.prompt.help", "!zone cancel to stop · !zone opens the panel");
+
     // ---- map chooser
     public static readonly HudText VoteEndOfMap  = new ("hud.vote.title", "Vote for the next map");
     public static readonly HudText VoteRtv       = new ("hud.vote.title_rtv", "Rock the vote");
@@ -491,6 +528,29 @@ internal static class HudLabels
         ("LNomClose", HudTexts.Close),
     ];
 
+    public static readonly (string Id, HudText Text)[] Zones =
+    [
+        ("LZnTitle", HudTexts.ZnTitle),
+        ("LZnTrack", HudTexts.ZnTrack),
+        ("ZnEmpty", HudTexts.ZnEmpty),
+        ("LZnAdd", HudTexts.ZnAddSection),
+        ("ZnType0Label", HudTexts.ZnStart),
+        ("ZnType1Label", HudTexts.ZnEnd),
+        ("ZnType2Label", HudTexts.ZnStage),
+        ("ZnType3Label", HudTexts.ZnCheckpoint),
+        ("ZnType4Label", HudTexts.ZnStopTimer),
+        ("LZnNumber", HudTexts.ZnNumber),
+        ("LZnPlacing", HudTexts.ZnPlacingSection),
+        ("LZnClose", HudTexts.Close),
+        .. HudModule.ZoneMapIds.Select(id => (id, HudTexts.ZnMap)),
+    ];
+
+    public static readonly (string Id, HudText Text)[] ZonePrompt =
+    [
+        ("LZnTall", HudTexts.ZnTall),
+        ("LZnHelp", HudTexts.ZnHelp),
+    ];
+
     public static readonly (string Id, HudText Text)[] Keys =
     [
         ("KeyDuck", HudTexts.KeyDuck),
@@ -498,7 +558,7 @@ internal static class HudLabels
     ];
 
     public static IEnumerable<(string Id, HudText Text)> All
-        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate)
+        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate).Concat(Zones).Concat(ZonePrompt)
                 .Append(("SplitsEmpty", HudTexts.SplitsEmpty))
                 .Append(("SsjEmpty", HudTexts.SsjEmpty));
 }

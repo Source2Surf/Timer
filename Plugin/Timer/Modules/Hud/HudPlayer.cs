@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Modules.Zone;
 using Source2Surf.Timer.Shared.Models;
 using Source2Surf.Timer.Shared.Models.Timer;
 using Source2Surf.Timer.Shared.Models.Zone;
@@ -85,6 +86,31 @@ internal sealed class HudReplayMenu
 ///     The profile card (!profile): whose it is, its picks, and what's been fetched for it. Version tells a late
 ///     answer for an earlier profile from one for this one.
 /// </summary>
+/// <summary>
+///     The admin zone panel (!zone). The zone module keeps the zones and the zone being placed.
+/// </summary>
+internal sealed class HudZones
+{
+    public bool            Open;
+    public int             Track;
+    public EZoneType       Type = EZoneType.Stage;
+    public int             Number;                  // for stages and checkpoints; 0 until the panel first opens
+    public int             Page;
+    public uint?           Confirm;                 // the zone whose Delete was clicked once
+    public uint?           Added;                   // the zone just placed from the panel, picked out in the list
+    public string?         Note;
+    public bool            Warn;
+    public bool            Dirty;
+    public int             Version = -1;            // the zone module's EditVersion, when last read
+    public ZoneBuildState? Build;                   // the zone being placed, as last read
+    public bool            FromPanel;               // it was started from the panel, which comes back when it's placed
+    public readonly HashSet<uint> Known = [];       // zone ids as last read, to spot the one just placed
+    public bool            KnownValid;
+    public readonly uint[] RowIds = new uint[HudModule.ZoneRows];
+    public bool            PromptShown;
+    public bool            PromptRecheck;           // flipped each time the prompt shows, so its key cap looks the key up again
+}
+
 /// <summary>
 ///     What the HUD last drew of the map chooser, which keeps the state itself.
 /// </summary>
@@ -184,6 +210,8 @@ internal sealed class HudPlayer
         SentNumbered.Clear();
         Chooser.Version     = -1;
         Chooser.VoteSecond  = -1;
+        Zones.Version       = -1;
+        Zones.PromptShown   = false;
     }
 
     // ---- settings
@@ -222,11 +250,13 @@ internal sealed class HudPlayer
 
     public readonly HudChooser Chooser = new ();
 
-    // Any menu takes the mouse.
-    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null;
+    public readonly HudZones Zones = new ();
 
-    // HUD settings and the nominate menu also keep the player from moving.
-    public bool MovementLocked => MenuOpen || Chooser.Menu is not null;
+    // Any menu takes the mouse.
+    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null || Zones.Open;
+
+    // HUD settings, the nominate menu and the zone panel also keep the player from moving.
+    public bool MovementLocked => MenuOpen || Chooser.Menu is not null || Zones.Open;
 
     // The texts this player reads, in their language where there's a translation.
     public HudTr Tr;
