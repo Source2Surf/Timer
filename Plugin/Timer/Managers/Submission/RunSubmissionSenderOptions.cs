@@ -228,7 +228,7 @@ internal sealed class RunSubmissionSenderOptions
         {
             if (enabled)
             {
-                throw new InvalidOperationException($"{SectionName}:Endpoint is required when enabled.");
+                throw new InvalidOperationException($"{SectionName}:endpoint is required when enabled.");
             }
 
             return null;
@@ -236,7 +236,7 @@ internal sealed class RunSubmissionSenderOptions
 
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var endpoint))
         {
-            throw new InvalidOperationException($"{SectionName}:Endpoint must be an absolute URI.");
+            throw new InvalidOperationException($"{SectionName}:endpoint must be an absolute URI.");
         }
 
         ValidateEndpoint(endpoint);
@@ -250,7 +250,7 @@ internal sealed class RunSubmissionSenderOptions
             || endpoint.Query.Length != 0
             || endpoint.Fragment.Length != 0)
         {
-            throw new InvalidOperationException($"{SectionName}:Endpoint must be a plain absolute service URI.");
+            throw new InvalidOperationException($"{SectionName}:endpoint must be a plain absolute service URI.");
         }
 
         if (endpoint.Scheme == Uri.UriSchemeHttp || endpoint.Scheme == Uri.UriSchemeHttps)
@@ -259,7 +259,7 @@ internal sealed class RunSubmissionSenderOptions
         }
 
         throw new InvalidOperationException(
-            $"{SectionName}:Endpoint must use HTTP or HTTPS.");
+            $"{SectionName}:endpoint must use HTTP or HTTPS.");
     }
 
     private static void ValidateDuration(TimeSpan value,
