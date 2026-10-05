@@ -176,12 +176,17 @@ internal static class HudOptions
     public static readonly HudOption SsjStrafes    = new (35, "OptSsjStrafes", OnOff, initial: 1);
     public static readonly HudOption SsjEfficiency = new (36, "OptSsjEfficiency", OnOff, initial: 1);
 
+    // HUD tab, Player: not the HUD's, but saved with it (IPlayerSettings)
+    public static readonly HudOption Hide   = new (37, "OptHide", OnOff, initial: 1);
+    public static readonly HudOption Sounds = new (38, "OptSounds", OnOff);
+
     public static readonly HudOption[] All =
     [
         Run, SizeRun, CSpeed, SizeCSpeed, Info, SizeInfo, Splits, SizeSplits, Keys, SizeKeys,
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
+        Hide, Sounds,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;

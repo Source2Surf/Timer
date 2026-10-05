@@ -22,7 +22,8 @@ using System.Linq;
 namespace Source2Surf.Timer.Modules.Hud;
 
 /// <summary>
-///     A player's settings as the backend keeps them: a few bytes, only what differs from the defaults.
+///     A player's settings as the backend keeps them (the HUD's, !hide, the finish sounds): a few bytes, only what
+///     differs from the defaults.
 ///     <code>
 ///     [version 1]
 ///     [n] n × (option key, choice index)   options not at their initial choice

@@ -481,7 +481,8 @@ public sealed class PlayerSettingsCodecTests
             [26] = ("OptSsj", "On,Off"), [27] = ("SizeSsj", Sizes), [28] = ("OptSsjJump", string.Join(',', Enumerable.Range(1, 16))),
             [29] = ("OptSsjRepeat", "On,Off"), [30] = ("OptSsjFirst", "On,Off"), [31] = ("OptSsjSpeedDiff", "On,Off"),
             [32] = ("OptSsjHeight", "On,Off"), [33] = ("OptSsjGain", "On,Off"), [34] = ("OptSsjSync", "On,Off"),
-            [35] = ("OptSsjStrafes", "On,Off"), [36] = ("OptSsjEfficiency", "On,Off"),
+            [35] = ("OptSsjStrafes", "On,Off"), [36] = ("OptSsjEfficiency", "On,Off"), [37] = ("OptHide", "On,Off"),
+            [38] = ("OptSounds", "On,Off"),
         };
 
         foreach (var (key, (id, choices)) in saved)

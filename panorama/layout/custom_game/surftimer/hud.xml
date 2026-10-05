@@ -415,6 +415,16 @@
 							</Panel>
 							<Button id="OptKeys" class="PillButton"><Label id="OptKeysValue" class="MenuValue off" text="{s:value}" /></Button>
 						</Panel>
+
+						<Panel class="MenuSection"><Label id="LPlayer" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+						<Button id="OptHide" class="MenuRow tall">
+							<Panel class="MenuText"><Label id="LHide" class="MenuName" text="{s:text}" /><Label id="LHideDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Label id="OptHideValue" class="MenuValue off" text="{s:value}" />
+						</Button>
+						<Button id="OptSounds" class="MenuRow tall">
+							<Panel class="MenuText"><Label id="LSounds" class="MenuName" text="{s:text}" /><Label id="LSoundsDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Label id="OptSoundsValue" class="MenuValue on" text="{s:value}" />
+						</Button>
 					</Panel>
 
 					<!-- Timer: lines and comparison -->

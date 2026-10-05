@@ -51,7 +51,7 @@ internal interface IHudModule
 ///     The entity's whole state is that player's, so every value and class is set on it directly, and nothing one
 ///     player's HUD does costs anyone else bandwidth.
 /// </summary>
-internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZoneModuleListener, IPlayerManagerListener
+internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerModuleListener, IZoneModuleListener, IPlayerManagerListener
 {
     private const float HudUpdateInterval   = 0.10f; // seconds between a player's HUD refreshes
     private const float LayoutRetryInterval = 5f;    // after the layout entity failed to spawn
@@ -302,6 +302,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
                 }
 
                 p.MenuDirty = true;
+                Changed?.Invoke(p.Slot);
             }).ConfigureAwait(false);
         });
     }
@@ -310,6 +311,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     {
         p.SaveAt          = _bridge.GlobalVars.CurTime + SaveDelay;
         p.SettingsChanged = true;
+        Changed?.Invoke(p.Slot);
     }
 
     // Encoded here, sent in the background. Shutting down waits a little for it, not for long.
@@ -757,7 +759,12 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         }
         else if (buttonId == "MenuReset")
         {
+            // The HUD's reset: hide and sounds stay as they are.
+            var hide   = p.Settings[HudOptions.Hide.Index];
+            var sounds = p.Settings[HudOptions.Sounds.Index];
             p.ResetSettings();
+            p.Settings[HudOptions.Hide.Index]   = hide;
+            p.Settings[HudOptions.Sounds.Index] = sounds;
             Array.Fill(p.UnplaceAt, float.NaN);
             MarkSettingsChanged(p);
         }

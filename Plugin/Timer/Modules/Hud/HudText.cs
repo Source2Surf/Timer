@@ -271,6 +271,11 @@ internal static class HudTexts
     public static readonly HudText TabSplits      = new ("ui.tab.splits", "Splits");
     public static readonly HudText TabKeys        = new ("ui.tab.keys", "Keys");
     public static readonly HudText Panels         = new ("ui.panels", "Panels");
+    public static readonly HudText PlayerSection  = new ("ui.player", "Player");
+    public static readonly HudText HideName       = new ("ui.hide", "Hide other players");
+    public static readonly HudText HideDesc       = new ("ui.hide_desc", "Replay bots too. Also !hide");
+    public static readonly HudText SoundsName     = new ("ui.sounds", "Finish sounds");
+    public static readonly HudText SoundsDesc     = new ("ui.sounds_desc", "Also !sounds");
     public static readonly HudText PanelRun       = new ("ui.panel.timer", "Timer");
     public static readonly HudText PanelCSpeed    = new ("ui.panel.cspeed", "Center speed");
     public static readonly HudText PanelInfo      = new ("ui.panel.records", "Records");
@@ -442,6 +447,11 @@ internal static class HudLabels
         ("TabSplitsLabel", HudTexts.TabSplits),
         ("TabKeysLabel", HudTexts.TabKeys),
         ("LPanels", HudTexts.Panels),
+        ("LPlayer", HudTexts.PlayerSection),
+        ("LHide", HudTexts.HideName),
+        ("LHideDesc", HudTexts.HideDesc),
+        ("LSounds", HudTexts.SoundsName),
+        ("LSoundsDesc", HudTexts.SoundsDesc),
         ("LPanelRun", HudTexts.PanelRun),
         ("LPanelCSpeed", HudTexts.PanelCSpeed),
         ("LPanelInfo", HudTexts.PanelInfo),

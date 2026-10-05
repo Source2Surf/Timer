@@ -663,6 +663,26 @@
     "en-us": "Panels",
     "zh-cn": "面板"
   },
+  "ui.player": {
+    "en-us": "Player",
+    "zh-cn": "玩家"
+  },
+  "ui.hide": {
+    "en-us": "Hide other players",
+    "zh-cn": "隐藏其他玩家"
+  },
+  "ui.hide_desc": {
+    "en-us": "Replay bots too. Also !hide",
+    "zh-cn": "回放机器人也会隐藏。也可用 !hide"
+  },
+  "ui.sounds": {
+    "en-us": "Finish sounds",
+    "zh-cn": "完成音效"
+  },
+  "ui.sounds_desc": {
+    "en-us": "Also !sounds",
+    "zh-cn": "也可用 !sounds"
+  },
   "ui.panel.timer": {
     "en-us": "Timer",
     "zh-cn": "计时器"
