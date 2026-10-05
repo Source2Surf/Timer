@@ -39,5 +39,12 @@
             "windows": "48 8B C4 4C 89 48 ? 4C 89 40 ? 48 89 50 ? 48 89 48 ? 55 53 56 57 41 54 41 55 41 56 41 57 48 8D A8 ? ? ? ? 48 81 EC ? ? ? ? 0F 29 70",
             "linux": "48 B8 ? ? ? ? ? ? ? ? 55 66 0F EF C0 48 89 E5 41 57 41 56 49 89 F6 41 55 49 89 D5"
         }
+    },
+    "VFuncs": {
+        // bool (CCSObserver_ObserverServices*, CBaseEntity* pTarget); the vfunc that references CPlantedC4's typeinfo
+        "CCSObserver_ObserverServices::IsValidObserverTarget": {
+            "windows": 34,
+            "linux": 35
+        }
     }
 }
