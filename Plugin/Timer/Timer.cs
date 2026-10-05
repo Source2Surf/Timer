@@ -95,6 +95,11 @@ public class Timer : IModSharpModule
         services.AddSingleton(backend);
         logger.LogInformation("Timer.Backend: {endpoint}", backend.Endpoint);
 
+        if (backend.FromScoreWriteSection)
+        {
+            logger.LogWarning("timer.jsonc's score_write section is read as backend (its mode is ignored). Rename it to backend.");
+        }
+
         if (configuration.GetSection("database").Exists())
         {
             logger.LogWarning("timer.jsonc's database section is no longer read: Timer.Backend owns the database. Remove it.");

@@ -28,11 +28,12 @@ public sealed class BackendRegistrationTests
     }
 
     [Fact]
-    public void MissingEndpointFailsWhenTheClientIsResolved()
+    public void MissingEndpointResolvesTheLocalBackend()
     {
         using var provider = Build(new Dictionary<string, string?>());
 
-        Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IRequestManager>());
+        Assert.IsType<BackendRequestManager>(provider.GetRequiredService<IRequestManager>());
+        Assert.Equal(new Uri(BackendOptions.DefaultEndpoint), provider.GetRequiredService<BackendOptions>().Endpoint);
     }
 
     private static ServiceProvider Build(Dictionary<string, string?> values)

@@ -10,11 +10,11 @@ public sealed class TimerConfigurationTests : IDisposable
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"timer-{Guid.NewGuid():N}.jsonc");
 
     [Fact]
-    public void WithoutTheFileStartupAsksForTheEndpoint()
+    public void WithoutTheFileTheLocalBackendIsUsed()
     {
         var config = TimerConfiguration.Load(_path);
 
-        Assert.Throws<InvalidOperationException>(() => BackendOptions.FromConfiguration(config));
+        Assert.Equal(new Uri(BackendOptions.DefaultEndpoint), BackendOptions.FromConfiguration(config).Endpoint);
     }
 
     [Fact]

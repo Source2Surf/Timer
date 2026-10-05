@@ -39,7 +39,14 @@ internal sealed class BackendOptions
 
     private const int DefaultBatchSize = 16;
 
+    internal const string DefaultEndpoint = "http://127.0.0.1:5082";
+
     public Uri Endpoint { get; }
+
+    /// <summary>
+    /// Read from an old score_write section, which still works but should be renamed.
+    /// </summary>
+    public bool FromScoreWriteSection { get; private init; }
 
     public TimeSpan RpcDeadline { get; }
 
@@ -67,14 +74,14 @@ internal sealed class BackendOptions
         ArgumentNullException.ThrowIfNull(configuration);
 
         var section = configuration.GetSection(SectionName);
+        var legacy  = !section.Exists() && configuration.GetSection("score_write").Exists();
 
-        if (!section.Exists() && configuration.GetSection("score_write").Exists())
+        if (legacy)
         {
-            throw new InvalidOperationException(
-                $"timer.jsonc's score_write section is now {SectionName}: rename it and remove its mode setting.");
+            section = configuration.GetSection("score_write");
         }
 
-        ValidateKnownSettings(section);
+        ValidateKnownSettings(section, legacy);
 
         var rpcDeadline          = ParseMilliseconds(section["rpc_deadline_milliseconds"],
                                                      "rpc_deadline_milliseconds",
@@ -98,7 +105,10 @@ internal sealed class BackendOptions
                                                 maximum: 128);
         var endpoint             = ParseEndpoint(section["endpoint"]);
 
-        return new BackendOptions(endpoint, rpcDeadline, pollInterval, shutdownDrainTimeout, batchSize);
+        return new BackendOptions(endpoint, rpcDeadline, pollInterval, shutdownDrainTimeout, batchSize)
+        {
+            FromScoreWriteSection = legacy,
+        };
     }
 
     internal static BackendOptions CreateForTests(Uri       endpoint,
@@ -139,11 +149,12 @@ internal sealed class BackendOptions
         return new BackendOptions(endpoint, rpcDeadline, pollInterval, shutdownDrainTimeout, batchSize);
     }
 
-    private static void ValidateKnownSettings(IConfigurationSection section)
+    // score_write's mode setting is gone: the backend is the only storage.
+    private static void ValidateKnownSettings(IConfigurationSection section, bool legacy)
     {
         foreach (var setting in section.GetChildren())
         {
-            if (!Keys.Contains(setting.Key))
+            if (!Keys.Contains(setting.Key) && !(legacy && setting.Key.Equals("mode", StringComparison.OrdinalIgnoreCase)))
             {
                 throw new InvalidOperationException($"{SectionName}:{setting.Key} is not supported.");
             }
@@ -187,8 +198,7 @@ internal sealed class BackendOptions
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
-            throw new InvalidOperationException(
-                $"timer.jsonc needs {SectionName}:endpoint, Timer.Backend's gRPC address (e.g. http://127.0.0.1:5082).");
+            raw = DefaultEndpoint;
         }
 
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var endpoint))

@@ -1,7 +1,7 @@
 {
   // Timer.Backend owns the database: every record, zone and map read or write goes through it.
   "backend": {
-    // Its gRPC port, e.g. "http://127.0.0.1:5082". The backend serves it with TimerBackend:WriteApi:Enabled=true.
+    // Its gRPC address. Empty means a backend on this machine with its default port: "http://127.0.0.1:5082".
     "endpoint": ""
   },
   // Leave empty / omit the whole "replay" section to disable remote replay upload.

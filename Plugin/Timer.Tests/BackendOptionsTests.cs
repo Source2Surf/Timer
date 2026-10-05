@@ -7,16 +7,12 @@ namespace Timer.Tests;
 public sealed class BackendOptionsTests
 {
     [Fact]
-    public void MissingEndpointFailsStartup()
-    {
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            BackendOptions.FromConfiguration(new ConfigurationBuilder().Build()));
-
-        Assert.Contains("backend:endpoint", error.Message);
-    }
+    public void MissingEndpointMeansTheLocalBackend()
+        => Assert.Equal(new Uri(BackendOptions.DefaultEndpoint),
+                        BackendOptions.FromConfiguration(new ConfigurationBuilder().Build()).Endpoint);
 
     [Fact]
-    public void LeftoverScoreWriteSectionNamesItsReplacement()
+    public void LeftoverScoreWriteSectionStillWorks()
     {
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -26,9 +22,11 @@ public sealed class BackendOptionsTests
                             })
                             .Build();
 
-        var error = Assert.Throws<InvalidOperationException>(() => BackendOptions.FromConfiguration(configuration));
+        var options = BackendOptions.FromConfiguration(configuration);
 
-        Assert.Contains("score_write", error.Message);
+        Assert.Equal(new Uri("http://timer.example:5082"), options.Endpoint);
+        Assert.True(options.FromScoreWriteSection);
+        Assert.False(BackendOptions.FromConfiguration(new ConfigurationBuilder().Build()).FromScoreWriteSection);
     }
 
     [Fact]
