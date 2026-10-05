@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
@@ -100,32 +101,27 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
             }
             Assert.Equal(60, (await first.Db.Queryable<PlayerBestRunEntity>().Where(x => x.MapId == mapB.MapId && x.Stage == 1).FirstAsync()).BestTime);
 
-            // Same map: hold the first exclusive lock and observe the second
-            // recalc attempting its lock. A third map still completes meanwhile.
+            // A recalculation takes no map lock: while one holds its player locks and score
+            // writes, a finish on the same map still commits.
             await second.GetPlayerRecords(player, mapB.MapName);
             await third.GetPlayerRecords(player, mapC.MapName);
-            using (var hold = new SqlPause(first, sql => sql.Contains("surf_player_track_scores") && sql.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)))
-            using (var attempted = new SqlSignal(second, IsMapLock))
+            using (var hold = new SqlPause(first, IsPlayerUpdate))
             {
                 var a = Task.Run(() => first.RecalculateTrackScoresAsync(mapA.MapId, 0, 0, 1));
-                Task? b = null;
                 try
                 {
                     await hold.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
-                    b = Task.Run(() => second.RecalculateTrackScoresAsync(mapA.MapId, 0, 0, 1));
-                    await attempted.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
-                    await Task.Delay(100);
-                    Assert.False(b.IsCompleted);
-                    await third.RecalculateTrackScoresAsync(mapC.MapId, 0, 0, 1).WaitAsync(TimeSpan.FromSeconds(15));
+                    await second.AddPlayerStageRecord(player, mapA.MapName, new RecordRequest { Stage = 2, Time = 50 })
+                                .WaitAsync(TimeSpan.FromSeconds(15));
                 }
-                finally { hold.Release.Set(); await a; if (b is not null) await b; }
+                finally { hold.Release.Set(); await a; }
             }
+            await third.RecalculateTrackScoresAsync(mapC.MapId, 0, 0, 1);
 
             // Different maps with one overlapping player: B must wait until A's
             // total commits, then sum the newly committed A score in a fresh snapshot.
             await first.Db.Updateable<MapEntity>().SetColumns(x => x.BasePot == 2000).Where(x => x.MapId == mapA.MapId).ExecuteCommandAsync();
-            // Saving map metadata preserves BasePot and replaces bonus tiers under
-            // the same map lock used by score recalculation.
+            // Saving map metadata preserves BasePot and replaces bonus tiers.
             mapA.Tier = [1, 2];
             await first.UpdateMapInfo(mapA);
             Assert.Equal(2000, (await first.Db.Queryable<MapEntity>().Where(x => x.MapId == mapA.MapId).FirstAsync()).BasePot);
@@ -150,7 +146,7 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
             second.Db.Aop.OnLogExecuting = (sql, _) => { if (IsPlayerUpdate(sql)) throw new InvalidOperationException("Injected wipe failure"); };
             await Assert.ThrowsAnyAsync<Exception>(() => second.RemoveMapRecords(mapA.MapName));
             second.Db.Aop.OnLogExecuting = null;
-            Assert.Equal(9, await first.Db.Queryable<RunEntity>().Where(x => x.MapId == mapA.MapId).CountAsync());
+            Assert.Equal(10, await first.Db.Queryable<RunEntity>().Where(x => x.MapId == mapA.MapId).CountAsync());
             Assert.Equal(2000u, (await first.Db.Queryable<PlayerTrackScoreEntity>().Where(x => x.MapId == mapA.MapId).FirstAsync()).Points);
             output.WriteLine($"{dialect}: map locks, cross-map player locks and refreshed score configuration passed.");
 
@@ -335,23 +331,21 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         Assert.Equal(requestCount, freshGeneration.ProcessedGeneration);
         Assert.InRange(Math.Abs((freshGeneration.AvailableAtUtc - nextRequestedAt.AddSeconds(5)).TotalSeconds), 0, 1);
         using (var completionPause = new SqlPause(first, IsOutboxCompletionUpdate))
-        using (var enqueueAttempted = new SqlSignal(second, IsMapLock))
         {
             var processing = Task.Run(() => first.ProcessScoreRecalcOutboxBatchAsync(
                                           freshGeneration.AvailableAtUtc, "generation-worker"));
-            Task? enqueue = null;
             try
             {
+                // The recalculation holds no map lock, so a PB's enqueue commits while it runs;
+                // its completion then keeps the newer generation pending.
                 await completionPause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
-                enqueue = Task.Run(() => second.EnqueueScoreRecalcAsync(
-                    mapId, style, track, 3, nextRequestedAt.AddSeconds(1)));
-                await enqueueAttempted.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
-                Assert.False(enqueue.IsCompleted); // Completion still owns the map transaction.
+                await second.EnqueueScoreRecalcAsync(mapId, style, track, 3, nextRequestedAt.AddSeconds(1))
+                            .WaitAsync(TimeSpan.FromSeconds(15));
             }
             finally
             {
                 completionPause.Release.Set();
-                await Task.WhenAll(processing, enqueue ?? Task.CompletedTask);
+                await processing;
             }
         }
 
@@ -374,24 +368,23 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         var leaseExpiryRequest = await first.Db.Queryable<ScoreRecalcOutboxEntity>()
                                                 .Where(x => x.MapId == mapId && x.Style == style && x.Track == track)
                                                 .SingleAsync();
+        // Nothing holds the map, so the recovery owner completes the generation while the expired
+        // owner is still running; the expired owner's completion then finds it processed and rolls back.
         using (var lateCompletionPause = new SqlPause(first, IsOutboxCompletionUpdate))
-        using (var recoveryAttempted = new SqlSignal(second, IsMapLock))
         {
             var lateOwner = Task.Run(() => first.ProcessScoreRecalcOutboxBatchAsync(
                                          leaseExpiryRequest.AvailableAtUtc, "expired-owner"));
-            Task<int>? recovery = null;
             try
             {
                 await lateCompletionPause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
-                recovery = Task.Run(() => second.ProcessScoreRecalcOutboxBatchAsync(
-                    leaseExpiryRequest.AvailableAtUtc.AddMinutes(2), "recovery-owner"));
-                await recoveryAttempted.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
-                Assert.False(recovery.IsCompleted);
+                Assert.Equal(1, await second.ProcessScoreRecalcOutboxBatchAsync(
+                                    leaseExpiryRequest.AvailableAtUtc.AddMinutes(2), "recovery-owner")
+                                .WaitAsync(TimeSpan.FromSeconds(15)));
             }
             finally
             {
                 lateCompletionPause.Release.Set();
-                await Task.WhenAll(lateOwner, recovery ?? Task.FromResult(0));
+                await lateOwner;
             }
         }
 
@@ -402,7 +395,7 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         Assert.Null(recovered.LeaseOwner);
         Assert.Null(recovered.LeaseUntilUtc);
 
-        // A worker can stall before taking the map lock, lose its lease, and resume only after a
+        // A worker can stall before its generation check, lose its lease, and resume only after a
         // newer generation has completed. The in-transaction generation fence must prevent
         // that old StyleFactor from becoming the final score state.
         var staleFactorRequestedAt = DateTime.UtcNow.AddMinutes(-1);
@@ -412,7 +405,7 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
                                                .Where(x => x.MapId == mapId && x.Style == 0 && x.Track == 0)
                                                .SingleAsync();
         uint newerWorkerPoints = 0;
-        using (var beforeMapLockPause = new SqlPause(first, IsMapLock))
+        using (var beforeMapLockPause = new SqlPause(first, IsGenerationCheck))
         {
             var staleWorker = Task.Run(() => first.ProcessScoreRecalcOutboxBatchAsync(
                                            staleFactorRequest.AvailableAtUtc, "stale-factor-owner"));
@@ -703,6 +696,8 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
     }
 
     private static bool IsMapLock(string sql) => sql.Contains("surf_maps") && sql.Contains("FOR UPDATE", StringComparison.OrdinalIgnoreCase);
+    private static bool IsGenerationCheck(string sql) => Regex.IsMatch(sql, @"^\s*SELECT\s+1\s+FROM", RegexOptions.IgnoreCase)
+                                                        && sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase);
     private static bool IsPlayerUpdate(string sql) => sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && sql.Contains("surf_players");
     private static bool IsBestRunWrite(string sql) => sql.Contains("surf_player_best_runs")
         && (sql.TrimStart().StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) || sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase));

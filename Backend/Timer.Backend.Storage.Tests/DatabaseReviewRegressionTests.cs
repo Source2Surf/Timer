@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
@@ -24,6 +25,22 @@ public sealed class DatabaseReviewRegressionTests
     [InlineData(true)]
     public Task PostgreSqlLongRecalculationCommitsItsCompletionAfterLeaseTakeover(bool exhaustDeliveries)
         => LongRecalculationCommitsItsCompletion(DbType.PostgreSQL, "TIMER_TEST_POSTGRES", exhaustDeliveries);
+
+    [DatabaseFact("TIMER_TEST_MYSQL")]
+    public Task MySqlWipeDuringRecalculationLeavesNoScores()
+        => WipeDuringRecalculationLeavesNoScores(DbType.MySql, "TIMER_TEST_MYSQL");
+
+    [DatabaseFact("TIMER_TEST_POSTGRES")]
+    public Task PostgreSqlWipeDuringRecalculationLeavesNoScores()
+        => WipeDuringRecalculationLeavesNoScores(DbType.PostgreSQL, "TIMER_TEST_POSTGRES");
+
+    [DatabaseFact("TIMER_TEST_MYSQL")]
+    public Task MySqlOvertakenRecalculationCannotCommitOverANewerOne()
+        => OvertakenRecalculationCannotCommitOverANewerOne(DbType.MySql, "TIMER_TEST_MYSQL");
+
+    [DatabaseFact("TIMER_TEST_POSTGRES")]
+    public Task PostgreSqlOvertakenRecalculationCannotCommitOverANewerOne()
+        => OvertakenRecalculationCannotCommitOverANewerOne(DbType.PostgreSQL, "TIMER_TEST_POSTGRES");
 
     [DatabaseFact("TIMER_TEST_MYSQL")]
     public Task MySqlConcurrentZoneSavesReplaceWholeSnapshots()
@@ -171,7 +188,7 @@ public sealed class DatabaseReviewRegressionTests
         var followerPauses = followers.Select(follower => new SqlPause(follower, sql =>
         {
             if (IsScoreRead(sql)) Interlocked.Increment(ref followerScoreReads);
-            return IsMapLock(sql);
+            return IsGenerationCheck(sql);
         })).ToArray();
         var firstWork = Task.Run(() => first.ProcessScoreRecalcOutboxBatchAsync(pending.AvailableAtUtc, "long-owner"));
         var followerWork = new List<Task<int>>();
@@ -215,6 +232,139 @@ public sealed class DatabaseReviewRegressionTests
         Assert.Equal(0, followerScoreReads); // Waiters see completed generation and never recalculate it.
     }
 
+    // Recalculations take no map lock. A wipe that lands while one has uncommitted scores must
+    // still end with no scores on the map and every total equal to the remaining scores.
+    private static async Task WipeDuringRecalculationLeavesNoScores(DbType type, string variable)
+    {
+        using var fixture = new Fixture(type, variable);
+        var setup = fixture.NewStore();
+        var worker = fixture.NewStore();
+        var wiper = fixture.NewStore();
+        var observer = fixture.NewStore();
+        await setup.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
+
+        var wiped = await setup.GetMapInfo($"surf_wiped_{Guid.NewGuid():N}");
+        var kept = await setup.GetMapInfo($"surf_kept_{Guid.NewGuid():N}");
+        var p = new SteamID(76561198000000000UL + (ulong)Random.Shared.NextInt64(1, 1_000_000_000));
+        var q = new SteamID(p.AsPrimitive() + 1);
+        await setup.GetPlayerProfile(p, "Wiped and kept");
+        await setup.GetPlayerProfile(q, "Wiped only");
+        await setup.AddPlayerRecord(p, wiped.MapName, new RecordRequest { Time = 80 });
+        await setup.AddPlayerRecord(q, wiped.MapName, new RecordRequest { Time = 90 });
+        await setup.AddPlayerRecord(p, kept.MapName, new RecordRequest { Time = 70 });
+        await setup.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
+        await setup.RecalculateTrackScoresAsync(kept.MapId, 0, 0, 1);
+
+        var now = DateTime.UtcNow;
+        await worker.EnqueueScoreRecalcAsync(wiped.MapId, 0, 0, 1, now);
+        var queued = await observer.Db.Queryable<ScoreRecalcOutboxEntity>().Where(x => x.MapId == wiped.MapId).SingleAsync();
+
+        Task? wipe = null;
+        using (var pause = new SqlPause(worker, IsOutboxCompletion))
+        {
+            var recalc = Task.Run(() => worker.ProcessScoreRecalcOutboxBatchAsync(queued.AvailableAtUtc, "in-flight"));
+            try
+            {
+                await pause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                wipe = Task.Run(() => wiper.RemoveMapRecords(wiped.MapName));
+                await Task.Delay(500);
+            }
+            finally
+            {
+                pause.Release.Set();
+                await Task.WhenAll(recalc, wipe ?? Task.CompletedTask).WaitAsync(TimeSpan.FromSeconds(30));
+            }
+        }
+
+        while (await worker.ProcessScoreRecalcOutboxBatchAsync(now.AddMinutes(5), $"drain-{Guid.NewGuid():N}") > 0)
+        {
+        }
+
+        Assert.Equal(0, await observer.Db.Queryable<PlayerTrackScoreEntity>().Where(x => x.MapId == wiped.MapId).CountAsync());
+        foreach (var player in new[] { p, q })
+        {
+            var id = unchecked((long)player.AsPrimitive());
+            var scores = await observer.Db.Queryable<PlayerTrackScoreEntity>().Where(x => x.SteamId == id).ToListAsync();
+            var total = (await observer.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == id).SingleAsync()).Points;
+            Assert.Equal(scores.Sum(x => (long)x.Points), (long)total);
+        }
+
+        Assert.True((await observer.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == unchecked((long)p.AsPrimitive())).SingleAsync()).Points > 0);
+    }
+
+    // A recalc outlives its lease while a PB queues a newer generation; a second worker claims that
+    // generation and reads scores before the first commits. Only one of them may commit.
+    private static async Task OvertakenRecalculationCannotCommitOverANewerOne(DbType type, string variable)
+    {
+        using var fixture = new Fixture(type, variable);
+        var setup = fixture.NewStore();
+        var slow = fixture.NewStore();
+        var takeover = fixture.NewStore();
+        var observer = fixture.NewStore();
+        await setup.Db.Deleteable<ScoreRecalcOutboxEntity>().ExecuteCommandAsync();
+
+        var map = await setup.GetMapInfo($"surf_overtaken_{Guid.NewGuid():N}");
+        var first = 76561198000000000UL + (ulong)Random.Shared.NextInt64(1, 1_000_000_000);
+        var (p, q, r) = (new SteamID(first), new SteamID(first + 1), new SteamID(first + 2));
+        foreach (var (player, time) in new[] { (p, 50f), (q, 60f), (r, 70f) })
+        {
+            await setup.GetPlayerProfile(player, "Overtaken");
+            await setup.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = time });
+        }
+
+        while (await setup.ProcessScoreRecalcOutboxBatchAsync(DateTime.UtcNow.AddMinutes(10), $"seed-{Guid.NewGuid():N}") > 0)
+        {
+        }
+
+        await setup.AddPlayerRecord(q, map.MapName, new RecordRequest { Time = 40 });
+        var queued = await observer.Db.Queryable<ScoreRecalcOutboxEntity>().Where(x => x.MapId == map.MapId).SingleAsync();
+        using (var slowPause = new SqlPause(slow, IsOutboxCompletion))
+        using (var takeoverPause = new SqlPause(takeover, IsOutboxCompletion))
+        {
+            var slowRun = Task.Run(() => slow.ProcessScoreRecalcOutboxBatchAsync(queued.AvailableAtUtc, "slow-owner"));
+            var takeoverRun = Task.CompletedTask;
+            try
+            {
+                await slowPause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await setup.AddPlayerRecord(p, map.MapName, new RecordRequest { Time = 30 });
+                takeoverRun = Task.Run(() => takeover.ProcessScoreRecalcOutboxBatchAsync(queued.AvailableAtUtc.AddMinutes(3), "takeover-owner"));
+                await takeoverPause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                slowPause.Release.Set();
+                await slowRun.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            finally
+            {
+                slowPause.Release.Set();
+                takeoverPause.Release.Set();
+                await Task.WhenAll(slowRun, takeoverRun).WaitAsync(TimeSpan.FromSeconds(10));
+            }
+        }
+
+        async Task<uint> Score(SteamID player)
+        {
+            var id = unchecked((long)player.AsPrimitive());
+            return (await observer.Db.Queryable<PlayerTrackScoreEntity>().Where(x => x.MapId == map.MapId && x.SteamId == id).SingleAsync()).Points;
+        }
+
+        // The board is P 30, Q 40, R 70.
+        Assert.True(await Score(p) > await Score(q));
+        Assert.True(await Score(q) > await Score(r));
+        var done = await observer.Db.Queryable<ScoreRecalcOutboxEntity>().Where(x => x.Id == queued.Id).SingleAsync();
+        Assert.Equal(done.RequestedGeneration, done.ProcessedGeneration);
+        foreach (var player in new[] { p, q, r })
+        {
+            var id = unchecked((long)player.AsPrimitive());
+            var total = (await observer.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == id).SingleAsync()).Points;
+            Assert.Equal(await Score(player), total);
+        }
+    }
+
+    private static bool IsOutboxCompletion(string sql)
+        => sql.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)
+           && sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase)
+           && sql.Contains("ProcessedGeneration", StringComparison.OrdinalIgnoreCase)
+           && sql.IndexOf("ProcessedGeneration", StringComparison.OrdinalIgnoreCase) < sql.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase);
+
     private static async Task ConcurrentZoneSavesReplaceWholeSnapshots(DbType type, string variable)
     {
         using var fixture = new Fixture(type, variable);
@@ -253,6 +403,9 @@ public sealed class DatabaseReviewRegressionTests
     private static bool IsMapLock(string sql)
         => sql.Contains("surf_maps", StringComparison.OrdinalIgnoreCase)
             && sql.Contains("FOR UPDATE", StringComparison.OrdinalIgnoreCase);
+    private static bool IsGenerationCheck(string sql) => Regex.IsMatch(sql, @"^\s*SELECT\s+1\s+FROM", RegexOptions.IgnoreCase)
+                                                        && sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsScoreRead(string sql) => IsCommand(sql, "SELECT", "surf_player_track_scores");
 
     private sealed class SqlPause : IDisposable

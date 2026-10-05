@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
@@ -55,7 +56,9 @@ public sealed class OutboxBatchClaimRegressionTests
             var leasedReads = 0;
             worker.Db.Aop.OnLogExecuting = (sql, _) =>
             {
+                // The claim re-read of each item; the recalc's own lease check selects a constant.
                 if (!sql.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)
+                    || sql.TrimStart().StartsWith("SELECT 1", StringComparison.OrdinalIgnoreCase)
                     || !sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase)
                     || !sql.Contains("LeaseOwner", StringComparison.OrdinalIgnoreCase))
                     return;
@@ -135,7 +138,7 @@ public sealed class OutboxBatchClaimRegressionTests
 
         var cancellations = Enumerable.Range(0, workers.Length).Select(_ => new CancellationTokenSource()).ToArray();
         var pauses = workers.Select((worker, index) => new SqlPause(
-            worker, index == 0 ? IsScoreRead : IsMapLock)).ToArray();
+            worker, index == 0 ? IsScoreRead : IsGenerationCheck)).ToArray();
         var operations = new List<Task<int>>();
         try
         {
@@ -188,6 +191,9 @@ public sealed class OutboxBatchClaimRegressionTests
             .Where(x => x.Id == tail.Id).SingleAsync();
         Assert.Equal(recovered.RequestedGeneration, recovered.ProcessedGeneration);
     }
+
+    private static bool IsGenerationCheck(string sql) => Regex.IsMatch(sql, @"^\s*SELECT\s+1\s+FROM", RegexOptions.IgnoreCase)
+                                                        && sql.Contains("surf_score_recalc_outbox", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsScoreRead(string sql)
         => sql.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)

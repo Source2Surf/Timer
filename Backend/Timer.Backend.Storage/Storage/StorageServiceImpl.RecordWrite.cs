@@ -149,9 +149,27 @@ internal sealed partial class StorageServiceImpl
             return;
         }
 
+        var wakeScoreRecalcWorker = false;
         await WithRecordTransactionAsync(async () =>
         {
             await LockMapAsync(mapId.Value);
+
+            // Score recalculations take no map lock. Queue a repair on every board first: a run
+            // already in flight then cannot commit scores from before this wipe, and one that
+            // committed first is visible to the reads below. The repairs find empty boards.
+            var queued = await _db.Queryable<ScoreRecalcOutboxEntity>()
+                                  .Where(x => x.MapId == mapId.Value)
+                                  .Select(x => new { x.Style, x.Track, x.StyleFactor })
+                                  .ToListAsync(OperationCancellation);
+            var nowUtc = DateTime.UtcNow;
+            foreach (var board in queued)
+            {
+                await EnqueueScoreRecalcInCurrentRecordTransactionAsync(mapId.Value, board.Style, board.Track,
+                                                                        board.StyleFactor, nowUtc, repairTotals: true);
+            }
+
+            wakeScoreRecalcWorker = queued.Count > 0;
+
             // Keep submission receipts: an exact retry acknowledges the historical commit,
             // rather than recreating a run intentionally removed by this administrative wipe.
             // Capture and deduplicate affected players before deleting their track scores.
@@ -167,7 +185,7 @@ internal sealed partial class StorageServiceImpl
                 affectedPlayers.Add(row.SteamId);
             }
 
-            await LockPlayersForPointsAsync(affectedPlayers);
+            var locked = await LockPlayersForPointsAsync(affectedPlayers);
 
             // Delete segments by materialized run-id list instead of a correlated-EXISTS
             // delete: MySQL does not semi-join-transform DELETE, so EXISTS would evaluate
@@ -211,9 +229,10 @@ internal sealed partial class StorageServiceImpl
                      .Where(x => x.MapId == mapId.Value)
                      .ExecuteCommandAsync(OperationCancellation);
 
-            await UpdatePlayerTotalPointsAsync(affectedPlayers);
+            await UpdatePlayerTotalPointsAsync(affectedPlayers, locked);
         });
         RemoveBestRunSeedCacheForMap(mapId.Value);
+        if (wakeScoreRecalcWorker) WakeScoreRecalcWorker();
     }
 
     /// <summary>

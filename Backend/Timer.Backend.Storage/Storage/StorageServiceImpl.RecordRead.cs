@@ -356,7 +356,8 @@ internal sealed partial class StorageServiceImpl
     // A player's best runs on the map's main or stage boards, with their name.
     private Task<IReadOnlyList<RunRecord>> ReadPlayerBestsAsync(ulong mapId, long steamId, bool stageRecords, int limit)
     {
-        var read = CachedShape($"player-bests:{stageRecords}:{limit}", () =>
+        var shapeLimit = ShapeLimit(limit);
+        var read = CachedShape($"player-bests:{stageRecords}:{shapeLimit}", () =>
         {
             var map        = Sentinel.MapId;
             var playerId   = Sentinel.SteamId;
@@ -371,9 +372,9 @@ internal sealed partial class StorageServiceImpl
                                .OrderBy((best, run, player) => best.BestTime)
                                .OrderBy((best, run, player) => best.RunId);
 
-            return SelectBoard(query).Take(limit).ToSql();
+            return SelectBoard(query).Take(shapeLimit).ToSql();
         }, Sentinel.MapId, Sentinel.SteamId);
 
-        return ReadRunRecordsAsync(read, mapId, steamId);
+        return ReadRunRecordsAsync(read, limit, mapId, steamId);
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Threading.Tasks;
+using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
 using SqlSugar;
 
@@ -48,13 +49,26 @@ internal sealed partial class StorageServiceImpl
         return _db.Ado.ExecuteCommandAsync(statement.Sql, statement.Bind(arguments));
     }
 
-    private async Task<IReadOnlyList<RunRecord>> ReadRunRecordsAsync(CachedSql read, params object[] arguments)
+    // Shapes carry their LIMIT, and HTTP callers choose any limit: read one of a few sizes and stop
+    // at the requested count, so the shape cache stays bounded.
+    private static int ShapeLimit(int limit)
+        => limit switch
+        {
+            <= 10   => 10,
+            <= 50   => 50,
+            <= 100  => 100,
+            <= 500  => 500,
+            <= 1000 => 1000,
+            _       => IRequestManager.DefaultRecordLimit,
+        };
+
+    private async Task<IReadOnlyList<RunRecord>> ReadRunRecordsAsync(CachedSql read, int take, params object[] arguments)
     {
         await using var reader = await ReadAsync(read, arguments);
         var ordinals = read.Ordinals(reader, BoardColumns);
         var result   = new List<RunRecord>();
 
-        while (await reader.ReadAsync(OperationCancellation))
+        while (result.Count < take && await reader.ReadAsync(OperationCancellation))
         {
             result.Add(ReadRunRecord(reader, ordinals));
         }

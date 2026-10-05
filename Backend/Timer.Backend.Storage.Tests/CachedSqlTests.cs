@@ -120,6 +120,9 @@ public sealed class CachedSqlTests
                          (await store.GetMapRecords(a, 0, 0)).Select(x => (x.SteamId, x.PlayerName, x.Time)));
             Assert.Equal([(q.AsPrimitive(), 50f)], (await store.GetMapRecords(b, 0, 0)).Select(x => (x.SteamId, x.Time)));
             Assert.Equal(2, (await store.GetMapRecords(a)).Count);
+            // HTTP limits share a few cached sizes; the reader stops at the requested count.
+            Assert.Equal([60f], (await store.GetMapRecordsForReadApiAsync(a, false, 0, 0, 0, 1, true)).Select(x => x.Time));
+            Assert.Equal([60f, 70f], (await store.GetMapRecordsForReadApiAsync(a, false, 0, 0, 0, 7, true)).Select(x => x.Time));
             Assert.Equal(1, Assert.Single(await store.GetMapStageRecords(a)).Stage);
             Assert.Empty(await store.GetMapStageRecords(b));
 
@@ -164,7 +167,7 @@ public sealed class CachedSqlTests
 
         Assert.Equal([(1, 10f), (2, 20f), (3, 30f)], (await store.GetMapStageRecords(e, 1)).Select(x => (x.Stage, x.Time)));
         Assert.Equal([(1, 10f)], (await store.GetMapStageRecords(a, 1)).Select(x => (x.Stage, x.Time)));
-        Assert.Equal([(1, 30f), (0, 60f)], (await store.GetMapRecords(e, 1)).Select(x => (x.Track, x.Time)));
+        Assert.Equal([(0, 60f), (1, 30f)], (await store.GetMapRecords(e, 1)).Select(x => (x.Track, x.Time)));
         Assert.Equal(6, (await store.GetMapStageRecords(e, 5)).Count);
 
         // Each record merges into its board's score queue through the one cached update.

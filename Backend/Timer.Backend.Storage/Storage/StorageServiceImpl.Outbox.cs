@@ -297,11 +297,11 @@ internal sealed partial class StorageServiceImpl
                 request.StyleFactor,
                 request.RepairGeneration > request.ProcessedGeneration,
                 () => IsScoreRecalcGenerationPendingAsync(request),
-                () => CompleteScoreRecalcOutboxAsync(request, completedAtUtc()));
+                () => CompleteScoreRecalcOutboxAsync(request, leaseOwner, completedAtUtc()));
             if (!recalculated)
             {
-                // A newer generation may have arrived without stealing our lease. Release that
-                // stale token promptly; if another owner already took over, this affects no rows.
+                // Another delivery completed this generation, or a repair or wipe superseded it.
+                // Release a still-held token promptly; if another owner took over, this affects no rows.
                 await ReleaseLeaseForNewerGenerationAsync(request, leaseOwner, completedAtUtc());
                 return;
             }
@@ -351,14 +351,25 @@ internal sealed partial class StorageServiceImpl
             .ExecuteCommandAsync(OperationCancellation);
     }
 
+    // Recalculations take no map lock. The generation is the fence instead: completion is the
+    // last statement of the score transaction, and a queued repair (wipe, tier or policy change)
+    // supersedes the run. Of two deliveries of one generation only the first to complete commits,
+    // so a run that outlives its lease can still finish. Once a newer generation is queued, only the
+    // lease holder may commit: a delivery of that generation may already be running on a snapshot
+    // taken before this run's writes.
     private Task<bool> IsScoreRecalcGenerationPendingAsync(ScoreRecalcOutboxEntity request)
         => _db.Queryable<ScoreRecalcOutboxEntity>()
               .Where(x => x.Id == request.Id
-                          && x.RequestedGeneration == request.RequestedGeneration
-                          && x.ProcessedGeneration < request.RequestedGeneration)
+                          && x.ProcessedGeneration < request.RequestedGeneration
+                          && x.RepairGeneration <= request.RequestedGeneration)
               .AnyAsync(OperationCancellation);
 
-    private async Task CompleteScoreRecalcOutboxAsync(ScoreRecalcOutboxEntity request, DateTime nowUtc)
+    /// <summary>
+    /// Marks the claimed generation processed as the last statement of the score transaction.
+    /// False means the run was superseded and its writes must roll back.
+    /// </summary>
+    private async Task<bool> CompleteScoreRecalcOutboxAsync(ScoreRecalcOutboxEntity request, string leaseOwner,
+                                                            DateTime nowUtc)
     {
         if (_db.Ado.Transaction is null)
             throw new InvalidOperationException("Outbox completion must commit with the score transaction.");
@@ -367,8 +378,6 @@ internal sealed partial class StorageServiceImpl
         string? noError = null;
         DateTime? noDate = null;
 
-        // The map lock excludes enqueue for this board. Lease ownership is only a scheduling
-        // hint: a replacement claimant must not prevent the current generation from committing.
         var completed = await _db.Updateable<ScoreRecalcOutboxEntity>()
             .SetColumns(x => x.ProcessedGeneration == request.RequestedGeneration)
             .SetColumns(x => x.AvailableAtUtc == nowUtc)
@@ -383,9 +392,28 @@ internal sealed partial class StorageServiceImpl
                         && x.RequestedGeneration == request.RequestedGeneration
                         && x.ProcessedGeneration < request.RequestedGeneration)
             .ExecuteCommandAsync(OperationCancellation);
+        if (completed == 1) return true;
 
-        if (completed != 1)
-            throw new InvalidOperationException("Outbox generation changed while its map was locked.");
+        // A PB queued a newer generation while this ran. These scores are still current up to the
+        // claimed generation, so keep them and leave the newer one for a pass after a fresh debounce.
+        var availableAtUtc = nowUtc.Add(ScoreRecalcDebounceDelay);
+        completed = await _db.Updateable<ScoreRecalcOutboxEntity>()
+            .SetColumns(x => x.ProcessedGeneration == request.RequestedGeneration)
+            .SetColumns(x => x.AvailableAtUtc == availableAtUtc)
+            .SetColumns(x => x.PendingSinceUtc == nowUtc)
+            .SetColumns(x => x.AttemptCount == 0)
+            .SetColumns(x => x.LeaseOwner == noLeaseOwner)
+            .SetColumns(x => x.LeaseUntilUtc == noDate)
+            .SetColumns(x => x.LastError == noError)
+            .SetColumns(x => x.UpdatedAtUtc == nowUtc)
+            .Where(x => x.Id == request.Id
+                        && x.LeaseOwner == leaseOwner
+                        && x.RequestedGeneration > request.RequestedGeneration
+                        && x.ProcessedGeneration < request.RequestedGeneration
+                        && x.RepairGeneration <= request.RequestedGeneration)
+            .ExecuteCommandAsync(OperationCancellation);
+
+        return completed == 1;
     }
 
     private async Task<bool> FailScoreRecalcOutboxAsync(ScoreRecalcOutboxEntity request, string leaseOwner,

@@ -12,16 +12,17 @@ namespace Timer.Backend.Storage;
 
 internal sealed partial class StorageServiceImpl
 {
-    // Map lock -> player locks -> score writes -> total update, all in one
-    // READ COMMITTED transaction. Different maps can proceed concurrently.
+    // Player locks -> score writes -> total update, all in one READ COMMITTED transaction.
+    // No map lock, so finishes on the map never wait for a recalculation. Direct calls are a
+    // test seam; the worker serializes each board through its Outbox lease.
     internal async Task RecalculateTrackScoresAsync(ulong mapId, int style, ushort track, double styleFactor,
                                                     bool repairTotals = false)
         => _ = await RecalculateTrackScoresCoreAsync(mapId, style, track, styleFactor, repairTotals, null);
 
     /// <summary>
-    /// Runs a recalculation only while an optional durable-work fence still holds. The fence is
-    /// evaluated after taking the map lock and before reading or writing score state, so a worker
-    /// holding an older generation cannot overwrite newer scores with stale parameters.
+    /// Runs a recalculation while an optional durable-work fence holds. <paramref name="completeWorkAsync"/>
+    /// runs last in the score transaction; when it reports the work superseded (lease lost, or a
+    /// wipe or repair queued meanwhile) every score write rolls back.
     /// </summary>
     private async Task<bool> RecalculateTrackScoresCoreAsync(ulong mapId,
                                                               int style,
@@ -29,36 +30,45 @@ internal sealed partial class StorageServiceImpl
                                                               double styleFactor,
                                                               bool repairTotals,
                                                               Func<Task<bool>>? canWriteAsync,
-                                                              Func<Task>? completeWorkAsync = null)
+                                                              Func<Task<bool>>? completeWorkAsync = null)
     {
         // Local seed gates must always be acquired before database locks.
         await EnsureBestRunsSeededAsync(mapId, RunType.Main, style, track, 0);
         var recalculated = false;
-        await WithRecordTransactionAsync(async () =>
+
+        try
         {
-            // WithRecordTransactionAsync may retry after rolling back a lock conflict. Never carry
-            // a successful fence result from an earlier attempt into the retry.
-            recalculated = false;
-            await LockMapAsync(mapId);
-
-            if (canWriteAsync is not null && !await canWriteAsync())
+            await WithRecordTransactionAsync(async () =>
             {
-                return;
-            }
+                // WithRecordTransactionAsync may retry after rolling back a lock conflict. Never carry
+                // a successful fence result from an earlier attempt into the retry.
+                recalculated = false;
 
-            recalculated = true;
-            await RecalculateTrackScoresInCurrentTransactionAsync(mapId, style, track, styleFactor, repairTotals);
-            if (completeWorkAsync is not null) await completeWorkAsync();
-        });
+                if (canWriteAsync is not null && !await canWriteAsync())
+                {
+                    return;
+                }
+
+                await RecalculateTrackScoresInCurrentTransactionAsync(mapId, style, track, styleFactor, repairTotals);
+                if (completeWorkAsync is not null && !await completeWorkAsync()) throw new ScoreRecalcSupersededException();
+                recalculated = true;
+            });
+        }
+        catch (ScoreRecalcSupersededException)
+        {
+            return false;
+        }
 
         return recalculated;
     }
 
+    private sealed class ScoreRecalcSupersededException : Exception;
+
     private async Task RecalculateTrackScoresInCurrentTransactionAsync(ulong mapId, int style, ushort track, double styleFactor,
                                                                       bool repairTotals)
     {
-        // Read current configuration while the map is locked; queueing never
-        // captures a potentially stale tier or score pool.
+        // Read current configuration here; queueing never captures a potentially stale tier
+        // or score pool, and a tier change queues a repair that supersedes this run.
         var (tier, basePot) = await GetTrackScoreConfigAsync(mapId, track);
         var trackPool = ScoreCalculator.CalculateTrackPool(tier, ScoreCalculator.IsBonus(track), basePot, styleFactor);
         var rankedPlayers = await GetRankedPlayersAsync(mapId, style, track);
@@ -103,10 +113,10 @@ internal sealed partial class StorageServiceImpl
 
         // Acquire all player locks before any score writes. A later SUM statement
         // then sees prior writers' commits even if this transaction had to wait.
-        await LockPlayersForPointsAsync(retotal);
+        var locked = await LockPlayersForPointsAsync(retotal);
 
-        // The map lock makes our existing-row lookup authoritative. No second
-        // Storageable existence probe and no individual update per player.
+        // The completion fence rolls this run back if another one could have changed these rows
+        // since the lookup, so it is authoritative. No Storageable probe, no update per player.
         foreach (var batch in inserts.Chunk(500))
             await _db.Insertable(batch).ExecuteCommandAsync(OperationCancellation);
         foreach (var batch in updates.Chunk(500))
@@ -117,85 +127,116 @@ internal sealed partial class StorageServiceImpl
                 .Where(x => x.MapId == mapId && x.Style == style && x.Track == track && batch.Contains(x.SteamId))
                 .ExecuteCommandAsync(OperationCancellation);
 
-        // Unchanged totals are filtered in SQL so they do not generate writes or change UpdatedAt.
-        await UpdatePlayerTotalPointsAsync(retotal);
+        await UpdatePlayerTotalPointsAsync(retotal, locked);
     }
 
-    private async Task LockPlayersForPointsAsync(IReadOnlyList<long> steamIds)
+    // Locks the players in ascending primary-key order and returns their current totals.
+    private async Task<Dictionary<long, LockedPlayerRow>> LockPlayersForPointsAsync(IReadOnlyList<long> steamIds)
     {
         if (_db.Ado.Transaction is null) throw new InvalidOperationException("Player locks require a transaction.");
-        if (_db.CurrentConnectionConfig.DbType == DbType.Sqlite) return;
 
         var ids = new List<ulong>(steamIds.Count);
         foreach (var batch in steamIds.Chunk(500))
-            ids.AddRange(await _db.Queryable<PlayerEntity>().Where(x => batch.Contains(x.SteamId)).Select(x => x.Id).ToListAsync(OperationCancellation));
+            ids.AddRange(await _db.Queryable<PlayerEntity>().In(x => x.SteamId, batch).Select(x => x.Id).ToListAsync(OperationCancellation));
         ids.Sort();
-        // A primary-key-only projection/range avoids secondary-index/filesort lock
-        // order differences. All map transactions take the same ascending order.
+
+        // A primary-key-only range avoids secondary-index/filesort lock order differences.
+        // Every transaction that locks players takes this ascending order.
+        var locked = new Dictionary<long, LockedPlayerRow>(ids.Count);
         foreach (var batch in ids.Chunk(500))
-            await _db.Queryable<PlayerEntity>().Where(x => batch.Contains(x.Id)).OrderBy(x => x.Id)
-                .TranLock(DbLockType.Wait).Select(x => x.Id).ToListAsync(OperationCancellation);
+        {
+            var query = _db.Queryable<PlayerEntity>().In(x => x.Id, batch).OrderBy(x => x.Id);
+            if (_db.CurrentConnectionConfig.DbType != DbType.Sqlite) query = query.TranLock(DbLockType.Wait);
+            foreach (var row in await query.Select(x => new LockedPlayerRow
+                     {
+                         Id = x.Id, SteamId = x.SteamId, Points = SqlFunc.ToInt64(x.Points),
+                         JoinedAtUtc = x.JoinedAtUtc, UpdatedAt = x.UpdatedAt,
+                     }).ToListAsync(OperationCancellation))
+            {
+                locked[row.SteamId] = row;
+            }
+        }
+
+        return locked;
     }
 
-    private async Task UpdatePlayerTotalPointsAsync(IReadOnlyList<long> idList)
+    // Re-totals the locked players from their track scores and writes only the totals that changed.
+    private async Task UpdatePlayerTotalPointsAsync(IReadOnlyList<long> idList, Dictionary<long, LockedPlayerRow> locked)
     {
         var now = DateTime.UtcNow;
+        var changed = new List<PlayerEntity>();
+        var legacy = new List<ulong>();
+        var capped = new List<long>();
+
         // Separate statement AFTER the lock reads; READ COMMITTED refreshes the
         // snapshot here. Atomic SUM alone does not provide this ordering on PG.
         foreach (var batch in idList.Chunk(500))
         {
             // The score tables use uint points, but a player's sum across boards can exceed
-            // uint even when every single track score is individually representable. Check
-            // in SQL as signed BIGINT before the provider coerces SUM into PlayerEntity.Points.
-            var totals = await _db.Queryable<PlayerTrackScoreEntity>()
-                                  .Where(s => batch.Contains(s.SteamId))
-                                  .GroupBy(s => s.SteamId)
-                                  .Select(s => new PlayerTotalPointsRow
-                                  {
-                                      SteamId = s.SteamId,
-                                      TotalPoints = SqlFunc.AggregateSum(SqlFunc.ToInt64(s.Points)),
-                                  })
-                                  .ToListAsync(OperationCancellation);
-            if (totals.Any(x => x.TotalPoints < 0))
+            // uint even when every single track score is individually representable. Sum
+            // as signed BIGINT before narrowing.
+            var totals = (await _db.Queryable<PlayerTrackScoreEntity>()
+                                   .In(s => s.SteamId, batch)
+                                   .GroupBy(s => s.SteamId)
+                                   .Select(s => new PlayerTotalPointsRow
+                                   {
+                                       SteamId = s.SteamId,
+                                       TotalPoints = SqlFunc.AggregateSum(SqlFunc.ToInt64(s.Points)),
+                                   })
+                                   .ToListAsync(OperationCancellation))
+                         .ToDictionary(x => x.SteamId, x => x.TotalPoints);
+
+            foreach (var steamId in batch)
             {
-                throw new InvalidOperationException("Player total score is negative.");
+                if (!locked.TryGetValue(steamId, out var player)) continue;
+
+                var total = totals.GetValueOrDefault(steamId);
+                if (total < 0) throw new InvalidOperationException("Player total score is negative.");
+
+                // A total above uint is capped rather than failing the transaction: throwing here rolled
+                // back the whole board, so one player's cross-board sum stopped every other player's
+                // scores on it from updating and eventually dead-lettered the board.
+                if (total > uint.MaxValue)
+                {
+                    capped.Add(steamId);
+                    total = uint.MaxValue;
+                }
+
+                if (total == player.Points) continue;
+                if (player.JoinedAtUtc is null) legacy.Add(player.Id);
+                changed.Add(new PlayerEntity { Id = player.Id, SteamId = steamId, Points = (uint)total, UpdatedAt = now });
             }
-
-            // A total above uint is capped rather than failing the transaction: throwing here rolled
-            // back the whole board, so one player's cross-board sum stopped every other player's
-            // scores on it from updating and eventually dead-lettered the board.
-            var cappedSteamIds = totals.Where(x => x.TotalPoints > uint.MaxValue).Select(x => x.SteamId).ToList();
-            if (cappedSteamIds.Count > 0)
-            {
-                _logger.LogWarning(
-                    "Capping the total score of {Count} player(s) at {Max}; their per-board scores sum past the uint range. SteamIds: {SteamIds}",
-                    cappedSteamIds.Count, uint.MaxValue, string.Join(", ", cappedSteamIds.Take(20)));
-
-                await _db.Updateable<PlayerEntity>()
-                    .SetColumns(p => p.Points == uint.MaxValue)
-                    .SetColumns(p => p.JoinedAtUtc == SqlFunc.IsNull(p.JoinedAtUtc, p.UpdatedAt))
-                    .SetColumns(p => p.UpdatedAt == now)
-                    .Where(p => cappedSteamIds.Contains(p.SteamId) && p.Points != uint.MaxValue)
-                    .ExecuteCommandAsync(OperationCancellation);
-            }
-
-            var exactBatch = cappedSteamIds.Count == 0 ? batch : batch.Except(cappedSteamIds).ToArray();
-            if (exactBatch.Length == 0)
-            {
-                continue;
-            }
-
-            await _db.Updateable<PlayerEntity>()
-                .SetColumns(p => p.Points == SqlFunc.IsNull(SqlFunc.Subqueryable<PlayerTrackScoreEntity>()
-                    .Where(s => s.SteamId == p.SteamId).Sum(s => s.Points), 0u))
-                // Freeze legacy/null join dates before UpdatedAt changes (also preserves
-                // MySQL's left-to-right single-table assignment semantics).
-                .SetColumns(p => p.JoinedAtUtc == SqlFunc.IsNull(p.JoinedAtUtc, p.UpdatedAt))
-                .SetColumns(p => p.UpdatedAt == now)
-                .Where(p => exactBatch.Contains(p.SteamId) && p.Points != SqlFunc.IsNull(SqlFunc.Subqueryable<PlayerTrackScoreEntity>()
-                    .Where(s => s.SteamId == p.SteamId).Sum(s => s.Points), 0u))
-                .ExecuteCommandAsync(OperationCancellation);
         }
+
+        if (capped.Count > 0)
+        {
+            _logger.LogWarning(
+                "Capping the total score of {Count} player(s) at {Max}; their per-board scores sum past the uint range. SteamIds: {SteamIds}",
+                capped.Count, uint.MaxValue, string.Join(", ", capped.Take(20)));
+        }
+
+        // Rows from older writers: freeze the join date from UpdatedAt in SQL before the batch
+        // below changes UpdatedAt. Batches write values as literals, so join dates stay out of them.
+        foreach (var batch in legacy.Chunk(500))
+            await _db.Updateable<PlayerEntity>()
+                     .SetColumns(p => p.JoinedAtUtc == SqlFunc.IsNull(p.JoinedAtUtc, p.UpdatedAt))
+                     .Where(p => batch.Contains(p.Id))
+                     .ExecuteCommandAsync(OperationCancellation);
+
+        foreach (var batch in changed.Chunk(500))
+            await _db.Updateable(batch.ToList())
+                     .UpdateColumns(x => new { x.Points, x.UpdatedAt })
+                     .ExecuteCommandAsync(OperationCancellation);
+    }
+
+    private sealed class LockedPlayerRow
+    {
+        public ulong     Id          { get; set; }
+        [SugarColumn(ColumnDataType = "bigint")]
+        public long      SteamId     { get; set; }
+        public long      Points      { get; set; }
+        public DateTime? JoinedAtUtc { get; set; }
+        public DateTime  UpdatedAt   { get; set; }
     }
 
     /// <summary>

@@ -118,15 +118,81 @@ internal sealed partial class StorageServiceImpl
         }
 
         var normalizedLimit = NormalizeLimit(limit);
-        var shape = $"board:{runType}:{style.HasValue}:{track.HasValue}:{stage.HasValue}:{orderByStageThenTime}:{limitPerBoard}:{normalizedLimit}";
+
+        if (limitPerBoard)
+        {
+            // Each board's top rows through the board index, rather than ranking every row of the map.
+            var records = new List<RunRecord>();
+            foreach (var board in await ReadBoardKeysAsync(mapId.Value, runType))
+            {
+                records.AddRange(await ReadBoardAsync(mapId.Value, runType, board.Style, (ushort)board.Track, (ushort)board.Stage,
+                                                      normalizedLimit));
+            }
+
+            return records;
+        }
+
+        var shapeLimit = ShapeLimit(normalizedLimit);
+        var shape = $"board:{runType}:{style.HasValue}:{track.HasValue}:{stage.HasValue}:{orderByStageThenTime}:{shapeLimit}";
         var read  = CachedShape(shape,
-                                () => limitPerBoard
-                                          ? BoardsSql(runType, style.HasValue, track.HasValue, stage.HasValue, orderByStageThenTime, normalizedLimit)
-                                          : BoardSql(runType, style.HasValue, track.HasValue, stage.HasValue, orderByStageThenTime, normalizedLimit),
+                                () => BoardSql(runType, style.HasValue, track.HasValue, stage.HasValue, orderByStageThenTime, shapeLimit),
                                 BoardArguments(Sentinel.MapId, style.HasValue ? Sentinel.Style : null,
                                                track.HasValue ? Sentinel.Track : null, stage.HasValue ? Sentinel.Stage : null));
 
-        return await ReadRunRecordsAsync(read, BoardArguments(mapId.Value, style, track, stage));
+        return await ReadRunRecordsAsync(read, normalizedLimit, BoardArguments(mapId.Value, style, track, stage));
+    }
+
+    private Task<IReadOnlyList<RunRecord>> ReadBoardAsync(ulong mapId, RunType runType, int style, ushort track, ushort stage, int limit)
+    {
+        var shapeLimit = ShapeLimit(limit);
+        var read = CachedShape($"board:{runType}:True:True:True:False:{shapeLimit}",
+                               () => BoardSql(runType, true, true, true, false, shapeLimit),
+                               BoardArguments(Sentinel.MapId, Sentinel.Style, Sentinel.Track, Sentinel.Stage));
+
+        return ReadRunRecordsAsync(read, limit, BoardArguments(mapId, style, track, stage));
+    }
+
+    // The map's boards of one run type, stage by stage: a DISTINCT over the board index prefix.
+    private async Task<List<BoardKeyRow>> ReadBoardKeysAsync(ulong mapId, RunType runType)
+    {
+        var read = CachedShape($"board-keys:{runType}", () =>
+        {
+            var map = Sentinel.MapId;
+            var query = QueryBestRuns().Where(x => x.MapId == map && x.RunType == runType);
+            query = runType == RunType.Main ? query.Where(x => x.Stage == 0) : query.Where(x => x.Stage > 0);
+
+            return query.Select(x => new BoardKeyRow
+                        {
+                            Style = x.Style, Track = SqlFunc.ToInt32(x.Track), Stage = SqlFunc.ToInt32(x.Stage),
+                        })
+                        .Distinct()
+                        .ToSql();
+        }, Sentinel.MapId);
+
+        await using var reader = await ReadAsync(read, mapId);
+        var o = read.Ordinals(reader, BoardKeyColumns);
+        var boards = new List<BoardKeyRow>();
+
+        while (await reader.ReadAsync(OperationCancellation))
+        {
+            boards.Add(new BoardKeyRow
+            {
+                Style = (int)reader.GetInt64(o[0]), Track = (int)reader.GetInt64(o[1]), Stage = (int)reader.GetInt64(o[2]),
+            });
+        }
+
+        boards.Sort((a, b) => (a.Stage, a.Style, a.Track).CompareTo((b.Stage, b.Style, b.Track)));
+
+        return boards;
+    }
+
+    private static readonly string[] BoardKeyColumns = [nameof(BoardKeyRow.Style), nameof(BoardKeyRow.Track), nameof(BoardKeyRow.Stage)];
+
+    private sealed class BoardKeyRow
+    {
+        public int Style { get; set; }
+        public int Track { get; set; }
+        public int Stage { get; set; }
     }
 
     // In the order BoardSql binds them; a filter that isn't there has no argument.
@@ -186,78 +252,12 @@ internal sealed partial class StorageServiceImpl
         return SelectBoard(query).Take(limit).ToSql();
     }
 
-    // The top rows of each board: ranked within (Style, Track, Stage) on the board index, then joined.
-    private KeyValuePair<string, List<SugarParameter>> BoardsSql(RunType runType, bool byStyle, bool byTrack, bool byStage,
-                                                                  bool orderByStageThenTime, int limit)
-    {
-        var mapId = Sentinel.MapId;
-        var style = Sentinel.Style;
-        var track = Sentinel.Track;
-        var stage = Sentinel.Stage;
-        var bests = QueryBestRuns().Where(x => x.MapId == mapId && x.RunType == runType);
-
-        if (byStyle)
-        {
-            bests = bests.Where(x => x.Style == style);
-        }
-
-        if (byTrack)
-        {
-            bests = bests.Where(x => x.Track == track);
-        }
-
-        if (byStage)
-        {
-            bests = bests.Where(x => x.Stage == stage);
-        }
-        else if (runType == RunType.Main)
-        {
-            bests = bests.Where(x => x.Stage == 0);
-        }
-        else
-        {
-            bests = bests.Where(x => x.Stage > 0);
-        }
-
-        var ranked = bests.Select(x => new RankedBestRow
-                          {
-                              RunId     = x.RunId,
-                              Stage     = x.Stage,
-                              BestTime  = x.BestTime,
-                              BoardRank = SqlFunc.RowNumber($"{x.BestTime} ASC, {x.RunId} ASC", $"{x.Style}, {x.Track}, {x.Stage}"),
-                          })
-                          .MergeTable()
-                          .Where(x => x.BoardRank <= limit);
-
-        var query = _db.Queryable(ranked)
-                       .InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
-                       .LeftJoin<PlayerEntity>((best, run, player) => player.SteamId == run.SteamId);
-
-        if (orderByStageThenTime)
-        {
-            query = query.OrderBy((best, run, player) => best.Stage);
-        }
-
-        query = query.OrderBy((best, run, player) => best.BestTime)
-                     .OrderBy((best, run, player) => best.RunId);
-
-        return SelectBoard(query).ToSql();
-    }
-
-    private sealed class RankedBestRow
-    {
-        public ulong  RunId     { get; set; }
-        public ushort Stage     { get; set; }
-        public float  BestTime  { get; set; }
-        public long   BoardRank { get; set; }
-    }
-
     // Best runs with their run and player, so a board's names come in the same query.
     private ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> QueryBoard()
         => QueryBestRuns().InnerJoin<RunEntity>((best, run) => best.RunId == run.Id)
                           .LeftJoin<PlayerEntity>((best, run, player) => player.SteamId == run.SteamId);
 
-    private static ISugarQueryable<BoardRow> SelectBoard<TBest>(ISugarQueryable<TBest, RunEntity, PlayerEntity> query)
+    private static ISugarQueryable<BoardRow> SelectBoard(ISugarQueryable<PlayerBestRunEntity, RunEntity, PlayerEntity> query)
         => query.Select((best, run, player) => new BoardRow
         {
             Id                       = SqlFunc.ToInt64(run.Id),
