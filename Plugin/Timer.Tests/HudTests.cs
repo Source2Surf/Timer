@@ -521,6 +521,22 @@ public sealed class HudLayoutContractTests
     }
 
     [Fact]
+    public void EveryRecordsPanelExists()
+    {
+        var ids = HudModule.RecordRowIds.Concat(HudModule.RecordRankIds).Concat(HudModule.RecordNameIds).Concat(HudModule.RecordTimeIds)
+                           .Concat(HudModule.RecordGapIds)
+                           .Concat(["LbMenu", "LbMap", "LbTrackPrev", "LbTrackValue", "LbTrackNext", "LbStagePrev", "LbStageValue", "LbStageNext",
+                                    "LbStylePrev", "LbStyleValue", "LbStyleNext", "LbCount", "LbJumpSr", "LbJumpYou", "LbEmpty", "LbPrev",
+                                    "LbPage", "LbNext", "LbCard", "LbCardName", "LbCardTime", "LbCardRank", "LbCardStats", "LbCardSpeed",
+                                    "LbNote", "LbClose", "LbDelete", "LbDeleteLabel"]);
+
+        foreach (var id in ids)
+        {
+            Assert.Contains(id, Ids);
+        }
+    }
+
+    [Fact]
     public void EveryZonePanelExists()
     {
         var ids = HudModule.ZoneRowIds.Concat(HudModule.ZoneNameIds).Concat(HudModule.ZoneMapIds).Concat(HudModule.ZoneDelIds)

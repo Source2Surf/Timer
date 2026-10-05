@@ -328,6 +328,18 @@ internal static class HudTexts
     public static readonly HudText TimeHere     = new ("ui.profile.time_here", "Time here");
     public static readonly HudText PersonalBest = new ("ui.profile.pb", "Personal best");
 
+    // ---- records panel
+    public static readonly HudText LbTitle      = new ("hud.records.title", "Records");
+    public static readonly HudText LbStats      = new ("hud.records.stats", "{0} jumps · {1} strafes · {2} sync");
+    public static readonly HudText LbSpeed      = new ("hud.records.speed", "Start {0} · Avg {1} · End {2} u/s");
+    public static readonly HudText LbHint       = new ("hud.records.hint", "Delete removes the picked run and its replays. The player's next-best run takes their row.");
+    public static readonly HudText LbDelete     = new ("hud.records.delete", "Delete run");
+    public static readonly HudText LbConfirm    = new ("hud.records.confirm", "Confirm delete");
+    public static readonly HudText LbConfirmAsk = new ("hud.records.confirm_ask", "Click Confirm delete to delete {0}'s {1} and its replays. Their next-best run takes the row, or they drop off the board.");
+    public static readonly HudText LbDeleting   = new ("hud.records.deleting", "Asked to delete {0}'s {1}. Chat says when it's done.");
+    public static readonly HudText LbDeleted    = new ("hud.records.deleted", "Deleted {0}'s {1} and its replays.");
+    public static readonly HudText LbLoading    = new ("hud.records.loading", "Loading {0}…");
+
     // ---- zone panel
     public static readonly HudText ZnTitle          = new ("zn.title", "Zones");
     public static readonly HudText ZnCount          = new ("zn.count", "{0} zones");
@@ -531,6 +543,17 @@ internal static class HudLabels
         ("LNomClose", HudTexts.Close),
     ];
 
+    public static readonly (string Id, HudText Text)[] Records =
+    [
+        ("LLbTitle", HudTexts.LbTitle),
+        ("LLbTrack", HudTexts.Track),
+        ("LLbStage", HudTexts.Stage),
+        ("LLbStyle", HudTexts.Style),
+        ("LLbJumpSr", HudTexts.Sr),
+        ("LLbJumpYou", HudTexts.You),
+        ("LLbClose", HudTexts.Close),
+    ];
+
     public static readonly (string Id, HudText Text)[] Zones =
     [
         ("LZnTitle", HudTexts.ZnTitle),
@@ -562,7 +585,7 @@ internal static class HudLabels
     ];
 
     public static IEnumerable<(string Id, HudText Text)> All
-        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate).Concat(Zones).Concat(ZonePrompt)
+        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate).Concat(Zones).Concat(ZonePrompt).Concat(Records)
                 .Append(("SplitsEmpty", HudTexts.SplitsEmpty))
                 .Append(("SsjEmpty", HudTexts.SsjEmpty));
 }

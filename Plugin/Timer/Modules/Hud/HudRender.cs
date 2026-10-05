@@ -177,6 +177,7 @@ internal partial class HudModule
 
         UpdateMapChooser(w, p, now);
         UpdateZones(w, p);
+        UpdateLeaderboard(w, p);
 
         var source = ResolveSource(p, controller);
         w.Class("TimerRoot", "Hidden", source is null);

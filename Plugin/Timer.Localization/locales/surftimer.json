@@ -1159,6 +1159,46 @@
     "en-us": "Nominations are closed.",
     "zh-cn": "提名已关闭。"
   },
+  "hud.records.title": {
+    "en-us": "Records",
+    "zh-cn": "记录"
+  },
+  "hud.records.stats": {
+    "en-us": "{0} jumps · {1} strafes · {2} sync",
+    "zh-cn": "跳跃 {0} · 转向 {1} · 同步率 {2}"
+  },
+  "hud.records.speed": {
+    "en-us": "Start {0} · Avg {1} · End {2} u/s",
+    "zh-cn": "起步 {0} · 平均 {1} · 结束 {2} u/s"
+  },
+  "hud.records.hint": {
+    "en-us": "Delete removes the picked run and its replays. The player's next-best run takes their row.",
+    "zh-cn": "删除会移除选中的成绩及其回放。该玩家的次佳成绩会补上其位置。"
+  },
+  "hud.records.delete": {
+    "en-us": "Delete run",
+    "zh-cn": "删除成绩"
+  },
+  "hud.records.confirm": {
+    "en-us": "Confirm delete",
+    "zh-cn": "确认删除"
+  },
+  "hud.records.confirm_ask": {
+    "en-us": "Click Confirm delete to delete {0}'s {1} and its replays. Their next-best run takes the row, or they drop off the board.",
+    "zh-cn": "点击确认删除，以删除 {0} 的 {1} 及其回放。其次佳成绩会补上，否则从榜上移除。"
+  },
+  "hud.records.deleting": {
+    "en-us": "Asked to delete {0}'s {1}. Chat says when it's done.",
+    "zh-cn": "已请求删除 {0} 的 {1}。完成后会在聊天中提示。"
+  },
+  "hud.records.deleted": {
+    "en-us": "Deleted {0}'s {1} and its replays.",
+    "zh-cn": "已删除 {0} 的 {1} 及其回放。"
+  },
+  "hud.records.loading": {
+    "en-us": "Loading {0}…",
+    "zh-cn": "正在加载 {0}…"
+  },
   "zn.title": {
     "en-us": "Zones",
     "zh-cn": "区域"

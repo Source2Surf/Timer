@@ -168,6 +168,15 @@ menu (through `IMapChooser`; without the module none of this appears):
   tier or to maps the player hasn't finished, with their best time on each.
 - The game's round timer shows the time left on the map, extensions included.
 
+### Records panel
+
+`!wr` / `!sr` open this map's leaderboard on the player's style and track;
+`!wr <map>` / `!sr <map>` open another map's (matched like `!nominate`). It has a
+board per style, track and stage, one row per player, and a card for the
+picked run (date, jumps, strafes, sync, speeds). Admins with `timer:records`
+can delete the picked run and its replays, after a confirm click; the player's
+next-best run takes their row.
+
 ### Zone panel
 
 Admins (`timer:zone`) open it with `!zone`. It lists each track's zones; zones

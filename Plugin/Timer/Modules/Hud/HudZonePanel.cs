@@ -79,6 +79,7 @@ internal partial class HudModule
         p.Replays.Open = false;
         p.Profile.Open = false;
         CloseNominateMenu(p);
+        CloseRecords(p);
 
         if (z.Number == 0 && ZoneEdit.IsNumbered(z.Type))
         {

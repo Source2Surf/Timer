@@ -2134,3 +2134,71 @@
     font-weight: normal;
     color: #ffffff8c;
 }
+
+/* ---- Records panel (!wr / !sr) ---- */
+
+/* Collapsed when closed, so its buttons can't take another menu's clicks. */
+.LbMenu.Closed {
+    visibility: collapse;
+}
+
+/* The picked run. Kept in place when there's none (blank), so the panel doesn't change height. */
+.LbCard {
+    width: 100%;
+    height: fit-children;
+    margin-top: 10px;
+    padding: 8px 12px;
+    flow-children: down;
+    border-radius: 4px;
+    background-color: #ffffff0a;
+}
+
+.LbCard.blank {
+    opacity: 0;
+}
+
+.LbCardTop {
+    width: 100%;
+    height: fit-children;
+    flow-children: right;
+}
+
+.Menu .LbCardName {
+    width: fill-parent-flow( 1 );
+    font-size: 14px;
+    font-weight: bold;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.Menu .LbCardTime {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.Menu .LbCardSub {
+    width: 100%;
+    margin-top: 2px;
+    font-size: 13px;
+    color: mutedColor;
+}
+
+.MenuButton--danger {
+    margin-left: 8px;
+    background-color: #b8483d;
+    border-color: #00000000;
+}
+
+.MenuButton--danger.confirm {
+    background-color: #e0574a;
+}
+
+.MenuButton--danger.disabled,
+.MenuButton--danger.disabled:hover {
+    background-color: #ffffff12;
+    brightness: 1;
+}
+
+.Menu #LbDeleteLabel.disabled {
+    color: mutedColor;
+}

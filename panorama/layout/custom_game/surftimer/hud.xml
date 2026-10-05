@@ -1062,5 +1062,120 @@
 				</Button>
 			</Panel>
 		</Panel>
+
+		<!-- Records (!wr / !sr): a board per style, track and stage, one row per player, for this map or another. Cursor
+		     mode, in the replay menu's spot. The card shows the picked run; Delete (timer:records only) deletes it. -->
+		<Panel id="LbMenu" class="Menu LbMenu Closed">
+			<Panel class="MenuHeader RMenuHeader">
+				<Label id="LLbTitle" class="MenuTitle" text="{s:text}" />
+				<Label id="LbMap" class="NomCount" text="{s:text}" />
+			</Panel>
+			<Panel class="MenuRow static">
+				<Label id="LLbTrack" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="LbTrackPrev" class="Step"><Label text="‹" /></Button>
+					<Label id="LbTrackValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="LbTrackNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+			<Panel class="MenuRow static">
+				<Label id="LLbStage" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="LbStagePrev" class="Step"><Label text="‹" /></Button>
+					<Label id="LbStageValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="LbStageNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+			<Panel class="MenuRow static">
+				<Label id="LLbStyle" class="MenuName" text="{s:text}" />
+				<Panel class="Stepper RmStepper">
+					<Button id="LbStylePrev" class="Step"><Label text="‹" /></Button>
+					<Label id="LbStyleValue" class="MenuValue RmValue" text="{s:value}" />
+					<Button id="LbStyleNext" class="Step"><Label text="›" /></Button>
+				</Panel>
+			</Panel>
+			<Panel class="MenuSection">
+				<Label id="LbCount" class="MenuSectionLabel" text="{s:text}" />
+				<Panel class="MenuRule" />
+				<Button id="LbJumpSr" class="RmJump"><Label id="LLbJumpSr" text="{s:text}" /></Button>
+				<Button id="LbJumpYou" class="RmJump"><Label id="LLbJumpYou" text="{s:text}" /></Button>
+			</Panel>
+			<Panel class="RmList">
+				<Panel class="RmRows">
+					<Button id="LbRow0" class="RmRow blank">
+						<Label id="LbRow0Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow0Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow0Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow0Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="LbRow1" class="RmRow blank">
+						<Label id="LbRow1Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow1Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow1Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow1Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="LbRow2" class="RmRow blank">
+						<Label id="LbRow2Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow2Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow2Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow2Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="LbRow3" class="RmRow blank">
+						<Label id="LbRow3Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow3Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow3Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow3Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="LbRow4" class="RmRow blank">
+						<Label id="LbRow4Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow4Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow4Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow4Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="LbRow5" class="RmRow blank">
+						<Label id="LbRow5Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow5Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow5Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow5Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="LbRow6" class="RmRow blank">
+						<Label id="LbRow6Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow6Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow6Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow6Gap" class="RmGap" text="{s:text}" />
+					</Button>
+					<Button id="LbRow7" class="RmRow blank">
+						<Label id="LbRow7Rank" class="RmRank" text="{s:text}" />
+						<Label id="LbRow7Name" class="RmName" text="{s:text}" />
+						<Label id="LbRow7Time" class="RmTime" text="{s:text}" />
+						<Label id="LbRow7Gap" class="RmGap" text="{s:text}" />
+					</Button>
+				</Panel>
+				<Label id="LbEmpty" class="RmEmpty Hidden" text="{s:text}" />
+			</Panel>
+			<Panel class="RmPager">
+				<Button id="LbPrev" class="Step"><Label text="‹" /></Button>
+				<Label id="LbPage" class="RmPage" text="{s:text}" />
+				<Button id="LbNext" class="Step"><Label text="›" /></Button>
+			</Panel>
+			<Panel id="LbCard" class="LbCard blank">
+				<Panel class="LbCardTop">
+					<Label id="LbCardName" class="LbCardName" text="{s:text}" />
+					<Label id="LbCardTime" class="LbCardTime" text="{s:text}" />
+				</Panel>
+				<Label id="LbCardRank" class="LbCardSub" text="{s:text}" />
+				<Label id="LbCardStats" class="LbCardSub" text="{s:text}" />
+				<Label id="LbCardSpeed" class="LbCardSub" text="{s:text}" />
+			</Panel>
+			<Label id="LbNote" class="NomNote Hidden" text="{s:text}" />
+			<Panel class="MenuFooter">
+				<Button id="LbClose" class="MenuButton">
+					<Label id="LLbClose" text="{s:text}" />
+				</Button>
+				<Button id="LbDelete" class="MenuButton MenuButton--danger Hidden">
+					<Label id="LbDeleteLabel" text="{s:text}" />
+				</Button>
+			</Panel>
+		</Panel>
 	</Panel>
 </root>

@@ -89,6 +89,29 @@ internal sealed class HudReplayMenu
 /// <summary>
 ///     The admin zone panel (!zone). The zone module keeps the zones and the zone being placed.
 /// </summary>
+/// <summary>
+///     The records panel (!wr / !sr). The record module keeps the boards.
+/// </summary>
+internal sealed class HudRecords
+{
+    public bool    Open;
+    public string? Map;          // another map's name; null for this one
+    public int     Style;
+    public int     Track;
+    public int     Stage;
+    public int     Page;
+    public long?   Picked;       // the picked run's id
+    public bool    PickFirst;    // pick the board's first run once it's there
+    public long?   Confirm;      // the run whose Delete was clicked once
+    public long?   Deleting;     // asked to delete; the note says so once it's gone
+    public string? DeletedNote;
+    public string? Note;
+    public bool    Warn;
+    public bool    Dirty;
+    public int     Version = -1; // the record module's RecordsVersion, when last drawn
+    public readonly long[] RowIds = new long[HudModule.RecordRows];
+}
+
 internal sealed class HudZones
 {
     public bool            Open;
@@ -212,6 +235,7 @@ internal sealed class HudPlayer
         Chooser.Version     = -1;
         Chooser.VoteSecond  = -1;
         Zones.Version       = -1;
+        Records.Version     = -1;
         Zones.PromptShown   = false;
     }
 
@@ -251,10 +275,11 @@ internal sealed class HudPlayer
 
     public readonly HudChooser Chooser = new ();
 
-    public readonly HudZones Zones = new ();
+    public readonly HudZones   Zones   = new ();
+    public readonly HudRecords Records = new ();
 
     // Any menu takes the mouse.
-    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null || Zones.Open;
+    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null || Zones.Open || Records.Open;
 
     // HUD settings, the nominate menu and the zone panel also keep the player from moving.
     public bool MovementLocked => MenuOpen || Chooser.Menu is not null || Zones.Open;

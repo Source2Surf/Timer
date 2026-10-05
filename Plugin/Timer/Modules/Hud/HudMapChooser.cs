@@ -215,6 +215,7 @@ internal partial class HudModule
             p.Replays.Open = false;
             p.Profile.Open = false;
             CloseZonePanel(p);
+            CloseRecords(p);
             c.Page         = 0;
             c.Note         = null;
         }
