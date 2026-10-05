@@ -369,41 +369,54 @@ public sealed class HudPlayerTests
     }
 }
 
-public sealed class HudSettingsStoreTests : IDisposable
+public sealed class PlayerSettingsCodecTests
 {
-    private readonly string _directory = Path.Combine(Path.GetTempPath(), $"hud-settings-{Guid.NewGuid():N}");
-
-    public void Dispose()
-    {
-        if (Directory.Exists(_directory))
-        {
-            Directory.Delete(_directory, true);
-        }
-    }
-
     [Fact]
-    public void SettingsSurviveASaveAndLoad()
+    public void SettingsSurviveARoundTrip()
     {
-        var store = new HudSettingsStore(_directory, NullLogger.Instance);
-        var p     = new HudPlayer(new PlayerSlot(1), 0);
-
+        var p = new HudPlayer(new PlayerSlot(1), 0);
         p.Settings[HudOptions.SizeRun.Index] = Array.IndexOf(HudOptions.Sizes, 130);
         p.Settings[HudOptions.Keys.Index]    = 0;
         p.Order                              = HudLines.DefaultOrder.Reverse().ToArray();
         p.Positions[(int) HudTarget.Run]     = new HudPosition { X = 2.4f, Y = 13.6f, Cx = true };
         p.Positions[(int) HudTarget.Info]    = new HudPosition { X = 50f, Y = -47f };
 
-        store.Save(76561198000000001, HudSettingsStore.Capture(p), true);
-
+        var data   = PlayerSettingsCodec.Encode(p);
         var loaded = new HudPlayer(new PlayerSlot(1), 0);
-        HudSettingsStore.Apply(store.Load(76561198000000001)!, loaded);
+        PlayerSettingsCodec.Decode(data, loaded);
 
         Assert.Equal(p.Settings, loaded.Settings);
         Assert.Equal(p.Order, loaded.Order);
-        Assert.Equal(0, loaded.Positions[(int) HudTarget.Run]!.X);     // snapped: exactly on the centre line
+        Assert.Equal(0, loaded.Positions[(int) HudTarget.Run]!.X); // snapped: exactly on the centre line
         Assert.Equal(14, loaded.Positions[(int) HudTarget.Run]!.Y);
         Assert.Equal(50, loaded.Positions[(int) HudTarget.Info]!.X);
+        Assert.Equal(-47, loaded.Positions[(int) HudTarget.Info]!.Y);
         Assert.Null(loaded.Positions[(int) HudTarget.Menu]);
+    }
+
+    [Fact]
+    public void DefaultsAreNoBytes()
+        => Assert.Empty(PlayerSettingsCodec.Encode(new HudPlayer(new PlayerSlot(1), 0)));
+
+    [Fact]
+    public void ItStaysSmall()
+    {
+        // Every option off its default, the lines reordered, every panel placed.
+        var p = new HudPlayer(new PlayerSlot(1), 0);
+
+        foreach (var option in HudOptions.All)
+        {
+            p.Settings[option.Index] = option.Initial == 0 ? option.Choices.Length - 1 : 0;
+        }
+
+        p.Order = HudLines.DefaultOrder.Reverse().ToArray();
+
+        foreach (var target in HudTargets.All)
+        {
+            p.Positions[(int) target] = new HudPosition { X = -50, Y = 50 };
+        }
+
+        Assert.InRange(PlayerSettingsCodec.Encode(p).Length, 1, PlayerSettingsCodec.MaxLength);
     }
 
     [Fact]
@@ -413,35 +426,85 @@ public sealed class HudSettingsStoreTests : IDisposable
         p.Positions[(int) HudTarget.Run] = new HudPosition { X = 3 };
         p.UnplaceAt[(int) HudTarget.Run] = 1;
 
-        Assert.Empty(HudSettingsStore.Capture(p).Placement);
+        Assert.Empty(PlayerSettingsCodec.Encode(p));
     }
 
     [Fact]
-    public void UnknownOrInvalidSavedValuesAreIgnored()
+    public void UnknownOrInvalidValuesAreSkipped()
     {
-        var saved = new HudSavedSettings
-        {
-            Options   = new Dictionary<string, string> { ["OptZone"] = "Maybe", ["SizeRun"] = "120%", ["Gone"] = "On" },
-            LineOrder = ["Mode", "Mode"],
-        };
+        byte[] data =
+        [
+            PlayerSettingsCodec.Version,
+            3, HudOptions.Zone.Key, 9, HudOptions.SizeRun.Key, 5, 250, 0, // out of range, fine, unknown key
+            2, 2, 2,                                                      // not a full order
+            2, 250, 1, 1, HudTargets.Def(HudTarget.Keys).Key, 0x9C, 60,   // unknown panel; -100 and 60 clamp
+        ];
 
         var p = new HudPlayer(new PlayerSlot(1), 0);
-        HudSettingsStore.Apply(saved, p);
+        PlayerSettingsCodec.Decode(data, p);
 
         Assert.True(p.IsOn(HudOptions.Zone));
         Assert.Equal("120%", p.Setting(HudOptions.SizeRun));
         Assert.Equal(HudLines.DefaultOrder, p.Order);
+        Assert.Equal(-50, p.Positions[(int) HudTarget.Keys]!.X);
+        Assert.Equal(50, p.Positions[(int) HudTarget.Keys]!.Y);
     }
 
-    [Fact]
-    public void MissingOrCorruptFilesLoadAsNothing()
+    [Theory]
+    [InlineData(new byte[] { 9, 1, 11, 1 })] // a version from the future
+    [InlineData(new byte[] { 1, 5, 11 })]    // cut short
+    [InlineData(new byte[] { })]
+    public void UnreadableDataGivesDefaults(byte[] data)
     {
-        var store = new HudSettingsStore(_directory, NullLogger.Instance);
-        Assert.Null(store.Load(1));
+        var p = new HudPlayer(new PlayerSlot(1), 0);
+        p.Settings[HudOptions.Zone.Index] = 1;
 
-        File.WriteAllText(Path.Combine(_directory, "hud", "2.json"), "{ not json");
-        Assert.Null(store.Load(2));
+        PlayerSettingsCodec.Decode(data, p);
+
+        Assert.Equal(HudOptions.DefaultSettings, p.Settings);
     }
+
+    // Saved data names options and panels by key and choices by index: a key is never reused for something else,
+    // and choices are only added at the end. New options and panels take new keys.
+    [Fact]
+    public void KeysAndChoicesStayPut()
+    {
+        var saved = new Dictionary<byte, (string Id, string Choices)>
+        {
+            [1]  = ("OptRun", "On,Off"), [2] = ("SizeRun", Sizes), [3] = ("OptCSpeed", "On,Off"), [4] = ("SizeCSpeed", Sizes),
+            [5]  = ("OptInfo", "On,Off"), [6] = ("SizeInfo", Sizes), [7] = ("OptSplits", "On,Off"), [8] = ("SizeSplits", Sizes),
+            [9]  = ("OptKeys", "On,Off"), [10] = ("SizeKeys", Sizes), [11] = ("OptZone", "On,Off"), [12] = ("OptMode", "On,Off"),
+            [13] = ("OptSpeed", "On,Off"), [14] = ("OptStart", "On,Off"), [15] = ("OptSync", "On,Off"), [16] = ("OptJumps", "On,Off"),
+            [17] = ("OptStrafes", "On,Off"), [18] = ("OptCompare", "Personal best,Server record,Off"), [19] = ("OptLive", "On,Off"),
+            [20] = ("OptSpeedColor", "On,Off"), [21] = ("OptSpeedAxes", "Horizontal,3D"), [22] = ("OptSplitRows", "3,5,8"),
+            [23] = ("OptSplitFade", "On,Off"), [24] = ("OptKeyMouse", "On,Off"), [25] = ("OptKeyJumpDuck", "On,Off"),
+            [26] = ("OptSsj", "On,Off"), [27] = ("SizeSsj", Sizes), [28] = ("OptSsjJump", string.Join(',', Enumerable.Range(1, 16))),
+            [29] = ("OptSsjRepeat", "On,Off"), [30] = ("OptSsjFirst", "On,Off"), [31] = ("OptSsjSpeedDiff", "On,Off"),
+            [32] = ("OptSsjHeight", "On,Off"), [33] = ("OptSsjGain", "On,Off"), [34] = ("OptSsjSync", "On,Off"),
+            [35] = ("OptSsjStrafes", "On,Off"), [36] = ("OptSsjEfficiency", "On,Off"),
+        };
+
+        foreach (var (key, (id, choices)) in saved)
+        {
+            var option = HudOptions.ByKey[key];
+            Assert.Equal(id, option.Id);
+            Assert.StartsWith(choices, string.Join(',', option.Choices.Select(c => c.Label)));
+        }
+
+        Assert.Equal(HudOptions.All.Length, HudOptions.All.Select(o => o.Key).Distinct().Count());
+
+        string[] panels = ["Menu", "RunPanel", "CSpeedPanel", "InfoPanel", "SplitsPanel", "KeysPanel", "LocsPanel", "SsjPanel"];
+
+        for (var i = 0; i < panels.Length; i++)
+        {
+            Assert.Equal(panels[i], HudTargets.Def(HudTargets.ByKey[(byte) (i + 1)]).Panel);
+        }
+
+        Assert.Equal([HudLine.Zone, HudLine.Gap, HudLine.Mode, HudLine.Speed, HudLine.Start, HudLine.Sync, HudLine.Jumps, HudLine.Strafes],
+                     HudLines.DefaultOrder.Take(8));
+    }
+
+    private const string Sizes = "70%,80%,90%,100%,110%,120%,130%,140%,150%";
 }
 
 /// <summary>

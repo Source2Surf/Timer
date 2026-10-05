@@ -65,7 +65,8 @@ Commands:
   time on its leaderboard, and watches it on the central replay bot. Pressing E
   while spectating that bot opens the menu too.
 
-Settings are saved per player in `sharp/data/surftimer/hud/<steamid64>.json`.
+Settings are saved per player through the backend, as a few bytes (only what differs from the defaults).
+The old `sharp/data/surftimer/hud/<steamid64>.json` files are no longer read.
 
 ### Central replay bot
 

@@ -40,12 +40,14 @@ internal readonly record struct HudChoice(string Label, string? Class = null, Hu
 /// <summary>
 ///     A HUD setting. <see cref="Id" /> is the Button that changes it (a size stepper's buttons are
 ///     <c>&lt;Id&gt;Down</c> / <c>&lt;Id&gt;Up</c>) and <c>&lt;Id&gt;Value</c> the label showing it. The layout's
-///     classes match each option's default. Settings are saved by label, so reordering choices is safe.
+///     classes match each option's default. Saved as <see cref="Key" /> and the choice's index (PlayerSettingsCodec), so
+///     a key is never reused and choices are only ever added at the end.
 /// </summary>
 internal sealed class HudOption
 {
-    public HudOption(string id, HudChoice[] choices, string[]? panels = null, int initial = 0)
+    public HudOption(byte key, string id, HudChoice[] choices, string[]? panels = null, int initial = 0)
     {
+        Key     = key;
         Id      = id;
         ValueId = id + "Value";
         DownId  = id + "Down";
@@ -55,6 +57,7 @@ internal sealed class HudOption
         Initial = initial;
     }
 
+    public byte       Key     { get; }
     public int        Index   { get; set; }
     public string     Id      { get; }
     public string     ValueId { get; }
@@ -104,28 +107,28 @@ internal static class HudOptions
     public static readonly int SizeDefault = Array.IndexOf(Sizes, 100);
 
     // HUD tab: each panel's on/off and size
-    public static readonly HudOption Run        = new ("OptRun", Shown, ["RunPanel"]);
-    public static readonly HudOption SizeRun    = new ("SizeRun", SizeChoices, ["RunBody"], SizeDefault);
-    public static readonly HudOption CSpeed     = new ("OptCSpeed", Shown, ["CSpeedPanel"]);
-    public static readonly HudOption SizeCSpeed = new ("SizeCSpeed", SizeChoices, ["CSpeedBody"], SizeDefault);
-    public static readonly HudOption Info       = new ("OptInfo", Shown, ["InfoPanel"]);
-    public static readonly HudOption SizeInfo   = new ("SizeInfo", SizeChoices, ["InfoBody"], SizeDefault);
-    public static readonly HudOption Splits     = new ("OptSplits", Shown, ["SplitsPanel"]);
-    public static readonly HudOption SizeSplits = new ("SizeSplits", SizeChoices, ["SplitsBody"], SizeDefault);
-    public static readonly HudOption Keys       = new ("OptKeys", Shown, ["KeysPanel"], 1); // off until !showkeys
-    public static readonly HudOption SizeKeys   = new ("SizeKeys", SizeChoices, ["KeysBody"], SizeDefault);
+    public static readonly HudOption Run        = new (1, "OptRun", Shown, ["RunPanel"]);
+    public static readonly HudOption SizeRun    = new (2, "SizeRun", SizeChoices, ["RunBody"], SizeDefault);
+    public static readonly HudOption CSpeed     = new (3, "OptCSpeed", Shown, ["CSpeedPanel"]);
+    public static readonly HudOption SizeCSpeed = new (4, "SizeCSpeed", SizeChoices, ["CSpeedBody"], SizeDefault);
+    public static readonly HudOption Info       = new (5, "OptInfo", Shown, ["InfoPanel"]);
+    public static readonly HudOption SizeInfo   = new (6, "SizeInfo", SizeChoices, ["InfoBody"], SizeDefault);
+    public static readonly HudOption Splits     = new (7, "OptSplits", Shown, ["SplitsPanel"]);
+    public static readonly HudOption SizeSplits = new (8, "SizeSplits", SizeChoices, ["SplitsBody"], SizeDefault);
+    public static readonly HudOption Keys       = new (9, "OptKeys", Shown, ["KeysPanel"], 1); // off until !showkeys
+    public static readonly HudOption SizeKeys   = new (10, "SizeKeys", SizeChoices, ["KeysBody"], SizeDefault);
 
     // Timer tab: the lines (switched from their rows) and what the time is compared against
-    public static readonly HudOption Zone    = new ("OptZone", OnOff);
-    public static readonly HudOption Mode    = new ("OptMode", OnOff);
-    public static readonly HudOption Speed   = new ("OptSpeed", OnOff);
-    public static readonly HudOption Start   = new ("OptStart", OnOff);
-    public static readonly HudOption Sync    = new ("OptSync", OnOff);
-    public static readonly HudOption Jumps   = new ("OptJumps", OnOff, initial: 1);
-    public static readonly HudOption Strafes = new ("OptStrafes", OnOff, initial: 1);
+    public static readonly HudOption Zone    = new (11, "OptZone", OnOff);
+    public static readonly HudOption Mode    = new (12, "OptMode", OnOff);
+    public static readonly HudOption Speed   = new (13, "OptSpeed", OnOff);
+    public static readonly HudOption Start   = new (14, "OptStart", OnOff);
+    public static readonly HudOption Sync    = new (15, "OptSync", OnOff);
+    public static readonly HudOption Jumps   = new (16, "OptJumps", OnOff, initial: 1);
+    public static readonly HudOption Strafes = new (17, "OptStrafes", OnOff, initial: 1);
 
     public static readonly HudOption Compare =
-        new ("OptCompare", [new ("Personal best"), new ("Server record"), new ("Off", null, HudTone.Off)]);
+        new (18, "OptCompare", [new ("Personal best"), new ("Server record"), new ("Off", null, HudTone.Off)]);
 
     public const int ComparePersonalBest = 0;
     public const int CompareServerRecord = 1;
@@ -135,43 +138,43 @@ internal static class HudOptions
     ///     The position-based difference against the replay of what the time is compared with (the player's PB, or
     ///     the server record), for the style and track they're on, continuously while running.
     /// </summary>
-    public static readonly HudOption Live = new ("OptLive", OnOff)
+    public static readonly HudOption Live = new (19, "OptLive", OnOff)
     {
         Needs = settings => settings[Compare.Index] != CompareOff,
     };
 
     // Speed tab: the measure is shared by the timer's speed line and center speed; the colours are center speed's
-    public static readonly HudOption SpeedColor = new ("OptSpeedColor", OnOff);
-    public static readonly HudOption SpeedAxes  = new ("OptSpeedAxes", [new ("Horizontal"), new ("3D")]);
+    public static readonly HudOption SpeedColor = new (20, "OptSpeedColor", OnOff);
+    public static readonly HudOption SpeedAxes  = new (21, "OptSpeedAxes", [new ("Horizontal"), new ("3D")]);
 
     // Splits tab
-    public static readonly HudOption SplitRows = new ("OptSplitRows", [new ("3"), new ("5"), new ("8")], initial: 1);
-    public static readonly HudOption SplitFade = new ("OptSplitFade", OnOff);
+    public static readonly HudOption SplitRows = new (22, "OptSplitRows", [new ("3"), new ("5"), new ("8")], initial: 1);
+    public static readonly HudOption SplitFade = new (23, "OptSplitFade", OnOff);
 
     // Keys tab
-    public static readonly HudOption KeyMouse    = new ("OptKeyMouse", OnOff);
-    public static readonly HudOption KeyJumpDuck = new ("OptKeyJumpDuck", OnOff);
+    public static readonly HudOption KeyMouse    = new (24, "OptKeyMouse", OnOff);
+    public static readonly HudOption KeyJumpDuck = new (25, "OptKeyJumpDuck", OnOff);
 
     // SSJ tab: the panel (off until turned on there), which jumps it shows, and what it shows of them
-    public static readonly HudOption Ssj     = new ("OptSsj", Shown, ["SsjPanel"], 1);
-    public static readonly HudOption SizeSsj = new ("SizeSsj", SizeChoices, ["SsjBody"], SizeDefault);
+    public static readonly HudOption Ssj     = new (26, "OptSsj", Shown, ["SsjPanel"], 1);
+    public static readonly HudOption SizeSsj = new (27, "SizeSsj", SizeChoices, ["SsjBody"], SizeDefault);
 
     public static readonly HudOption SsjJump =
-        new ("OptSsjJump", Enumerable.Range(1, 16).Select(n => new HudChoice(n.ToString(CultureInfo.InvariantCulture))).ToArray(), initial: 5)
+        new (28, "OptSsjJump", Enumerable.Range(1, 16).Select(n => new HudChoice(n.ToString(CultureInfo.InvariantCulture))).ToArray(), initial: 5)
         {
             Stepped = true,
         };
 
     // Jump 1 with repeat is every jump; jump 1 alone is the takeoff only, so first jump adds nothing to it.
-    public static readonly HudOption SsjRepeat = new ("OptSsjRepeat", OnOff, initial: 1);
-    public static readonly HudOption SsjFirst  = new ("OptSsjFirst", OnOff) { Needs = settings => settings[SsjJump.Index] > 0 };
+    public static readonly HudOption SsjRepeat = new (29, "OptSsjRepeat", OnOff, initial: 1);
+    public static readonly HudOption SsjFirst  = new (30, "OptSsjFirst", OnOff) { Needs = settings => settings[SsjJump.Index] > 0 };
 
-    public static readonly HudOption SsjSpeedDiff  = new ("OptSsjSpeedDiff", OnOff);
-    public static readonly HudOption SsjHeight     = new ("OptSsjHeight", OnOff, initial: 1);
-    public static readonly HudOption SsjGain       = new ("OptSsjGain", OnOff);
-    public static readonly HudOption SsjSync       = new ("OptSsjSync", OnOff);
-    public static readonly HudOption SsjStrafes    = new ("OptSsjStrafes", OnOff, initial: 1);
-    public static readonly HudOption SsjEfficiency = new ("OptSsjEfficiency", OnOff, initial: 1);
+    public static readonly HudOption SsjSpeedDiff  = new (31, "OptSsjSpeedDiff", OnOff);
+    public static readonly HudOption SsjHeight     = new (32, "OptSsjHeight", OnOff, initial: 1);
+    public static readonly HudOption SsjGain       = new (33, "OptSsjGain", OnOff);
+    public static readonly HudOption SsjSync       = new (34, "OptSsjSync", OnOff);
+    public static readonly HudOption SsjStrafes    = new (35, "OptSsjStrafes", OnOff, initial: 1);
+    public static readonly HudOption SsjEfficiency = new (36, "OptSsjEfficiency", OnOff, initial: 1);
 
     public static readonly HudOption[] All =
     [
@@ -182,6 +185,7 @@ internal static class HudOptions
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;
+    public static readonly IReadOnlyDictionary<byte, HudOption>   ByKey;
 
     public static readonly int[] DefaultSettings;
 
@@ -193,6 +197,7 @@ internal static class HudOptions
         }
 
         ById            = All.ToDictionary(o => o.Id);
+        ByKey           = All.ToDictionary(o => o.Key);
         DefaultSettings = All.Select(o => o.Initial).ToArray();
     }
 
@@ -214,6 +219,9 @@ internal static class HudOptions
 /// <summary>
 ///     The timer's reorderable lines, below its fixed heading (title, time, stage). Each shows in the
 ///     Line&lt;i&gt; slot matching its place in the player's order, and row &lt;i&gt; of the Timer tab edits it.
+/// </summary>
+/// <summary>
+///     The timer's lines. Their values are saved (PlayerSettingsCodec): only ever add at the end.
 /// </summary>
 internal enum HudLine
 {
@@ -305,7 +313,7 @@ internal static class HudLines
 }
 
 /// <summary>
-///     Panels a player can drag.
+///     Panels a player can drag. Saved by <see cref="HudTargetDef.Key" />, not by this value.
 /// </summary>
 internal enum HudTarget
 {
@@ -335,7 +343,7 @@ internal sealed record HudTargetDef(
     (float W, float H) Size,
     bool            Offscreen,
     HudText         Name,
-    string          SaveKey);
+    byte            Key); // saved; never reused
 
 internal static class HudTargets
 {
@@ -343,16 +351,18 @@ internal static class HudTargets
 
     public static readonly int Count = All.Length;
 
+    public static readonly IReadOnlyDictionary<byte, HudTarget> ByKey;
+
     private static readonly HudTargetDef[] Defs =
     [
-        new ("Menu", "MenuPos", (-39, 0), (20, 58), false, HudTexts.TargetMenu, "menu"),
-        new ("RunPanel", "RunPos", (0, 24), (15, 18), true, HudTexts.TargetRun, "run"),
-        new ("CSpeedPanel", "CSpeedPos", (0, 8), (6, 5), true, HudTexts.TargetCSpeed, "cspeed"),
-        new ("InfoPanel", "InfoPos", (-46, -47), (10, 6), true, HudTexts.TargetInfo, "info"),
-        new ("SplitsPanel", "SplitsPos", (-40, -34), (20, 19), true, HudTexts.TargetSplits, "splits"),
-        new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, HudTexts.TargetKeys, "keys"),
-        new ("LocsPanel", "LocsPos", (-42, 0), (13, 21), true, HudTexts.TargetLocs, "locs"),
-        new ("SsjPanel", "SsjPos", (0, 12), (22, 4), true, HudTexts.TargetSsj, "ssj"),
+        new ("Menu", "MenuPos", (-39, 0), (20, 58), false, HudTexts.TargetMenu, 1),
+        new ("RunPanel", "RunPos", (0, 24), (15, 18), true, HudTexts.TargetRun, 2),
+        new ("CSpeedPanel", "CSpeedPos", (0, 8), (6, 5), true, HudTexts.TargetCSpeed, 3),
+        new ("InfoPanel", "InfoPos", (-46, -47), (10, 6), true, HudTexts.TargetInfo, 4),
+        new ("SplitsPanel", "SplitsPos", (-40, -34), (20, 19), true, HudTexts.TargetSplits, 5),
+        new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, HudTexts.TargetKeys, 6),
+        new ("LocsPanel", "LocsPos", (-42, 0), (13, 21), true, HudTexts.TargetLocs, 7),
+        new ("SsjPanel", "SsjPos", (0, 12), (22, 4), true, HudTexts.TargetSsj, 8),
     ];
 
     /// <summary>
@@ -369,6 +379,9 @@ internal static class HudTargets
         ["LocsPanel"]   = HudTarget.Locs,
         ["SsjPanel"]    = HudTarget.Ssj,
     };
+
+    static HudTargets()
+        => ByKey = All.ToDictionary(t => Defs[(int) t].Key);
 
     public static HudTargetDef Def(HudTarget target)
         => Defs[(int) target];

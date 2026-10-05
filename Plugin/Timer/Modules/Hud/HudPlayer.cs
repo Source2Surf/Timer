@@ -220,6 +220,7 @@ internal sealed class HudPlayer
 
     public ulong SteamId;
     public bool  SettingsLoaded;
+    public bool  SettingsChanged; // this visit, so a late load doesn't undo it
     public float SaveAt = float.NaN;
 
     // ---- the player's own custom_hud_layout, and what it currently holds

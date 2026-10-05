@@ -17,6 +17,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared;
 using Sharp.Shared.Enums;
@@ -76,7 +77,6 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
     private readonly IRequestManager    _request;
     private readonly IEventHookManager  _eventHook;
     private readonly ILogger<HudModule> _logger;
-    private readonly HudSettingsStore   _store;
 
     private readonly HudPlayer?[] _players = new HudPlayer?[PlayerSlot.MaxPlayerCount];
 
@@ -129,7 +129,6 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         _request        = request;
         _eventHook      = eventHook;
         _logger         = logger;
-        _store          = new HudSettingsStore(bridge.TimerDataPath, logger);
 
         timer_hud_layout = bridge.ConVarManager.CreateConVar("timer_hud_layout",
                                                              DefaultLayout,
@@ -251,6 +250,7 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         }
     }
 
+    // Defaults show until the backend answers.
     private void LoadSettings(HudPlayer p, SteamID steamId)
     {
         var id = (ulong) steamId;
@@ -263,24 +263,56 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
         p.SteamId        = id;
         p.SettingsLoaded = true;
 
-        if (_store.Load(id) is not { } saved)
+        Task.Run(async () =>
         {
-            return;
-        }
+            byte[]? data = null;
 
-        HudSettingsStore.Apply(saved, p);
+            try
+            {
+                data = await RetryHelper.RetryAsync(() => _request.GetPlayerSettings(steamId), RetryHelper.IsTransient, _logger, "GetPlayerSettings")
+                                        .ConfigureAwait(false);
+            }
+            catch (RpcException e) when (e.StatusCode == StatusCode.Unimplemented)
+            {
+                // a backend without player settings: defaults
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "Failed to load settings for {SteamId}", id);
+            }
 
-        foreach (var target in HudTargets.All)
-        {
-            ClampPosition(p, target);
-        }
+            if (data is not { Length: > 0 })
+            {
+                return;
+            }
 
-        p.MenuDirty = true;
+            await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+            {
+                // Settings they changed meanwhile win over the saved ones.
+                if (_players[p.Slot] != p || p.SettingsChanged)
+                {
+                    return;
+                }
+
+                PlayerSettingsCodec.Decode(data, p);
+
+                foreach (var target in HudTargets.All)
+                {
+                    ClampPosition(p, target);
+                }
+
+                p.MenuDirty = true;
+            }).ConfigureAwait(false);
+        });
     }
 
     private void MarkSettingsChanged(HudPlayer p)
-        => p.SaveAt = _bridge.GlobalVars.CurTime + SaveDelay;
+    {
+        p.SaveAt          = _bridge.GlobalVars.CurTime + SaveDelay;
+        p.SettingsChanged = true;
+    }
 
+    // Encoded here, sent in the background. Shutting down waits a little for it, not for long.
     private void FlushSettings(HudPlayer p, bool wait = false)
     {
         if (float.IsNaN(p.SaveAt))
@@ -290,9 +322,30 @@ internal partial class HudModule : IModule, IHudModule, ITimerModuleListener, IZ
 
         p.SaveAt = float.NaN;
 
-        if (p.SteamId != 0)
+        if (p.SteamId == 0)
         {
-            _store.Save(p.SteamId, HudSettingsStore.Capture(p), wait);
+            return;
+        }
+
+        var steamId = new SteamID(p.SteamId);
+        var data    = PlayerSettingsCodec.Encode(p);
+
+        var save = Task.Run(async () =>
+        {
+            try
+            {
+                await RetryHelper.RetryAsync(() => _request.SavePlayerSettings(steamId, data), RetryHelper.IsTransient, _logger, "SavePlayerSettings")
+                                 .ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "Failed to save settings for {SteamId}", p.SteamId);
+            }
+        });
+
+        if (wait)
+        {
+            save.Wait(TimeSpan.FromSeconds(2));
         }
     }
 
