@@ -19,6 +19,32 @@ public sealed class TimerWriteApiOptionsTests
     }
 
     [Fact]
+    public void RegisteredFactorsReplaceTheImplicitDefault()
+    {
+        var options = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build());
+
+        Assert.False(options.UseRegisteredStyleFactors(new Dictionary<int, double> { [1] = 0.5 }));
+        Assert.True(options.UseRegisteredStyleFactors(new Dictionary<int, double> { [0] = 1, [1] = 0.5 }));
+
+        Assert.True(options.HasRegisteredStyleFactors);
+        Assert.True(options.HasScorePolicy);
+        Assert.Equal(0.5, options.StyleFactors[1]);
+    }
+
+    [Fact]
+    public void ConfiguredFactorsWinOverRegisteredOnes()
+    {
+        var options = TimerWriteApiOptions.FromConfiguration(Build(new()
+        {
+            ["TimerBackend:WriteApi:StyleFactors:0"] = "1",
+            ["TimerBackend:WriteApi:StyleFactors:1"] = "2",
+        }));
+
+        Assert.False(options.UseRegisteredStyleFactors(new Dictionary<int, double> { [0] = 1, [1] = 0.5 }));
+        Assert.Equal(2d, options.StyleFactors[1]);
+    }
+
+    [Fact]
     public void EnabledApiDefaultsToRulesetOneAndMainStyleFactorOne()
     {
         var options = TimerWriteApiOptions.FromConfiguration(Build(new()

@@ -53,6 +53,37 @@ public sealed class PlayerSettingsStorageTests
         Assert.Null(await store.GetPlayerSettingsAsync(player));
     }
 
+    [Fact]
+    public Task SqliteStyleFactorsAreUpserted()
+        => StyleFactorsAreUpserted(DbType.Sqlite, null);
+
+    [DatabaseFact("TIMER_TEST_MYSQL")]
+    public Task MySqlStyleFactorsAreUpserted()
+        => StyleFactorsAreUpserted(DbType.MySql, "TIMER_TEST_MYSQL");
+
+    [DatabaseFact("TIMER_TEST_POSTGRES")]
+    public Task PostgreSqlStyleFactorsAreUpserted()
+        => StyleFactorsAreUpserted(DbType.PostgreSQL, "TIMER_TEST_POSTGRES");
+
+    // Game servers register their styles' score factors; a server without a style leaves it as it was.
+    private static async Task StyleFactorsAreUpserted(DbType type, string? variable)
+    {
+        using var fixture = new Fixture(type, variable);
+        var store = fixture.Store;
+
+        await store.Db.Deleteable<StyleFactorEntity>().ExecuteCommandAsync();
+        Assert.Empty(await store.GetStyleFactorsAsync());
+
+        await store.SaveStyleFactorsAsync(new Dictionary<int, double> { [0] = 1, [1] = 0.5 });
+        await store.SaveStyleFactorsAsync(new Dictionary<int, double> { [1] = 0.25, [2] = 0 });
+
+        var factors = await store.GetStyleFactorsAsync();
+        Assert.Equal(3, factors.Count);
+        Assert.Equal(1, factors[0]);
+        Assert.Equal(0.25, factors[1]);
+        Assert.Equal(0, factors[2]);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly string? _path;

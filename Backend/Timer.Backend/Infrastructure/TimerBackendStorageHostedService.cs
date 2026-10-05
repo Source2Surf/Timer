@@ -33,7 +33,7 @@ internal sealed class TimerBackendStorageHostedService : IHostedService
         _runtimeOptions = runtimeOptions ?? new TimerBackendRuntimeOptions();
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (_options.InitializeSchema || _options.AllowReadRepair
@@ -57,7 +57,19 @@ internal sealed class TimerBackendStorageHostedService : IHostedService
             _options.EnableOutboxWorker,
             _writeApiOptions.Enabled);
 
-        return Task.CompletedTask;
+        if (!_writeApiOptions.HasExplicitStyleFactors)
+        {
+            try
+            {
+                _writeApiOptions.UseRegisteredStyleFactors(
+                    await new TimerBackendGameStorage(_storage).GetStyleFactorsAsync(cancellationToken));
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // A database without the table (schema not initialized) still serves style 0.
+                _logger.LogWarning(e, "Failed to read the registered style factors; only style 0 is scored until a game server registers its styles.");
+            }
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

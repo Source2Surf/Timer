@@ -101,7 +101,8 @@ internal sealed partial class StorageServiceImpl
                                      typeof(RunSegmentEntity),
                                      typeof(ReplayEntity),
                                      typeof(ZoneEntity),
-                                     typeof(PlayerSettingsEntity));
+                                     typeof(PlayerSettingsEntity),
+                                     typeof(StyleFactorEntity));
         }
         catch (Exception e)
         {

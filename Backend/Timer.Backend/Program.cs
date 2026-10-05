@@ -41,13 +41,18 @@ var runtimeOptions = TimerBackendRuntimeOptions.FromConfiguration(builder.Config
 if (administrativeInvocation.Operation is BackendAdministrativeOperation.SetTier
     or BackendAdministrativeOperation.RecalculateScores)
 {
-    // Fail before connecting: these commands write the configured factors onto every board.
-    BackendAdministrativeCli.EnsureExplicitScorePolicy(writeApiOptions);
     using var loggerFactory = LoggerFactory.Create(logging => logging.AddSimpleConsole());
     using var storage = TimerBackendStorageFactory.Create(
         backendOptions.DatabaseType, backendOptions.ConnectionString, loggerFactory,
         enableOutboxWorker: false);
     storage.Start(initializeSchema: false, allowReadRepair: false, requireWriteSchema: true);
+
+    // These commands write the factors onto every board: configured, or the ones game servers registered.
+    if (!writeApiOptions.HasExplicitStyleFactors)
+    {
+        writeApiOptions.UseRegisteredStyleFactors(
+            new TimerBackendGameStorage(storage).GetStyleFactorsAsync().GetAwaiter().GetResult());
+    }
     var result = BackendAdministrativeCli.ExecuteAsync(administrativeInvocation, storage, writeApiOptions)
         .GetAwaiter().GetResult();
     if (!result.MapFound)

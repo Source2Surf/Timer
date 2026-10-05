@@ -391,6 +391,12 @@ public interface ITimerStorageServiceV1 : IService<ITimerStorageServiceV1>
 
     UnaryResult<RankDto> GetPlayerPointsRankAsync(ulong steamId);
 
+    /// <summary>
+    /// The game server's styles and their score factors. Used unless the backend configures its own StyleFactors;
+    /// returns whether they were taken.
+    /// </summary>
+    UnaryResult<bool> RegisterStyleFactorsAsync(Dictionary<int, double> factors);
+
     /// <summary>The points leaderboard's top players, best first.</summary>
     UnaryResult<RankedPlayerDto[]> GetTopPlayersAsync(int limit);
 

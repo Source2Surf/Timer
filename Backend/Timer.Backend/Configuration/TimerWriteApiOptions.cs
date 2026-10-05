@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using Microsoft.Extensions.Configuration;
 
 namespace Timer.Backend.Configuration;
@@ -18,13 +19,30 @@ internal sealed class TimerWriteApiOptions
 
     public int RulesetVersion { get; }
 
-    public IReadOnlyDictionary<int, double> StyleFactors { get; }
+    /// <summary>
+    /// The configured factors; without any, those the game servers registered for their styles, or until then the
+    /// implicit style-0 default.
+    /// </summary>
+    public IReadOnlyDictionary<int, double> StyleFactors => Volatile.Read(ref _styleFactors);
+
+    private IReadOnlyDictionary<int, double> _styleFactors;
+    private volatile bool                    _hasRegisteredStyleFactors;
 
     /// <summary>
     /// False when <see cref="StyleFactors"/> is only the implicit style-0 default. Score
     /// administration must not treat that default as the serving instance's policy.
     /// </summary>
     public bool HasExplicitStyleFactors { get; }
+
+    /// <summary>
+    /// True once game servers' registered factors replaced the implicit style-0 default.
+    /// </summary>
+    public bool HasRegisteredStyleFactors => _hasRegisteredStyleFactors;
+
+    /// <summary>
+    /// Factors to put on every board a tier change or recalculation queues: configured or registered, with style 0.
+    /// </summary>
+    public bool HasScorePolicy => (HasExplicitStyleFactors || HasRegisteredStyleFactors) && StyleFactors.ContainsKey(0);
 
     /// <summary>
     /// Local listener ports that may serve write RPCs. Empty means every Kestrel listener.
@@ -39,7 +57,7 @@ internal sealed class TimerWriteApiOptions
     {
         Enabled = enabled;
         RulesetVersion = rulesetVersion;
-        StyleFactors = styleFactors;
+        _styleFactors = styleFactors;
         HasExplicitStyleFactors = hasExplicitStyleFactors;
         LocalPorts = localPorts;
     }
@@ -99,6 +117,25 @@ internal sealed class TimerWriteApiOptions
             new ReadOnlyDictionary<int, double>(styleFactors),
             hasExplicitStyleFactors,
             localPorts);
+    }
+
+    /// <summary>
+    /// Takes the game servers' registered factors in place of the implicit default. Configured factors always win, and
+    /// a set without style 0 is refused.
+    /// </summary>
+    public bool UseRegisteredStyleFactors(IReadOnlyDictionary<int, double> factors)
+    {
+        ArgumentNullException.ThrowIfNull(factors);
+
+        if (HasExplicitStyleFactors || !factors.ContainsKey(0))
+        {
+            return false;
+        }
+
+        Volatile.Write(ref _styleFactors, new ReadOnlyDictionary<int, double>(new Dictionary<int, double>(factors)));
+        _hasRegisteredStyleFactors = true;
+
+        return true;
     }
 
     private static HashSet<int> ParseLocalPorts(IConfigurationSection section)

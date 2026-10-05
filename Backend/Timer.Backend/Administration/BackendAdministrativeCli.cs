@@ -155,7 +155,7 @@ internal static class BackendAdministrativeCli
         TimerWriteApiOptions writeApiOptions)
     {
         ArgumentNullException.ThrowIfNull(storage);
-        EnsureExplicitScorePolicy(writeApiOptions);
+        EnsureScorePolicy(writeApiOptions);
 
         var administration = new TimerBackendScoreAdministration(storage);
         return invocation.Operation switch
@@ -173,18 +173,18 @@ internal static class BackendAdministrativeCli
 
     /// <summary>
     /// Score commands persist these factors onto every board they queue. The implicit style-0
-    /// default a write instance falls back to would silently replace the serving policy when
-    /// the command runs without that instance's configuration, so require it explicitly.
+    /// default would silently replace the serving policy, so they need configured factors or the
+    /// ones game servers registered.
     /// </summary>
-    internal static void EnsureExplicitScorePolicy(TimerWriteApiOptions writeApiOptions)
+    internal static void EnsureScorePolicy(TimerWriteApiOptions writeApiOptions)
     {
         ArgumentNullException.ThrowIfNull(writeApiOptions);
 
-        if (!writeApiOptions.HasExplicitStyleFactors || !writeApiOptions.StyleFactors.ContainsKey(0))
+        if (!writeApiOptions.HasScorePolicy)
         {
             throw new InvalidOperationException(
-                $"Score administration requires {TimerWriteApiOptions.SectionName}:StyleFactors to be configured "
-              + "explicitly, including style 0, with the same factors as the serving write instance.");
+                "Score administration needs style factors, including style 0: start a game server once so it registers "
+              + $"its styles, or configure {TimerWriteApiOptions.SectionName}:StyleFactors.");
         }
     }
 

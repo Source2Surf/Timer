@@ -174,6 +174,13 @@ public interface IRequestManager
     Task<(int rank, int total)> GetPlayerPointsRank(SteamID steamId);
 
     /// <summary>
+    /// Tells the backend each style's score factor (timer-styles.jsonc score_factor), so it needs no copy of them.
+    /// Returns false when the backend configures its own. A provider that doesn't implement it ignores it.
+    /// </summary>
+    Task<bool> RegisterStyleFactors(IReadOnlyDictionary<int, double> factors)
+        => Task.FromResult(false);
+
+    /// <summary>
     /// The points leaderboard's top players, best first. A provider that doesn't implement it returns none.
     /// </summary>
     Task<IReadOnlyList<RankedPlayer>> GetTopPlayers(int limit)

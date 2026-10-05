@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
@@ -29,6 +30,7 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
@@ -60,6 +62,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private readonly IZoneModule          _zoneModule;
     private          ITimerModule         _timerModule = null!;
     private readonly IMapInfoModule       _mapInfoModule;
+    private readonly IRequestManager      _request;
     private readonly ILogger<StyleModule> _logger;
     private readonly ListenerHub<IStyleModuleListener> _listenerHub;
 
@@ -86,12 +89,14 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
                        ICommandManager      commandManager,
                        IZoneModule          zoneModule,
                        IMapInfoModule       mapInfoModule,
+                       IRequestManager      request,
                        ILogger<StyleModule> logger)
     {
         _bridge         = bridge;
         _commandManager = commandManager;
         _zoneModule     = zoneModule;
         _mapInfoModule  = mapInfoModule;
+        _request        = request;
         _logger      = logger;
         _listenerHub = new ListenerHub<IStyleModuleListener>(logger);
 
@@ -388,6 +393,31 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         AddStyleCommands();
 
         NotifyStyleConfigLoaded(_styles);
+        _ = RegisterStyleFactorsAsync(_styles);
+    }
+
+    // The backend scores with these unless it configures its own StyleFactors.
+    private async Task RegisterStyleFactorsAsync(IReadOnlyList<StyleSetting> styles)
+    {
+        var factors = new Dictionary<int, double>(styles.Count);
+
+        for (var i = 0; i < styles.Count; i++)
+        {
+            factors[i] = styles[i].ScoreFactor;
+        }
+
+        try
+        {
+            if (!await RetryHelper.RetryAsync(() => _request.RegisterStyleFactors(factors), RetryHelper.IsTransient, _logger, "RegisterStyleFactors")
+                                  .ConfigureAwait(false))
+            {
+                _logger.LogInformation("Timer.Backend scores with its own StyleFactors, not timer-styles.jsonc's score_factor");
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Failed to register the styles' score factors with Timer.Backend");
+        }
     }
 
     private void AddStyleCommands()

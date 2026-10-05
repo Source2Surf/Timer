@@ -225,6 +225,9 @@ internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog, I
         return (rank.Rank, rank.Total);
     }
 
+    public async Task<bool> RegisterStyleFactors(IReadOnlyDictionary<int, double> factors)
+        => await Call.RegisterStyleFactorsAsync(new Dictionary<int, double>(factors));
+
     public async Task<IReadOnlyList<RankedPlayer>> GetTopPlayers(int limit)
     {
         var players = await Call.GetTopPlayersAsync(limit);

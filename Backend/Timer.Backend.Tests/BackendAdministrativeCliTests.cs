@@ -62,7 +62,7 @@ public sealed class BackendAdministrativeCliTests
         var implicitPolicy = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build());
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            BackendAdministrativeCli.EnsureExplicitScorePolicy(implicitPolicy));
+            BackendAdministrativeCli.EnsureScorePolicy(implicitPolicy));
 
         Assert.Contains("StyleFactors", exception.Message, StringComparison.Ordinal);
     }
@@ -72,11 +72,12 @@ public sealed class BackendAdministrativeCliTests
     {
         var withoutStyleZero = BuildWriteOptions(new()
         {
+            ["TimerBackend:WriteApi:Enabled"]        = "false",
             ["TimerBackend:WriteApi:StyleFactors:1"] = "0.5",
         });
 
         Assert.Throws<InvalidOperationException>(() =>
-            BackendAdministrativeCli.EnsureExplicitScorePolicy(withoutStyleZero));
+            BackendAdministrativeCli.EnsureScorePolicy(withoutStyleZero));
     }
 
     [Fact]
@@ -88,7 +89,18 @@ public sealed class BackendAdministrativeCliTests
             ["TimerBackend:WriteApi:StyleFactors:1"] = "0.5",
         });
 
-        BackendAdministrativeCli.EnsureExplicitScorePolicy(explicitPolicy);
+        BackendAdministrativeCli.EnsureScorePolicy(explicitPolicy);
+    }
+
+    [Fact]
+    public void ScoreAdministrationAcceptsTheGameServersRegisteredFactors()
+    {
+        var options = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build());
+
+        Assert.True(options.UseRegisteredStyleFactors(new Dictionary<int, double> { [0] = 1, [1] = 0.5 }));
+
+        BackendAdministrativeCli.EnsureScorePolicy(options);
+        Assert.Equal(0.5, options.StyleFactors[1]);
     }
 
     [Fact]

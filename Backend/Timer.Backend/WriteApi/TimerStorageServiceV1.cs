@@ -9,6 +9,7 @@ using MagicOnion.Server;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
+using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 using Timer.Backend.Configuration;
 using Timer.Backend.Endpoints;
@@ -25,7 +26,8 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
     // The game server's encoding of every setting stays far below this.
     private const int MaxPlayerSettingsBytes = 256;
 
-    private const int MaxTopPlayers    = 50;
+    private const int    MaxTopPlayers  = 50;
+    private const double MaxStyleFactor = 100;
     private const int MaxRankedLookups = 64; // a full server
 
     private readonly TimerBackendStorage            _owner;
@@ -143,6 +145,25 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
             var (rank, total) = await _storage.GetPlayerPointsRankAsync(steamId, token);
 
             return new RankDto { Rank = rank, Total = total };
+        });
+
+    public async UnaryResult<bool> RegisterStyleFactorsAsync(Dictionary<int, double> factors)
+        => await RunAsync(async token =>
+        {
+            if (factors is not { Count: > 0 } || !factors.ContainsKey(0)
+                || factors.Any(f => (uint) f.Key >= TimerConstants.MAX_STYLE || !double.IsFinite(f.Value) || f.Value is < 0 or > MaxStyleFactor))
+            {
+                throw TimerWriteRpcErrors.InvalidArgument();
+            }
+
+            if (_options.HasExplicitStyleFactors)
+            {
+                return false;
+            }
+
+            await _storage.SaveStyleFactorsAsync(factors, token);
+
+            return _options.UseRegisteredStyleFactors(await _storage.GetStyleFactorsAsync(token));
         });
 
     public async UnaryResult<RankedPlayerDto[]> GetTopPlayersAsync(int limit)
@@ -269,7 +290,7 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
 
     // Tier changes and recalculations queue boards under this instance's factors, as the CLI does.
     private IReadOnlyDictionary<int, double> ScorePolicy()
-        => _options.HasExplicitStyleFactors && _options.StyleFactors.ContainsKey(0)
+        => _options.HasScorePolicy
                ? _options.StyleFactors
                : throw TimerWriteRpcErrors.ScorePolicyNotConfigured();
 

@@ -26,7 +26,7 @@ internal static class TimerWriteRpcErrors
 
     public static RpcException ScorePolicyNotConfigured()
         => new (new Status(StatusCode.FailedPrecondition,
-                           "Tier changes and score recalculation need TimerBackend:WriteApi:StyleFactors, including style 0."));
+                           "Tier changes and score recalculation need style factors: start a game server once so it registers its styles, or configure TimerBackend:WriteApi:StyleFactors."));
 
     public static RpcException InternalMappingFailure()
         => new (new Status(StatusCode.Internal, InternalFailureMessage));
