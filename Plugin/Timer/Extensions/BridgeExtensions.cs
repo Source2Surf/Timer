@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Units;
@@ -63,4 +64,14 @@ internal static class BridgeExtensions
 
         return false;
     }
+
+    /// <summary>
+    ///     The player that <paramref name="controller" /> spectates in first or third person, if any.
+    /// </summary>
+    public static PlayerSlot? GetObservedSlot(this InterfaceBridge bridge, IPlayerController controller)
+        => controller.GetPawn()?.AsObserver()?.GetObserverService() is { ObserverMode: not (ObserverMode.None or ObserverMode.Roaming) } service
+           && service.ObserverTarget.IsValid()
+           && bridge.EntityManager.FindEntityByHandle(service.ObserverTarget)?.AsPlayerPawn()?.GetController() is { } target
+            ? target.PlayerSlot
+            : null;
 }

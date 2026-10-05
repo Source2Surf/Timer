@@ -1742,5 +1742,13 @@
   "chat.loc.list_current": {
     "en-us": " <- current",
     "zh-cn": " <- 当前"
+  },
+  "chat.hide.on": {
+    "en-us": "Other players are now hidden.",
+    "zh-cn": "已隐藏其他玩家。"
+  },
+  "chat.hide.off": {
+    "en-us": "Other players are now visible.",
+    "zh-cn": "已显示其他玩家。"
   }
 }

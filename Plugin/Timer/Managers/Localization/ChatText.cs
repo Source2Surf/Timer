@@ -213,6 +213,9 @@ internal static class ChatTexts
     public static readonly ChatText LocListSegmented = new ("chat.loc.list_segmented", " (segmented)");
     public static readonly ChatText LocListCurrent   = new ("chat.loc.list_current", " <- current");
 
+    // ---- hide
+    public static readonly ChatText HideOn  = new ("chat.hide.on", "Other players are now hidden.");
+    public static readonly ChatText HideOff = new ("chat.hide.off", "Other players are now visible.");
     public static readonly IReadOnlyList<ChatText> All = typeof(ChatTexts).GetFields(BindingFlags.Public | BindingFlags.Static)
                                                                           .Where(f => f.FieldType == typeof(ChatText))
                                                                           .Select(f => (ChatText) f.GetValue(null)!)
