@@ -229,6 +229,13 @@ internal static class ChatTexts
     public static readonly ChatText SoundsOn  = new ("chat.sounds.on", "Timer sounds are on.");
     public static readonly ChatText SoundsOff = new ("chat.sounds.off", "Timer sounds are off.");
 
+    // ---- points ranks
+    public static readonly ChatText TopPlayersTitle    = new ("chat.ptop.title", "Top players:");
+    public static readonly ChatText TopPlayersRow      = new ("chat.ptop.row", "#{0} {1} - {2} points");
+    public static readonly ChatText TopPlayersYou      = new ("chat.ptop.you", "You: #{0}/{1}");
+    public static readonly ChatText TopPlayersUnranked = new ("chat.ptop.unranked", "You aren't ranked yet: finish a map to earn points.");
+    public static readonly ChatText TopPlayersNone     = new ("chat.ptop.none", "No ranked players yet.");
+
     public static readonly IReadOnlyList<ChatText> All = typeof(ChatTexts).GetFields(BindingFlags.Public | BindingFlags.Static)
                                                                           .Where(f => f.FieldType == typeof(ChatText))
                                                                           .Select(f => (ChatText) f.GetValue(null)!)

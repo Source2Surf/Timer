@@ -1798,5 +1798,25 @@
   "chat.sounds.off": {
     "en-us": "Timer sounds are off.",
     "zh-cn": "已关闭计时器音效。"
+  },
+  "chat.ptop.title": {
+    "en-us": "Top players:",
+    "zh-cn": "积分排行："
+  },
+  "chat.ptop.row": {
+    "en-us": "#{0} {1} - {2} points",
+    "zh-cn": "#{0} {1} - {2} 分"
+  },
+  "chat.ptop.you": {
+    "en-us": "You: #{0}/{1}",
+    "zh-cn": "你：#{0}/{1}"
+  },
+  "chat.ptop.unranked": {
+    "en-us": "You aren't ranked yet: finish a map to earn points.",
+    "zh-cn": "你还没有排名：完成地图即可获得积分。"
+  },
+  "chat.ptop.none": {
+    "en-us": "No ranked players yet.",
+    "zh-cn": "暂无排名玩家。"
   }
 }

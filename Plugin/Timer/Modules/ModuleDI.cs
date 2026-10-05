@@ -48,6 +48,7 @@ internal static class ModuleDI
         services.AddSingleton<IPlayerSettings>(x => x.GetRequiredService<HudModule>());
         services.ImplSingleton<IMessageModule, IModule, MessageModule>();
         services.ImplSingleton<ISoundModule, IModule, SoundModule>();
+        services.ImplSingleton<IRankModule, IModule, RankModule>();
 
         services.ImplSingleton<IMiscModule, IModule, MiscModule>();
         services.ImplSingleton<IHideModule, IModule, HideModule>();

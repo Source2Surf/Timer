@@ -1,0 +1,36 @@
+{
+    // Titles by global points rank, shown as a chat tag ("[Master] Nuko: gg") and as the scoreboard clan tag.
+    // A player gets the first title whose max_rank covers their rank; max_rank 0 covers every rank.
+    // color is a chat color: White, DarkRed, Pink, Green, LightGreen, Lime, Red, Grey, Yellow, Gold, Silver, Blue,
+    // DarkBlue, Purple, LightRed.
+    "titles": [
+        { "name": "Legend",  "max_rank": 10,  "color": "Gold" },
+        { "name": "Master",  "max_rank": 50,  "color": "LightRed" },
+        { "name": "Elite",   "max_rank": 150, "color": "Purple" },
+        { "name": "Expert",  "max_rank": 300, "color": "Blue" },
+        { "name": "Skilled", "max_rank": 600, "color": "Green" },
+        { "name": "Ranked",  "max_rank": 0,   "color": "Silver" }
+    ],
+
+    // Title of players without points yet; empty for no tag.
+    "unranked": "",
+
+    "chat_tags": true,
+
+    // A chat line. Tokens: {prefix} {title} {rank} {total} {name} {message}; {color} is the title's color, {team} the
+    // player's team color, and any color above works too, e.g. {gold} or {white}.
+    "chat_format": "{prefix}{color}[{title}] {team}{name}{white}: {message}",
+
+    // A chat line of a player without a title (no points yet and no "unranked" title).
+    "chat_format_untitled": "{prefix}{team}{name}{white}: {message}",
+
+    // {prefix}: before a dead player's, a spectator's and a team-only message (a dead player's team message gets both).
+    "chat_prefix_dead": "{grey}*DEAD* ",
+    "chat_prefix_spec": "{grey}*SPEC* ",
+    "chat_prefix_team": "{grey}(Team) ",
+
+    "scoreboard_tags": true,
+
+    // The scoreboard clan tag. Tokens: {title} {rank} {total}, e.g. "#{rank} {title}".
+    "scoreboard_format": "{title}"
+}
