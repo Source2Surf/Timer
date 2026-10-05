@@ -104,7 +104,10 @@ internal sealed class HudRecords
     public bool    PickFirst;    // pick the board's first run once it's there
     public long?   Confirm;      // the run whose Delete was clicked once
     public long?   Deleting;     // asked to delete; the note says so once it's gone
-    public string? DeletedNote;
+    public bool    ShowDeleted;  // the note follows the deleted run's player: their next run takes the row
+    public ulong   DeletedSteamId;
+    public string? DeletedName;
+    public string? DeletedTime;
     public string? Note;
     public bool    Warn;
     public bool    Dirty;

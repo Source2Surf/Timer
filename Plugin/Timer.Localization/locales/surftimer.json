@@ -1171,9 +1171,9 @@
     "en-us": "Start {0} · Avg {1} · End {2} u/s",
     "zh-cn": "起步 {0} · 平均 {1} · 结束 {2} u/s"
   },
-  "hud.records.hint": {
-    "en-us": "Delete removes the picked run and its replays. The player's next-best run takes their row.",
-    "zh-cn": "删除会移除选中的成绩及其回放。该玩家的次佳成绩会补上其位置。"
+  "hud.records.admin_note": {
+    "en-us": "Delete removes only this run and its replay. The player's next-fastest run on this board takes its place.",
+    "zh-cn": "删除只会移除这一条成绩及其回放，该玩家在此榜单上的下一条最快成绩会顶替它的位置。"
   },
   "hud.records.delete": {
     "en-us": "Delete run",
@@ -1194,6 +1194,10 @@
   "hud.records.deleted": {
     "en-us": "Deleted {0}'s {1} and its replays.",
     "zh-cn": "已删除 {0} 的 {1} 及其回放。"
+  },
+  "hud.records.deleted_next": {
+    "en-us": "Deleted {0}'s {1} and its replays. Their next-fastest run, {2}, takes its place.",
+    "zh-cn": "已删除 {0} 的 {1} 及其回放。其下一条最快成绩 {2} 顶替了它的位置。"
   },
   "hud.records.loading": {
     "en-us": "Loading {0}…",

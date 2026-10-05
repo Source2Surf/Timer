@@ -1167,6 +1167,7 @@
 				<Label id="LbCardStats" class="LbCardSub" text="{s:text}" />
 				<Label id="LbCardSpeed" class="LbCardSub" text="{s:text}" />
 			</Panel>
+			<Label id="LbAdminNote" class="LbAdminNote Hidden" text="{s:text}" />
 			<Label id="LbNote" class="NomNote Hidden" text="{s:text}" />
 			<Panel class="MenuFooter">
 				<Button id="LbClose" class="MenuButton">

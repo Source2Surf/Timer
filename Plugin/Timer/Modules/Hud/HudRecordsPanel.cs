@@ -85,6 +85,7 @@ internal partial class HudModule
         r.PickFirst = true;
         r.Confirm   = null;
         r.Deleting  = null;
+        r.ShowDeleted = false;
         r.Note      = null;
         r.Open      = true;
         r.Dirty     = true;
@@ -166,13 +167,22 @@ internal partial class HudModule
         {
             if (r.Deleting == r.Picked)
             {
-                r.Note     = r.DeletedNote;
-                r.Warn     = false;
-                r.Deleting = null;
+                r.ShowDeleted = true;
+                r.Deleting    = null;
             }
 
             r.Picked  = null;
             r.Confirm = null;
+        }
+
+        // What took the deleted run's place, once the board has it (another map's refetch lands a little later).
+        if (r.ShowDeleted && !loading)
+        {
+            var next = IndexOfPlayer(list, r.DeletedSteamId);
+            r.Note = next >= 0
+                ? tr.Format(HudTexts.LbDeletedNext, r.DeletedName!, r.DeletedTime!, HudFormat.FormatTime(list[next].Time))
+                : tr.Format(HudTexts.LbDeleted, r.DeletedName!, r.DeletedTime!);
+            r.Warn = false;
         }
 
         if (r.PickFirst && !loading)
@@ -257,6 +267,7 @@ internal partial class HudModule
 
         // Deleting, for admins only.
         var admin = _recordModule.CanDeleteRecords(p.Slot);
+        w.Class("LbAdminNote", "Hidden", !admin);
         w.Class("LbNote", "Hidden", !admin);
         w.Class("LbDelete", "Hidden", !admin);
 
@@ -268,7 +279,7 @@ internal partial class HudModule
             w.Class("LbDelete", "confirm", confirm);
             w.Class("LbDelete", "disabled", off);
             w.Class("LbDeleteLabel", "disabled", off);
-            w.Text("LbNote", "text", r.Note ?? tr[HudTexts.LbHint]);
+            w.Text("LbNote", "text", r.Note ?? "");
             w.Class("LbNote", "warn", r.Note is not null && r.Warn);
         }
     }
@@ -357,6 +368,7 @@ internal partial class HudModule
         var boards = r.Map is null ? null : _recordModule.GetBoards(r.Map);
         var keep   = false;
         var board  = false; // a different board: pick its first run
+        r.ShowDeleted = false;
 
         switch (buttonId)
         {
@@ -458,10 +470,12 @@ internal partial class HudModule
 
         // The admin's chat line says how it went; the board redraws when it reloads.
         _recordModule.DeleteRecord(p.Slot, record, r.Map);
-        r.Deleting    = id;
-        r.DeletedNote = p.Tr.Format(HudTexts.LbDeleted, record.PlayerName, time);
-        r.Note        = p.Tr.Format(HudTexts.LbDeleting, record.PlayerName, time);
-        r.Warn        = false;
+        r.Deleting       = id;
+        r.DeletedSteamId = record.SteamId;
+        r.DeletedName    = record.PlayerName;
+        r.DeletedTime    = time;
+        r.Note           = p.Tr.Format(HudTexts.LbDeleting, record.PlayerName, time);
+        r.Warn           = false;
 
         return false;
     }

@@ -528,7 +528,7 @@ public sealed class HudLayoutContractTests
                            .Concat(["LbMenu", "LbMap", "LbTrackPrev", "LbTrackValue", "LbTrackNext", "LbStagePrev", "LbStageValue", "LbStageNext",
                                     "LbStylePrev", "LbStyleValue", "LbStyleNext", "LbCount", "LbJumpSr", "LbJumpYou", "LbEmpty", "LbPrev",
                                     "LbPage", "LbNext", "LbCard", "LbCardName", "LbCardTime", "LbCardRank", "LbCardStats", "LbCardSpeed",
-                                    "LbNote", "LbClose", "LbDelete", "LbDeleteLabel"]);
+                                    "LbAdminNote", "LbNote", "LbClose", "LbDelete", "LbDeleteLabel"]);
 
         foreach (var id in ids)
         {

@@ -332,12 +332,13 @@ internal static class HudTexts
     public static readonly HudText LbTitle      = new ("hud.records.title", "Records");
     public static readonly HudText LbStats      = new ("hud.records.stats", "{0} jumps · {1} strafes · {2} sync");
     public static readonly HudText LbSpeed      = new ("hud.records.speed", "Start {0} · Avg {1} · End {2} u/s");
-    public static readonly HudText LbHint       = new ("hud.records.hint", "Delete removes the picked run and its replays. The player's next-best run takes their row.");
+    public static readonly HudText LbAdminNote  = new ("hud.records.admin_note", "Delete removes only this run and its replay. The player's next-fastest run on this board takes its place.");
     public static readonly HudText LbDelete     = new ("hud.records.delete", "Delete run");
     public static readonly HudText LbConfirm    = new ("hud.records.confirm", "Confirm delete");
     public static readonly HudText LbConfirmAsk = new ("hud.records.confirm_ask", "Click Confirm delete to delete {0}'s {1} and its replays. Their next-best run takes the row, or they drop off the board.");
     public static readonly HudText LbDeleting   = new ("hud.records.deleting", "Asked to delete {0}'s {1}. Chat says when it's done.");
     public static readonly HudText LbDeleted    = new ("hud.records.deleted", "Deleted {0}'s {1} and its replays.");
+    public static readonly HudText LbDeletedNext = new ("hud.records.deleted_next", "Deleted {0}'s {1} and its replays. Their next-fastest run, {2}, takes its place.");
     public static readonly HudText LbLoading    = new ("hud.records.loading", "Loading {0}…");
 
     // ---- zone panel
@@ -552,6 +553,7 @@ internal static class HudLabels
         ("LLbJumpSr", HudTexts.Sr),
         ("LLbJumpYou", HudTexts.You),
         ("LLbClose", HudTexts.Close),
+        ("LbAdminNote", HudTexts.LbAdminNote),
     ];
 
     public static readonly (string Id, HudText Text)[] Zones =
