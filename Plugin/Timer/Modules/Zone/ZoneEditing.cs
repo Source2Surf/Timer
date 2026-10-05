@@ -157,6 +157,26 @@ internal partial class ZoneModule
         return true;
     }
 
+    public bool TeleportToZone(PlayerSlot slot, uint id)
+    {
+        if (!_zoneEditors[slot]
+            || !_zones.TryGetValue(id, out var info)
+            || _bridge.ClientManager.GetGameClient(slot)?.GetPlayerController()?.GetPlayerPawn() is not
+            {
+                IsValidEntity: true, IsAlive: true,
+            } pawn)
+        {
+            return false;
+        }
+
+        // Like !end: stop, move, then stop again once leaving a start zone on the way could have restarted it.
+        _timerModule.StopTimer(slot);
+        pawn.Teleport(info.TeleportOrigin ?? info.Origin, null, new Vector());
+        _bridge.ModSharp.InvokeFrameAction(() => _timerModule.StopTimer(slot));
+
+        return true;
+    }
+
     private List<ZoneEntry> ZoneEntries()
     {
         var zones = new List<ZoneEntry>(_zones.Count);

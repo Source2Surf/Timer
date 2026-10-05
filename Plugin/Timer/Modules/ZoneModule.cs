@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Iced.Intel;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
@@ -86,6 +87,9 @@ internal interface IZoneModule
 
     // Deletes a zone added in game and saves the rest; the map's own zones can't be deleted.
     bool DeleteZone(PlayerSlot slot, uint id);
+
+    // Takes the player to any zone, the map's own included. Stops their run, so the zone can't start, split or finish it.
+    bool TeleportToZone(PlayerSlot slot, uint id);
 }
 
 // TODO:
@@ -99,6 +103,9 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     private readonly ICommandManager      _commandManager;
     private readonly IRequestManager      _requestManager;
     private readonly IPlayerManager       _playerManager;
+
+    // The timer module depends on this one, so it is resolved after both are built.
+    private ITimerModule _timerModule = null!;
 
     private readonly ILogger<ZoneModule> _logger;
     private readonly ListenerHub<IZoneModuleListener> _listenerHub;
@@ -373,6 +380,9 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
         return true;
     }
+
+    public void OnPostInit(ServiceProvider provider)
+        => _timerModule = provider.GetRequiredService<ITimerModule>();
 
     public void Shutdown()
     {
