@@ -98,6 +98,7 @@ internal sealed class HudZones
     public int             Page;
     public uint?           Confirm;                 // the zone whose Delete was clicked once
     public uint?           Added;                   // the zone just placed from the panel, picked out in the list
+    public uint?           Here;                    // the zone last teleported to
     public string?         Note;
     public bool            Warn;
     public bool            Dirty;

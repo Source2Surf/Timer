@@ -350,7 +350,10 @@ internal static class HudTexts
     public static readonly HudText ZnCancel         = new ("zn.cancel", "Cancel placing");
     public static readonly HudText ZnPlacingSection = new ("zn.placing_section", "Placing");
     public static readonly HudText ZnStatus         = new ("zn.status", "Corner {0} of 2. Close the panel to carry on placing.");
-    public static readonly HudText ZnHint           = new ("zn.hint", "Aim and press your use key at two corners; zones are 128 units tall. The map's own zones can't be deleted.");
+    public static readonly HudText ZnHint           = new ("zn.hint", "Click a zone to teleport there. To place one, aim and press your use key at two corners (128 units tall).");
+    public static readonly HudText ZnTeleport       = new ("zn.teleport", "Teleport");
+    public static readonly HudText ZnTeleported     = new ("zn.teleported", "Teleported to {0}.");
+    public static readonly HudText ZnTeleportFailed = new ("zn.teleport_failed", "Couldn't teleport to {0}. You need to be alive.");
     public static readonly HudText ZnTaken          = new ("zn.taken", "{0} already has {1}. This adds another area that also counts as {1}.");
     public static readonly HudText ZnConfirmAsk     = new ("zn.confirm_ask", "Click Confirm to delete {0}. It's removed from the map and the database.");
     public static readonly HudText ZnDeleted        = new ("zn.deleted", "{0} deleted.");
@@ -543,6 +546,7 @@ internal static class HudLabels
         ("LZnPlacing", HudTexts.ZnPlacingSection),
         ("LZnClose", HudTexts.Close),
         .. HudModule.ZoneMapIds.Select(id => (id, HudTexts.ZnMap)),
+        .. HudModule.ZoneGoHint.Select(id => (id, HudTexts.ZnTeleport)),
     ];
 
     public static readonly (string Id, HudText Text)[] ZonePrompt =

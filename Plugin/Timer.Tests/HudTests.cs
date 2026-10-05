@@ -525,6 +525,7 @@ public sealed class HudLayoutContractTests
     {
         var ids = HudModule.ZoneRowIds.Concat(HudModule.ZoneNameIds).Concat(HudModule.ZoneMapIds).Concat(HudModule.ZoneDelIds)
                            .Concat(HudModule.ZoneDelLabel).Concat(HudModule.ZoneTypeIds).Concat(HudModule.ZoneTypeLabel)
+                           .Concat(HudModule.ZoneGoIds).Concat(HudModule.ZoneGoHint)
                            .Concat(["ZnMenu", "ZnCount", "ZnTrackPrev", "ZnTrackValue", "ZnTrackNext", "ZnEmpty", "ZnPrev", "ZnPage", "ZnNext",
                                     "ZnAdd", "ZnNumPrev", "ZnNumberValue", "ZnNumNext", "ZnStatus", "ZnStatusName", "ZnStatusSub", "ZnNote",
                                     "ZnClose", "ZnPlace", "ZnPlaceLabel", "ZnPrompt", "ZnPromptTitle", "ZnPromptTrack", "ZnDot1", "ZnDot2",

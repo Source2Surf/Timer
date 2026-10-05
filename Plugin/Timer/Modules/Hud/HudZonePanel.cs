@@ -38,6 +38,8 @@ internal partial class HudModule
     internal static readonly string[] ZoneMapIds   = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnRow", i, "Map")).ToArray();
     internal static readonly string[] ZoneDelIds   = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnDel", i)).ToArray();
     internal static readonly string[] ZoneDelLabel = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnDel", i, "Label")).ToArray();
+    internal static readonly string[] ZoneGoIds    = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnGo", i)).ToArray();
+    internal static readonly string[] ZoneGoHint   = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnGo", i, "Hint")).ToArray();
 
     // The type chips, in EZoneType order.
     internal static readonly EZoneType[] ZoneTypes     = [EZoneType.Start, EZoneType.End, EZoneType.Stage, EZoneType.Checkpoint, EZoneType.StopTimer];
@@ -103,6 +105,7 @@ internal partial class HudModule
         z.Open    = false;
         z.Confirm = null;
         z.Note    = null;
+        z.Here    = null;
 
         if (z.Build is null)
         {
@@ -297,6 +300,7 @@ internal partial class HudModule
             var confirm = z.Confirm == entry.Id;
             w.Class(ZoneRowIds[row], "blank", false);
             w.Class(ZoneRowIds[row], "new", z.Added == entry.Id);
+            w.Class(ZoneRowIds[row], "sel", z.Here == entry.Id);
             w.Text(ZoneNameIds[row], "text", ZoneName(p, entry.Type, entry.Number));
             w.Class(ZoneNameIds[row], "map", entry.Prebuilt);
             w.Class(ZoneMapIds[row], "Hidden", !entry.Prebuilt);
@@ -310,6 +314,7 @@ internal partial class HudModule
         for (; row < ZoneRows; row++)
         {
             w.Class(ZoneRowIds[row], "blank", true);
+            w.Class(ZoneRowIds[row], "sel", false);
             w.Class(ZoneMapIds[row], "Hidden", true);
             w.Class(ZoneDelIds[row], "Hidden", true);
             z.RowIds[row] = 0;
@@ -430,6 +435,10 @@ internal partial class HudModule
                 {
                     keepConfirm = DeleteZone(p, id);
                 }
+                else if (TryParseIndex(buttonId, "ZnGo", out var go) && go < ZoneRows && z.RowIds[go] is var target and not 0)
+                {
+                    TeleportToZone(p, target);
+                }
 
                 break;
         }
@@ -467,6 +476,23 @@ internal partial class HudModule
         z.Warn = false;
 
         return false;
+    }
+
+    // The panel stays open, for hopping between zones.
+    private void TeleportToZone(HudPlayer p, uint id)
+    {
+        var z = p.Zones;
+
+        if (_zoneModule.GetZones().FirstOrDefault(x => x.Id == id) is not { Id: not 0 } entry)
+        {
+            return;
+        }
+
+        var ok   = _zoneModule.TeleportToZone(p.Slot, id);
+        var name = ZoneName(p, entry.Type, entry.Number);
+        z.Here = ok ? id : z.Here;
+        z.Note = p.Tr.Format(ok ? HudTexts.ZnTeleported : HudTexts.ZnTeleportFailed, name);
+        z.Warn = !ok;
     }
 
     private void PlaceZone(HudPlayer p)

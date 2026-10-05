@@ -939,7 +939,7 @@
 		</Panel>
 
 		<!-- Zone panel (admins), opened by !zone. Cursor mode, in the replay menu's spot. It steps aside while a zone is
-		     placed (the prompt above takes over) and comes back when it's done. 8 zones a page; a row past the end is blank. -->
+		     placed (the prompt above takes over) and comes back when it's done. 8 zones a page; a row past the end is blank. A zone's name teleports there. -->
 		<Panel id="ZnMenu" class="Menu ZnMenu Closed">
 			<Panel class="MenuHeader RMenuHeader">
 				<Label id="LZnTitle" class="MenuTitle" text="{s:text}" />
@@ -956,42 +956,66 @@
 			<Panel class="RmList">
 				<Panel class="RmRows">
 					<Panel id="ZnRow0" class="RmRow ZnRow blank">
-						<Label id="ZnRow0Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo0" class="ZnGo">
+							<Label id="ZnRow0Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo0Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow0Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel0" class="ZnDel Hidden"><Label id="ZnDel0Label" text="{s:text}" /></Button>
 					</Panel>
 					<Panel id="ZnRow1" class="RmRow ZnRow blank">
-						<Label id="ZnRow1Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo1" class="ZnGo">
+							<Label id="ZnRow1Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo1Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow1Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel1" class="ZnDel Hidden"><Label id="ZnDel1Label" text="{s:text}" /></Button>
 					</Panel>
 					<Panel id="ZnRow2" class="RmRow ZnRow blank">
-						<Label id="ZnRow2Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo2" class="ZnGo">
+							<Label id="ZnRow2Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo2Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow2Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel2" class="ZnDel Hidden"><Label id="ZnDel2Label" text="{s:text}" /></Button>
 					</Panel>
 					<Panel id="ZnRow3" class="RmRow ZnRow blank">
-						<Label id="ZnRow3Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo3" class="ZnGo">
+							<Label id="ZnRow3Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo3Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow3Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel3" class="ZnDel Hidden"><Label id="ZnDel3Label" text="{s:text}" /></Button>
 					</Panel>
 					<Panel id="ZnRow4" class="RmRow ZnRow blank">
-						<Label id="ZnRow4Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo4" class="ZnGo">
+							<Label id="ZnRow4Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo4Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow4Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel4" class="ZnDel Hidden"><Label id="ZnDel4Label" text="{s:text}" /></Button>
 					</Panel>
 					<Panel id="ZnRow5" class="RmRow ZnRow blank">
-						<Label id="ZnRow5Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo5" class="ZnGo">
+							<Label id="ZnRow5Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo5Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow5Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel5" class="ZnDel Hidden"><Label id="ZnDel5Label" text="{s:text}" /></Button>
 					</Panel>
 					<Panel id="ZnRow6" class="RmRow ZnRow blank">
-						<Label id="ZnRow6Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo6" class="ZnGo">
+							<Label id="ZnRow6Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo6Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow6Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel6" class="ZnDel Hidden"><Label id="ZnDel6Label" text="{s:text}" /></Button>
 					</Panel>
 					<Panel id="ZnRow7" class="RmRow ZnRow blank">
-						<Label id="ZnRow7Name" class="RmName" text="{s:text}" />
+						<Button id="ZnGo7" class="ZnGo">
+							<Label id="ZnRow7Name" class="RmName" text="{s:text}" />
+							<Label id="ZnGo7Hint" class="ZnGoHint" text="{s:text}" />
+						</Button>
 						<Label id="ZnRow7Map" class="ZnMapTag Hidden" text="{s:text}" />
 						<Button id="ZnDel7" class="ZnDel Hidden"><Label id="ZnDel7Label" text="{s:text}" /></Button>
 					</Panel>

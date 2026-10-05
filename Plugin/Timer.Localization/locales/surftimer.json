@@ -1244,8 +1244,20 @@
     "zh-cn": "第 {0} 个角，共 2 个。关闭面板继续放置。"
   },
   "zn.hint": {
-    "en-us": "Aim and press your use key at two corners; zones are 128 units tall. The map's own zones can't be deleted.",
-    "zh-cn": "瞄准并按使用键确定两个角；区域高 128 单位。地图自带的区域无法删除。"
+    "en-us": "Click a zone to teleport there. To place one, aim and press your use key at two corners (128 units tall).",
+    "zh-cn": "点击区域即可传送过去。放置区域：瞄准并按使用键确定两个角，高 128 单位。"
+  },
+  "zn.teleport": {
+    "en-us": "Teleport",
+    "zh-cn": "传送"
+  },
+  "zn.teleported": {
+    "en-us": "Teleported to {0}.",
+    "zh-cn": "已传送到{0}。"
+  },
+  "zn.teleport_failed": {
+    "en-us": "Couldn't teleport to {0}. You need to be alive.",
+    "zh-cn": "无法传送到{0}。你需要处于存活状态。"
   },
   "zn.taken": {
     "en-us": "{0} already has {1}. This adds another area that also counts as {1}.",

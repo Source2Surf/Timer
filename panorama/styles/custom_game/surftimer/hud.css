@@ -1896,13 +1896,59 @@
     flow-children: down;
 }
 
-/* Rows aren't buttons here: only Delete is. */
+/* The row itself isn't a button: its name (teleport) and Delete are. */
+.ZnRow {
+    padding: 0px 8px 0px 0px;
+}
+
 .ZnRow:hover {
     background-color: #00000000;
 }
 
+.ZnGo {
+    width: fill-parent-flow( 1 );
+    height: 100%;
+    margin-right: 8px;
+    padding: 0px 8px;
+    flow-children: right;
+    border-radius: 4px;
+
+    transition-property: background-color;
+    transition-duration: .1s;
+}
+
+.ZnGo:hover {
+    background-color: menuHover;
+}
+
+/* The name fits its text, so the hint follows it. */
+.Menu .ZnGo .RmName {
+    width: fit-children;
+    max-width: 220px;
+}
+
+.Menu .ZnGoHint {
+    vertical-align: center;
+    margin-left: 8px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: accentColor;
+    opacity: 0;
+
+    transition-property: opacity;
+    transition-duration: .12s;
+}
+
+.ZnGo:hover .ZnGoHint {
+    opacity: 1;
+}
+
 .ZnRow.new {
     background-color: #7ce27c1f;
+}
+
+.ZnRow.sel {
+    background-color: #5ab4ff1a;
 }
 
 .Menu .RmName.map {
