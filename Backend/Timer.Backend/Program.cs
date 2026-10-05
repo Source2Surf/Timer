@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -83,6 +84,8 @@ builder.Services.ConfigureHttpJsonOptions(BackendJsonOptions.Configure);
 TimerWriteApiRegistration.Add(builder.Services, writeApiOptions);
 
 var app = builder.Build();
+app.Logger.LogInformation("Timer.Backend {Version}",
+                          typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
 if (writeApiOptions.Enabled && writeApiOptions.LocalPorts.Count == 0)
 {
     app.Logger.LogWarning(

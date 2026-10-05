@@ -1,0 +1,28 @@
+<Project>
+  <!-- Versions follow git: 1.0.<commits on HEAD>+<short hash>. Bump the major.minor here by hand. -->
+  <PropertyGroup>
+    <TimerVersionPrefix>1.0</TimerVersionPrefix>
+    <!-- Modules bind to Timer.Shared by this, so it changes only with the major.minor. -->
+    <AssemblyVersion>$(TimerVersionPrefix).0.0</AssemblyVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <!-- Without git (a source archive), builds stay 1.0.0. -->
+  <Target Name="TimerGitVersion" BeforeTargets="GetAssemblyVersion;GenerateNuspec">
+    <Exec Command="git rev-list --count HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="TimerGitCommits" />
+      <Output TaskParameter="ExitCode" PropertyName="TimerGitCountExit" />
+    </Exec>
+    <Exec Command="git rev-parse --short HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="TimerGitHash" />
+      <Output TaskParameter="ExitCode" PropertyName="TimerGitHashExit" />
+    </Exec>
+    <PropertyGroup Condition="'$(TimerGitCountExit)' == '0' and '$(TimerGitHashExit)' == '0'">
+      <Version>$(TimerVersionPrefix).$(TimerGitCommits)</Version>
+      <FileVersion>$(Version).0</FileVersion>
+      <InformationalVersion>$(Version)+$(TimerGitHash)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>

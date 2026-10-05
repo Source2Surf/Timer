@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Reflection;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -93,6 +94,7 @@ public class Timer : IModSharpModule
         var backend       = BackendOptions.FromConfiguration(configuration);
         services.AddSingleton(configuration);
         services.AddSingleton(backend);
+        logger.LogInformation("Timer {version}", typeof(Timer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
         logger.LogInformation("Timer.Backend: {endpoint}", backend.Endpoint);
 
         if (backend.FromScoreWriteSection)
