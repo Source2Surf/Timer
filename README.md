@@ -252,13 +252,13 @@ Timer.Backend owns the database. Game servers read and write everything (maps,
 records, zones, players, replays) through its gRPC port.
 
 Copy [appsettings.example.json](Backend/Timer.Backend/appsettings.example.json) to
-`Backend/Timer.Backend/appsettings.Production.json` (preserve an existing file).
-Set `TimerBackend:Database:Type` and `ConnectionString`. Use a normal driver
-connection string without a `mysql://` or `pgsql://` prefix. Set
-`TimerBackend:WriteApi:Enabled=true`: that serves the game servers' gRPC API.
+`appsettings.Production.json` next to the backend (preserve an existing file)
+and set `TimerBackend:Database:Type` and `ConnectionString`: a normal driver
+connection string without a `mysql://` or `pgsql://` prefix. That's all it
+needs: it creates its tables on startup, serves the game servers' gRPC on
+`127.0.0.1:5082`, and takes each style's `score_factor` from the game servers.
 
-- **New database:** set `TimerBackend:InitializeSchema=true` for the first
-  startup, then back to `false`.
+- **New database:** create it empty and start the backend.
 - **Existing database:** stop all writers and back up first. Follow the
   [master migration](Backend/Timer.Backend/README.md#upgrade-an-existing-master-sql-database)
   or [earlier Backend upgrade](Backend/Timer.Backend/README.md#update-an-earlier-backend-test-bundle)
@@ -270,22 +270,21 @@ From the repository root:
 dotnet run -c Release --no-launch-profile --project Backend/Timer.Backend/Timer.Backend.csproj -- --environment Production
 ```
 
-The template uses HTTP port **5081** and HTTP/2 gRPC port **5082**.
+It listens on HTTP port **5081** and HTTP/2 gRPC port **5082**, on loopback.
 Check `http://127.0.0.1:5081/health/ready` for HTTP 200.
 
-Then point each game server at the gRPC port in its
-**`sharp/configs/timer.jsonc`**:
+A game server on the same host needs no backend settings. Otherwise point it at
+the gRPC port in its **`sharp/configs/timer.jsonc`**:
 
 ```jsonc
 "backend": {
-  "endpoint": "http://127.0.0.1:5082"
+  "endpoint": "http://10.0.0.2:5082"
 }
 ```
 
-Start Backend before the game server. Defaults accept ruleset 1 and style 0;
-configure `WriteApi:StyleFactors` for other styles. `!set_tier` and
-`timer_recalc_scores` queue score recalculation on the backend under those
-factors, so they need `StyleFactors` set explicitly, including style 0.
+Start Backend before the game server. `WriteApi:StyleFactors` overrides the
+factors game servers register; `!set_tier` and `timer_recalc_scores` use
+whichever applies.
 
 Keep gRPC on loopback/private networking: it has no built-in authentication.
 The plugin retry queue is in memory; unacknowledged runs are lost on restart.

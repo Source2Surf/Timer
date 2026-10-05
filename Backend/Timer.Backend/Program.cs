@@ -11,6 +11,7 @@ using Timer.Backend.Storage;
 
 var administrativeInvocation = BackendAdministrativeCli.Parse(args);
 var builder = WebApplication.CreateBuilder(administrativeInvocation.ConfigurationArguments);
+TimerBackendDefaults.Apply(builder.Configuration);
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole();
 

@@ -19,7 +19,7 @@ public sealed class TimerWriteApiRegistrationTests
     public void DisabledWriteApiDoesNotRegisterWriteFacadeOrMagicOnionServices()
     {
         var services = new ServiceCollection();
-        var options = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build());
+        var options = DisabledOptions();
 
         TimerWriteApiRegistration.Add(services, options);
 
@@ -40,7 +40,7 @@ public sealed class TimerWriteApiRegistrationTests
     [Fact]
     public async Task ServiceEndpointsAreMappedOnlyWhenTheWriteApiIsEnabled()
     {
-        var disabled = await BuildAndMapAsync(TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build()));
+        var disabled = await BuildAndMapAsync(DisabledOptions());
         try
         {
             Assert.Empty(((IEndpointRouteBuilder)disabled).DataSources.SelectMany(source => source.Endpoints));
@@ -83,4 +83,9 @@ public sealed class TimerWriteApiRegistrationTests
         };
         return TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
     }
+
+    private static TimerWriteApiOptions DisabledOptions()
+        => TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder()
+                                                  .AddInMemoryCollection(new Dictionary<string, string?> { ["TimerBackend:WriteApi:Enabled"] = "false" })
+                                                  .Build());
 }

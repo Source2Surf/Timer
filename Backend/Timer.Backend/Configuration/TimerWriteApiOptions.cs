@@ -79,7 +79,8 @@ internal sealed class TimerWriteApiOptions
             }
         }
 
-        var enabled = ParseBoolean(section["Enabled"], $"{SectionName}:Enabled");
+        // A backend serves its game servers unless told otherwise (a read-only replica).
+        var enabled = string.IsNullOrWhiteSpace(section["Enabled"]) || ParseBoolean(section["Enabled"], $"{SectionName}:Enabled");
         var rulesetVersion = string.IsNullOrWhiteSpace(section["RulesetVersion"])
                                  ? (enabled ? 1 : 0)
                                  : ParseInteger(section["RulesetVersion"],

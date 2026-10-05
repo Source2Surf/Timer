@@ -74,8 +74,9 @@ internal sealed record TimerBackendOptions(string DatabaseType,
 
         return new TimerBackendOptions(databaseType,
                                        connectionString,
-                                       bool.TryParse(initializeSchemaRaw, out var initializeSchema)
-                                           && initializeSchema,
+                                       // Additive: creates what's missing. Off for read-only replicas.
+                                       string.IsNullOrWhiteSpace(initializeSchemaRaw)
+                                       || (bool.TryParse(initializeSchemaRaw, out var initializeSchema) && initializeSchema),
                                        bool.TryParse(allowReadRepairRaw, out var allowReadRepair)
                                            && allowReadRepair,
                                        bool.TryParse(enableOutboxWorkerRaw, out var enableOutboxWorker)

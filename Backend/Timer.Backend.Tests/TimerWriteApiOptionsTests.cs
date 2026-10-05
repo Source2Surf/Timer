@@ -10,12 +10,24 @@ namespace Timer.Backend.Tests;
 public sealed class TimerWriteApiOptionsTests
 {
     [Fact]
-    public void MissingSectionDefaultsToDisabledAndStyleZero()
+    public void MissingSectionDefaultsToEnabledWithStyleZero()
     {
         var options = TimerWriteApiOptions.FromConfiguration(new ConfigurationBuilder().Build());
+        Assert.True(options.Enabled);
+        Assert.Equal(1, options.RulesetVersion);
+        Assert.Equal(1d, options.StyleFactors[0]);
+        Assert.False(options.HasScorePolicy);
+    }
+
+    [Fact]
+    public void ReadOnlyReplicasTurnTheApiOff()
+    {
+        var options = TimerWriteApiOptions.FromConfiguration(Build(new()
+        {
+            ["TimerBackend:WriteApi:Enabled"] = "false",
+        }));
         Assert.False(options.Enabled);
         Assert.Equal(0, options.RulesetVersion);
-        Assert.Equal(1d, options.StyleFactors[0]);
     }
 
     [Fact]

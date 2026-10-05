@@ -2,9 +2,9 @@
 
 `Timer.Backend` owns Timer's database. It is an ASP.NET Core 10 host over the
 strongly typed SQLSugar storage in `Timer.Backend.Storage`. Its HTTP API is
-read-only; game servers use its MagicOnion gRPC API, which is served only when
-the default-off write role is enabled. Game servers never connect to the
-database themselves.
+read-only; game servers use its MagicOnion gRPC API, which is on by default
+(a read-only replica turns `WriteApi:Enabled` off). Game servers never connect
+to the database themselves.
 
 ## First setup
 
@@ -12,22 +12,26 @@ For fresh-database initialization and game/backend configuration together,
 follow the [repository setup guide](../../README.md#timer-setup).
 
 Build a Release once (`dotnet build Backend/Timer.Backend/Timer.Backend.csproj -c Release`),
-then make `Backend/Timer.Backend/appsettings.Production.json` from
+or take a release build, then make `appsettings.Production.json` from
 `appsettings.example.json` without overwriting an existing file. This local
-configuration is ignored by Git because it may contain the SQL password. Edit
-`TimerBackend:Database:Type` and `ConnectionString`; the template already
-includes separate loopback HTTP/1 read and HTTP/2 gRPC write ports. Schema
-initialization and read repair are off by default. The write API stays disabled
-until the master SQL migration has been run.
+configuration is ignored by Git because it may contain the SQL password. Only
+`TimerBackend:Database:Type` and `ConnectionString` are needed; everything else
+defaults:
 
-For an existing master SQL database, run the migration below before enabling
-`WriteApi:Enabled=true`. The backend defaults to ruleset v1 and a factor of
-1.0 for main style 0. Each game server points at the gRPC port in
-`{CS2}/game/sharp/configs/timer.jsonc`:
+- it listens on `127.0.0.1:5081` (HTTP/1 read API) and `127.0.0.1:5082`
+  (HTTP/2 gRPC for game servers), and serves writes only on 5082;
+- it creates missing tables on startup (`InitializeSchema`, additive);
+- game servers register their styles' `score_factor`s, so `WriteApi:StyleFactors`
+  is only needed to override them.
+
+For an existing master SQL database, run the migration below before starting
+the backend against it. A game server on the same host needs nothing in
+`{CS2}/game/sharp/configs/timer.jsonc`: an empty or missing `backend:endpoint`
+means `http://127.0.0.1:5082`. Otherwise:
 
 ```jsonc
 "backend": {
-  "endpoint": "http://127.0.0.1:5082"
+  "endpoint": "http://10.0.0.2:5082"
 }
 ```
 
@@ -142,8 +146,9 @@ earlier backend test bundles use the additive update described below.
    already widened column is revalidated, so do not resume normal writers until
    it succeeds. Inspect any failure and the backup first; MySQL DDL is not one
    atomic transaction.
-5. Start the new backend with `InitializeSchema=false`,
-   `AllowReadRepair=false` and the appropriate read/write role. Upgrade the
+5. Start the new backend with `AllowReadRepair=false`. It creates the tables
+   newer than this migration (later, set `InitializeSchema=false` if its account
+   may not create tables). Upgrade the
    game-server binaries, delete their `sharp/modules/Timer.RequestManager`, and
    replace the `database` and `score_write` sections of each
    `sharp/configs/timer.jsonc` with `backend`. Game servers no longer need any
@@ -170,13 +175,14 @@ configuration. Do not commit database credentials.
 dotnet run --project Backend/Timer.Backend/Timer.Backend.csproj
 ```
 
-The example listens on loopback. Set the gRPC listener address to a private
-interface if game servers run on other hosts; the default no-key deployment
-depends on the operator's network isolation. Logs are written to standard
+Without `Kestrel` settings it listens on loopback 5081/5082. Configure the
+listeners below to serve game servers on other hosts, on a private interface;
+the default no-key deployment depends on the operator's network isolation. Logs are written to standard
 output/error for service-manager or container collection; the backend does not depend on a
 writable Windows EventLog source.
 
-The example has an HTTP/1 read port and a separate HTTP/2 h2c port for gRPC:
+The defaults are an HTTP/1 read port and a separate HTTP/2 h2c port for gRPC,
+the same as configuring:
 
 ```json
 {
@@ -198,28 +204,24 @@ both ports to loopback; deployment and network access policy are operator-owned.
 ```json
 {
   "TimerBackend": {
-    "InitializeSchema": false,
-    "AllowReadRepair": false,
-    "EnableOutboxWorker": false,
-    "WriteApi": {
-      "Enabled": false,
-      "LocalPorts": [5082]
-    },
     "Database": {
       "Type": "postgresql",
-      "ConnectionString": "Host=127.0.0.1;Database=timer;Username=timer_api;Password=change_me"
+      "ConnectionString": "Host=127.0.0.1;Database=timer;Username=timer;Password=change_me"
     }
   }
 }
 ```
 
+The optional settings below default to what a single backend serving game servers needs.
+
 - `Database:Type` accepts `mysql`/`mariadb` or
   `postgresql`/`postgres`/`pgsql`.
 - `Database:ConnectionString` may instead be supplied as
   `ConnectionStrings:TimerBackend`.
-- `InitializeSchema` is `false` by default. Set it only on a designated
-  bootstrap/migration instance; it runs the existing SQLSugar CodeFirst schema
-  initialization and index check.
+- `InitializeSchema` is `true` by default: on startup it runs the additive
+  SQLSugar CodeFirst schema initialization and index check, creating what a new
+  version adds. Set it `false` on read-only replicas and for accounts that may
+  not create tables.
 - `AllowReadRepair` is `false` by default. When enabled, leaderboard and
   player-record reads may populate the historical `surf_player_best_runs`
   projection. This requires write credentials and is intended only as a
@@ -231,13 +233,15 @@ both ports to loopback; deployment and network access policy are operator-owned.
   player tables. The SQL lease makes multiple enabled workers safe, but a
   dedicated worker deployment keeps API connection budgets predictable; if write
   replicas also serve workers, include both workloads in their connection budget.
-- `WriteApi:Enabled` is `false` by default. It serves the game servers' gRPC
+- `WriteApi:Enabled` is `true` by default. It serves the game servers' gRPC
   API: `ITimerWriteServiceV1` for run submissions and `ITimerStorageServiceV1`
-  for everything else they read and write. When enabled without other write
-  settings, ruleset v1 and factor 1.0 for style 0 apply. Only configured styles
-  accept remote submissions; an omitted style is treated as disabled.
+  for everything else they read and write. Ruleset v1 applies.
+- `WriteApi:StyleFactors` is optional. Game servers register each style's
+  `score_factor` from their `timer-styles.jsonc` (kept in `surf_style_factors`),
+  and until one has, only style 0 at factor 1.0 is accepted. Configured factors
+  replace the registered ones entirely; an omitted style is then disabled.
 - `WriteApi:LocalPorts` lists the local listener ports that serve write RPCs,
-  e.g. `[5082]`. Kestrel routes every endpoint on every listener, so without it
+  e.g. `[5082]`, which is the default with the default listeners. Kestrel routes every endpoint on every listener, so without it
   the write service is also reachable on the read port whenever that port speaks
   HTTP/2 (for example HTTPS with the default protocols). The check uses the
   connection's local port, not the client-supplied host header; calls on other
@@ -255,7 +259,8 @@ tables.
 
 Score policy is intentionally not exposed as an HTTP or gRPC API: game servers'
 `!set_tier` and `timer_recalc_scores` reach the same operations over gRPC, but
-always under this instance's `WriteApi:StyleFactors`. Run these one-shot
+always under this instance's factors: configured, or else the ones game servers
+registered. Run these one-shot
 commands locally on a host with the existing write-capable database
 configuration; they create a short-lived storage scope,
 do not bind a web port, and do not start a score worker. The normal worker picks
@@ -294,10 +299,9 @@ score on the board changed. A style
 omitted from `StyleFactors` is deliberately left untouched and reported as
 skipped; configure that style explicitly with factor `0` and rerun the command
 when the desired policy is to remove its scores. The administrative commands
-refuse to run unless `WriteApi:StyleFactors` is configured explicitly and
-includes style 0: the implicit style-0 factor 1.0 that a write instance uses when
-no factors are configured does not apply to them. Launch them with the same
-factors as the serving write instance.
+use the configured `WriteApi:StyleFactors`, or else the factors game servers
+registered, and refuse to run with neither: the implicit style-0 factor 1.0 does
+not apply to them.
 
 ## v1 routes
 

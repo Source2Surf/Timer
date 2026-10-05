@@ -13,11 +13,11 @@ namespace Timer.Backend.Tests;
 public sealed class BackendConfigurationTests
 {
     [Fact]
-    public void MutatingStartupOptionsDefaultToFalse()
+    public void SchemaIsCreatedByDefaultOtherMutatingOptionsAreOff()
     {
         var options = TimerBackendOptions.FromConfiguration(CreateConfiguration());
 
-        Assert.False(options.InitializeSchema);
+        Assert.True(options.InitializeSchema);
         Assert.False(options.AllowReadRepair);
         Assert.False(options.EnableOutboxWorker);
     }
