@@ -190,6 +190,12 @@ internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog, I
                ? BackendRpcMapper.ToSummary(summary)
                : null;
 
+    public async Task<byte[]?> GetPlayerSettings(SteamID steamId)
+        => await Call.GetPlayerSettingsAsync(steamId.AsPrimitive());
+
+    public async Task SavePlayerSettings(SteamID steamId, byte[] data)
+        => await Call.SavePlayerSettingsAsync(steamId.AsPrimitive(), data);
+
     public async Task<IReadOnlyDictionary<ulong, float>> GetCompletedMapsAsync(SteamID steamId, int style, int track)
         => await Call.GetCompletedMapsAsync(steamId.AsPrimitive(), style, track);
 

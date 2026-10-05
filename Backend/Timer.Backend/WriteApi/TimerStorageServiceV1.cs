@@ -21,6 +21,9 @@ namespace Timer.Backend.WriteApi;
 /// </summary>
 public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>, ITimerStorageServiceV1
 {
+    // The game server's encoding of every setting stays far below this.
+    private const int MaxPlayerSettingsBytes = 256;
+
     private readonly TimerBackendStorage            _owner;
     private readonly TimerBackendGameStorage        _storage;
     private readonly TimerWriteApiOptions           _options;
@@ -150,6 +153,16 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
             return new MapStatsDto { PlayTime = playTime, PlayCount = playCount };
         });
 
+    public async UnaryResult<byte[]?> GetPlayerSettingsAsync(ulong steamId)
+        => await RunAsync(token => _storage.GetPlayerSettingsAsync(Player(steamId), token));
+
+    public async UnaryResult SavePlayerSettingsAsync(ulong steamId, byte[] data)
+        => await RunAsync(token => Done(_storage.SavePlayerSettingsAsync(Player(steamId),
+                                                                  data is { Length: <= MaxPlayerSettingsBytes }
+                                                                      ? data
+                                                                      : throw TimerWriteRpcErrors.InvalidArgument(),
+                                                                  token)));
+
     public async UnaryResult<ZoneDto[]> GetZonesAsync(string mapName, ulong workshopId)
         => await RunAsync(async token => TimerStorageRpcMapper.ToDto(
                               await _storage.GetZonesAsync(Map(mapName), workshopId, token)));
@@ -202,6 +215,9 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
 
             return _storage.SaveReplayUrlAsync(Map(mapName), workshopId, steamId, runId, url, token);
         });
+
+    private static ulong Player(ulong steamId)
+        => steamId != 0 ? steamId : throw TimerWriteRpcErrors.InvalidArgument();
 
     private static string Map(string? mapName)
         => ApiRouteValidation.TryNormalizeMapName(mapName, out var normalized, out _)

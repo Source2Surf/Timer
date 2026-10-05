@@ -127,6 +127,20 @@ public interface IRequestManager
     Task<IReadOnlyDictionary<ulong, float>> GetCompletedMapsAsync(SteamID steamId, int style, int track)
         => Task.FromResult<IReadOnlyDictionary<ulong, float>>(new Dictionary<ulong, float>());
 
+    /// <summary>
+    /// A player's settings in the plugin's binary format, or null when they're all defaults or the provider
+    /// doesn't keep them.
+    /// </summary>
+    Task<byte[]?> GetPlayerSettings(SteamID steamId)
+        => Task.FromResult<byte[]?>(null);
+
+    /// <summary>
+    /// Replaces a player's settings; empty data resets them to defaults. A provider that doesn't keep them
+    /// ignores it.
+    /// </summary>
+    Task SavePlayerSettings(SteamID steamId, byte[] data)
+        => Task.CompletedTask;
+
 #endregion
 
 #region Score

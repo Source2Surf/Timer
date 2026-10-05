@@ -365,6 +365,12 @@ public interface ITimerStorageServiceV1 : IService<ITimerStorageServiceV1>
 
     UnaryResult<MapStatsDto> GetPlayerMapStatsAsync(ulong steamId, string mapName, ulong workshopId);
 
+    /// <summary>The player's settings in the game server's binary format, or null when they're all defaults.</summary>
+    UnaryResult<byte[]?> GetPlayerSettingsAsync(ulong steamId);
+
+    /// <summary>Replaces the player's settings; empty data resets them to defaults.</summary>
+    UnaryResult SavePlayerSettingsAsync(ulong steamId, byte[] data);
+
     UnaryResult<ZoneDto[]> GetZonesAsync(string mapName, ulong workshopId);
 
     UnaryResult SaveZonesAsync(string mapName, ulong workshopId, ZoneDto[] zones);

@@ -136,6 +136,12 @@ public sealed class TimerBackendGameStorage
         => OnMapAsync(mapName, workshopId,
                       () => Storage.GetPlayerMapStatsAsync(new SteamID(steamId), mapName), cancellationToken);
 
+    public Task<byte[]?> GetPlayerSettingsAsync(ulong steamId, CancellationToken cancellationToken = default)
+        => _owner.ExecuteAsync(() => Storage.GetPlayerSettingsAsync(new SteamID(steamId)), cancellationToken);
+
+    public Task SavePlayerSettingsAsync(ulong steamId, byte[] data, CancellationToken cancellationToken = default)
+        => _owner.ExecuteAsync(() => Done(Storage.SavePlayerSettingsAsync(new SteamID(steamId), data)), cancellationToken);
+
     public Task<IReadOnlyList<ZoneData>> GetZonesAsync(string mapName, ulong workshopId, CancellationToken cancellationToken = default)
         => OnMapAsync(mapName, workshopId, () => Storage.GetZonesAsync(mapName), cancellationToken);
 
