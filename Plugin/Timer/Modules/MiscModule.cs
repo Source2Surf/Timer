@@ -43,8 +43,9 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     private readonly IPatchManager       _patchManager;
     private readonly IReplayModule       _replayModule;
     private readonly IStyleModule        _styleModule;
-    private readonly ITimerModule        _timerModule;
-    private readonly ILogger<MiscModule> _logger;
+    private readonly ITimerModule          _timerModule;
+    private readonly ILocalizationProvider _localization;
+    private readonly ILogger<MiscModule>   _logger;
 
     // ReSharper disable InconsistentNaming
 
@@ -72,8 +73,9 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
                       IPatchManager       patchManager,
                       IReplayModule       replayModule,
                       IStyleModule        styleModule,
-                      ITimerModule        timerModule,
-                      ILogger<MiscModule> logger)
+                      ITimerModule          timerModule,
+                      ILocalizationProvider localization,
+                      ILogger<MiscModule>   logger)
     {
         _bridge            = bridge;
         _commandManager    = commandManager;
@@ -82,6 +84,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         _replayModule      = replayModule;
         _styleModule       = styleModule;
         _timerModule       = timerModule;
+        _localization      = localization;
         _logger            = logger;
 
         CBaseEntity_m_vecVelocity_offset = bridge.SchemaManager.GetNetVarOffset("CBaseEntity", "m_vecVelocity");

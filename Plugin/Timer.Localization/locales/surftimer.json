@@ -1750,5 +1750,25 @@
   "chat.hide.off": {
     "en-us": "Other players are now visible.",
     "zh-cn": "已显示其他玩家。"
+  },
+  "chat.find.none": {
+    "en-us": "No player named \"{0}\" is on the server.",
+    "zh-cn": "服务器上没有名为“{0}”的玩家。"
+  },
+  "chat.find.many": {
+    "en-us": "More than one player matches \"{0}\".",
+    "zh-cn": "有多名玩家匹配“{0}”。"
+  },
+  "chat.spec.unavailable": {
+    "en-us": "{0} can't be spectated right now.",
+    "zh-cn": "现在无法观战 {0}。"
+  },
+  "chat.specs.list": {
+    "en-us": "Spectating {0} ({1}): {2}",
+    "zh-cn": "正在观战 {0}（{1}）：{2}"
+  },
+  "chat.specs.none": {
+    "en-us": "Nobody is spectating {0}.",
+    "zh-cn": "没有人在观战 {0}。"
   }
 }

@@ -216,6 +216,13 @@ internal static class ChatTexts
     // ---- hide
     public static readonly ChatText HideOn  = new ("chat.hide.on", "Other players are now hidden.");
     public static readonly ChatText HideOff = new ("chat.hide.off", "Other players are now visible.");
+
+    // ---- spectating
+    public static readonly ChatText FindNone        = new ("chat.find.none", "No player named \"{0}\" is on the server.");
+    public static readonly ChatText FindMany        = new ("chat.find.many", "More than one player matches \"{0}\".");
+    public static readonly ChatText SpecUnavailable = new ("chat.spec.unavailable", "{0} can't be spectated right now.");
+    public static readonly ChatText SpecsList       = new ("chat.specs.list", "Spectating {0} ({1}): {2}");
+    public static readonly ChatText SpecsNone       = new ("chat.specs.none", "Nobody is spectating {0}.");
     public static readonly IReadOnlyList<ChatText> All = typeof(ChatTexts).GetFields(BindingFlags.Public | BindingFlags.Static)
                                                                           .Where(f => f.FieldType == typeof(ChatText))
                                                                           .Select(f => (ChatText) f.GetValue(null)!)
