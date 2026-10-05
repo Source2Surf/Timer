@@ -28,7 +28,8 @@ namespace Source2Surf.Timer.Modules;
 // ReSharper restore CheckNamespace
 
 // Valve's IsValidObserverTarget lets a respawning (dead) pawn through, so spec_next can land on a dead player.
-// Only pawns alive on T or CT are valid; a dying current target keeps Valve's death cam.
+// Only pawns alive on T or CT are valid; a dying current target keeps Valve's death cam, except the spectator's own
+// pawn, which joining spectators from a team would otherwise watch.
 internal unsafe partial class MiscModule
 {
     // ReSharper disable InconsistentNaming
@@ -39,6 +40,8 @@ internal unsafe partial class MiscModule
     private static int  CBaseEntity_m_lifeState_offset;
     private static int  CBaseEntity_m_iTeamNum_offset;
     private static int  CPlayer_ObserverServices_m_hObserverTarget_offset;
+    private static int  CPlayerPawnComponent_m_pChainEntity_offset;
+    private static int  CBasePlayerPawn_m_hController_offset;
 
     // ReSharper restore InconsistentNaming
 
@@ -51,6 +54,9 @@ internal unsafe partial class MiscModule
 
         CPlayer_ObserverServices_m_hObserverTarget_offset
             = schema.GetNetVarOffset("CPlayer_ObserverServices", "m_hObserverTarget");
+
+        CPlayerPawnComponent_m_pChainEntity_offset = schema.GetNetVarOffset("CPlayerPawnComponent", "__m_pChainEntity");
+        CBasePlayerPawn_m_hController_offset       = schema.GetNetVarOffset("CBasePlayerPawn", "m_hController");
 
         var target = FindIsValidObserverTarget();
 
@@ -157,6 +163,11 @@ internal unsafe partial class MiscModule
             return valid;
         }
 
+        if (IsOwnPawn(service, target))
+        {
+            return 0;
+        }
+
         var lifeState = (LifeState) (*(byte*) (target + CBaseEntity_m_lifeState_offset));
 
         if (lifeState == LifeState.Alive)
@@ -165,6 +176,22 @@ internal unsafe partial class MiscModule
         }
 
         return lifeState is LifeState.Dying or LifeState.Dead && IsObserverTarget(service, target) ? valid : (byte) 0;
+    }
+
+    // The observer pawn owning the services and the target pawn belong to the same controller.
+    private static bool IsOwnPawn(nint service, nint target)
+    {
+        var observer = *(nint*) (service + CPlayerPawnComponent_m_pChainEntity_offset);
+
+        if (observer == nint.Zero)
+        {
+            return false;
+        }
+
+        var controller = *(uint*) (observer + CBasePlayerPawn_m_hController_offset);
+
+        return controller != uint.MaxValue
+               && (controller & 0x7FFF) == (*(uint*) (target + CBasePlayerPawn_m_hController_offset) & 0x7FFF);
     }
 
     // Compares entity indices: CEntityInstance::m_pEntity, then CEntityIdentity's handle.
