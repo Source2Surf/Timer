@@ -105,6 +105,7 @@ internal static class ChatTexts
     public static readonly ChatText TrackBonusStage = new ("chat.track.bonus_stage", "Bonus {0} Stage {1}");
     public static readonly ChatText Checkpoint      = new ("chat.checkpoint", "CP{0}: {1}");
     public static readonly ChatText VsSr            = new ("chat.vs_sr", " | SR {0}");
+    public static readonly ChatText VsPb            = new ("chat.vs_pb", " | PB {0}");
     public static readonly ChatText Hours           = new ("chat.duration.hours", "{0}h {1}m");
     public static readonly ChatText Minutes         = new ("chat.duration.minutes", "{0}m");
 

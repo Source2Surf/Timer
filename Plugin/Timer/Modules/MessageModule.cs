@@ -16,7 +16,10 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Cysharp.Text;
+using Microsoft.Extensions.Logging;
 using Sharp.Shared.Definition;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.Units;
@@ -40,19 +43,30 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
     private readonly IRecordModule         _recordModule;
     private readonly ITimerModule          _timerModule;
     private readonly IStyleModule          _styleModule;
-    private readonly ILocalizationProvider _localization;
+    private readonly ILocalizationProvider  _localization;
+    private readonly IRequestManager        _request;
+    private readonly ILogger<MessageModule> _logger;
 
-    public MessageModule(InterfaceBridge       bridge,
-                         IRecordModule         recordModule,
-                         ITimerModule          timerModule,
-                         IStyleModule          styleModule,
-                         ILocalizationProvider localization)
+    // The record cache keeps only the SR's checkpoint splits, so each player's PB splits are fetched when their run
+    // starts, keyed by the PB they belong to.
+    private readonly (int Style, int Track, long RecordId, IReadOnlyList<RunCheckpoint>? Checkpoints)[] _pbCheckpoints
+        = new (int, int, long, IReadOnlyList<RunCheckpoint>?)[PlayerSlot.MaxPlayerCount];
+
+    public MessageModule(InterfaceBridge        bridge,
+                         IRecordModule          recordModule,
+                         ITimerModule           timerModule,
+                         IStyleModule           styleModule,
+                         ILocalizationProvider  localization,
+                         IRequestManager        request,
+                         ILogger<MessageModule> logger)
     {
         _bridge       = bridge;
         _recordModule = recordModule;
         _timerModule  = timerModule;
         _styleModule  = styleModule;
         _localization = localization;
+        _request      = request;
+        _logger       = logger;
     }
 
     public bool Init()
@@ -112,9 +126,59 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
             message = ZString.Concat(message, tr.Format(ChatTexts.VsSr, Utils.SignedDelta(timerInfo.Time - wrCheckpoints[checkpoint - 1].Time)));
         }
 
-        // PB checkpoint comparison would require caching PB checkpoints separately.
+        if (GetPbCheckpoints(controller.PlayerSlot, timerInfo.Style, timerInfo.Track) is { } pbCheckpoints
+            && checkpoint >= 1
+            && checkpoint <= pbCheckpoints.Count)
+        {
+            message = ZString.Concat(message, tr.Format(ChatTexts.VsPb, Utils.SignedDelta(timerInfo.Time - pbCheckpoints[checkpoint - 1].Time)));
+        }
 
         pawn.PrintToChat(message);
+    }
+
+    public void OnPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
+    {
+        var slot = controller.PlayerSlot;
+
+        if (_recordModule.GetPlayerRecord(slot, timerInfo.Style, timerInfo.Track) is not { } pb
+            || _pbCheckpoints[slot] is var cached && cached.Style == timerInfo.Style && cached.Track == timerInfo.Track && cached.RecordId == pb.Id)
+        {
+            return;
+        }
+
+        _pbCheckpoints[slot] = (timerInfo.Style, timerInfo.Track, pb.Id, null);
+        _                    = LoadPbCheckpointsAsync(slot, timerInfo.Style, timerInfo.Track, pb.Id);
+    }
+
+    private IReadOnlyList<RunCheckpoint>? GetPbCheckpoints(PlayerSlot slot, int style, int track)
+        => _pbCheckpoints[slot] is var cached
+           && cached.Style == style
+           && cached.Track == track
+           && _recordModule.GetPlayerRecord(slot, style, track)?.Id == cached.RecordId
+            ? cached.Checkpoints
+            : null;
+
+    private async Task LoadPbCheckpointsAsync(PlayerSlot slot, int style, int track, long recordId)
+    {
+        IReadOnlyList<RunCheckpoint>? checkpoints = null;
+
+        try
+        {
+            checkpoints = await _request.GetRecordCheckpoints(recordId).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Failed to load PB checkpoints of record {recordId}", recordId);
+        }
+
+        await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+        {
+            if (_pbCheckpoints[slot] == (style, track, recordId, null))
+            {
+                // A failed load is forgotten, so the next start tries again.
+                _pbCheckpoints[slot] = checkpoints is null ? default : (style, track, recordId, checkpoints);
+            }
+        }).ConfigureAwait(false);
     }
 
     // "New SR! Nuko finished Main - Normal in 25.421 (SR -02:18.093)"
