@@ -45,6 +45,9 @@ internal sealed class MapRecordCache
 
     // Bumped on the game thread whenever a board changes; the lists are reused in place.
     public int Version { get; private set; }
+
+    private (int Style, int Track, int Stage)[] _boards = [];
+    private int _boardsVersion = -1;
     public LoadToken BeginLoad(LoadToken origin) => new(origin.Generation, Interlocked.Increment(ref _loadSequence));
     public bool IsCurrent(LoadToken load) => load.Generation == Volatile.Read(ref _generation);
 
@@ -178,6 +181,36 @@ internal sealed class MapRecordCache
         }
 
         return null;
+    }
+
+    // The boards with records, by style, track then stage.
+    public IReadOnlyList<(int Style, int Track, int Stage)> GetBoards()
+    {
+        if (_boardsVersion == Version)
+        {
+            return _boards;
+        }
+
+        List<(int Style, int Track, int Stage)> boards = [];
+
+        for (var style = 0; style < TimerConstants.MAX_STYLE; style++)
+        {
+            for (var track = 0; track < TimerConstants.MAX_TRACK; track++)
+            {
+                if (_mapRecords[style, track].Count > 0)
+                {
+                    boards.Add((style, track, 0));
+                }
+            }
+        }
+
+        boards.AddRange(_stageRecords.Where(x => x.Value.Count > 0).Select(x => x.Key));
+        boards.Sort();
+
+        _boards        = [.. boards];
+        _boardsVersion = Version;
+
+        return _boards;
     }
 
     public IReadOnlyList<RunRecord> GetRecords(int style, int track)

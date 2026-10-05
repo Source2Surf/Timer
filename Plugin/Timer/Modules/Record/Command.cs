@@ -231,7 +231,16 @@ internal partial class RecordModule
 
         if (LeaderboardRequested is { } open)
         {
-            open(slot);
+            var map = command.ArgString.Trim();
+
+            if (map.Length == 0)
+            {
+                open(slot, null);
+            }
+            else
+            {
+                OpenLeaderboard(slot, map);
+            }
 
             return ECommandAction.Handled;
         }

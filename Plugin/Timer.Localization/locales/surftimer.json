@@ -1423,6 +1423,18 @@
     "en-us": "No SR found for this track.",
     "zh-cn": "这条路线还没有 SR。"
   },
+  "chat.map.no_match": {
+    "en-us": "No map matches \"{0}\".",
+    "zh-cn": "没有地图匹配“{0}”。"
+  },
+  "chat.map.matches": {
+    "en-us": "{0} maps match: {1}",
+    "zh-cn": "{0} 张地图匹配：{1}"
+  },
+  "chat.map.lookup_failed": {
+    "en-us": "Couldn't look up the maps; try again later.",
+    "zh-cn": "无法查询地图列表，请稍后再试。"
+  },
   "chat.record.deleted": {
     "en-us": "Deleted {0}'s {1} run.",
     "zh-cn": "已删除 {0} 的 {1} 成绩。"

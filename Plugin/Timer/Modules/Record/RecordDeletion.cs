@@ -37,24 +37,21 @@ internal partial class RecordModule
     // Runs being deleted, so a double click sends one request.
     private readonly HashSet<long> _deletingRuns = [];
 
-    public event Action<PlayerSlot>? LeaderboardRequested;
-
-    public int RecordsVersion => _mapCache.Version;
-
     public bool CanDeleteRecords(PlayerSlot slot)
         => _bridge.ClientManager.GetGameClient(slot) is { IsFakeClient: false } client
            && _adminPermissions.HasPermission(client.SteamId, DeleteRecordsPermission);
 
-    public void DeleteRecord(PlayerSlot slot, RunRecord record)
+    public void DeleteRecord(PlayerSlot slot, RunRecord record, string? map = null)
     {
         if (!CanDeleteRecords(slot) || !_deletingRuns.Add(record.Id))
         {
             return;
         }
 
-        var admin   = _bridge.ClientManager.GetGameClient(slot)!.SteamId;
-        var mapName = _bridge.CurrentMapName;
-        var load    = _mapCache.BeginLoad();
+        var admin      = _bridge.ClientManager.GetGameClient(slot)!.SteamId;
+        var currentMap = IsCurrentMap(map);
+        var mapName    = currentMap ? _bridge.CurrentMapName : map!;
+        var load       = _mapCache.BeginLoad();
 
         _taskTracker.Track(Task.Run(async () =>
         {
@@ -65,7 +62,7 @@ internal partial class RecordModule
             {
                 deleted = await _recordAdministration.DeleteRunAsync(mapName, (ulong) record.Id).ConfigureAwait(false);
 
-                if (deleted is { WasBest: true })
+                if (currentMap && deleted is { WasBest: true })
                 {
                     await _saver.RefreshBoardAsync(mapName, record.Style, record.Track, record.Stage, load).ConfigureAwait(false);
                 }
@@ -78,7 +75,7 @@ internal partial class RecordModule
 
             try
             {
-                await _bridge.ModSharp.InvokeFrameActionAsync(() => OnRecordDeleted(admin, mapName, load, record, deleted, failed))
+                await _bridge.ModSharp.InvokeFrameActionAsync(() => OnRecordDeleted(admin, mapName, currentMap, load, record, deleted, failed))
                              .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -87,8 +84,8 @@ internal partial class RecordModule
         }, _bridge.CancellationToken));
     }
 
-    private void OnRecordDeleted(SteamID admin, string mapName, MapRecordCache.LoadToken load, RunRecord record,
-                                 DeletedRun? deleted, bool failed)
+    private void OnRecordDeleted(SteamID admin, string mapName, bool currentMap, MapRecordCache.LoadToken load,
+                                 RunRecord record, DeletedRun? deleted, bool failed)
     {
         _deletingRuns.Remove(record.Id);
 
@@ -98,9 +95,14 @@ internal partial class RecordModule
                                    admin, record.Id, record.PlayerName, record.SteamId, record.Time, mapName,
                                    record.Style, record.Track, record.Stage);
 
-            var currentMap = _mapCache.IsCurrent(load);
+            // The server may have changed maps meanwhile.
+            currentMap &= _mapCache.IsCurrent(load);
 
-            if (currentMap && deleted.WasBest && _bridge.ClientManager.GetGameClient(new SteamID(record.SteamId)) is { } player)
+            if (!currentMap)
+            {
+                _otherMaps.OnRunDeleted(mapName, record.Id);
+            }
+            else if (deleted.WasBest && _bridge.ClientManager.GetGameClient(new SteamID(record.SteamId)) is { } player)
             {
                 // The reloaded board holds their next-fastest run, if any.
                 var next = GetRecords(record.Style, record.Track, record.Stage)

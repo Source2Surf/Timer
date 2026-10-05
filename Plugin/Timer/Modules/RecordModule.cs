@@ -72,20 +72,30 @@ internal interface IRecordModule
     /// </summary>
     float GetSessionTime(PlayerSlot slot);
 
-    // Raised by !wr and !sr, to open the leaderboard panel.
-    event Action<PlayerSlot>? LeaderboardRequested;
+    // Raised by !wr and !sr [map], to open the leaderboard panel: null for the current map, else the map's name.
+    event Action<PlayerSlot, string?>? LeaderboardRequested;
 
-    // Changes whenever a leaderboard of the map is loaded, reloaded or cleared.
+    // Changes whenever a leaderboard is loaded, reloaded or cleared, of this map or another.
     int RecordsVersion { get; }
+
+    /// <summary>
+    /// A board of any map, fastest first. Another map's are null while it loads (the first read starts the load) and
+    /// are reloaded in the background once a minute old; the current map's are the ones above.
+    /// </summary>
+    IReadOnlyList<RunRecord>? GetRecords(string map, int style, int track, int stage);
+
+    // The boards with records, by style, track then stage (0 = the map); null while another map loads.
+    IReadOnlyList<(int Style, int Track, int Stage)>? GetBoards(string map);
 
     // Admins with timer:records.
     bool CanDeleteRecords(PlayerSlot slot);
 
     /// <summary>
-    /// Deletes a run of the current map and its replays, for an admin who <see cref="CanDeleteRecords" />. When it was
-    /// the player's best, their next-fastest run takes its place or they leave the board; the admin gets a chat line.
+    /// Deletes a run and its replays, for an admin who <see cref="CanDeleteRecords" />: of the current map, or of
+    /// <paramref name="map" />. When it was the player's best, their next-fastest run takes its place or they leave
+    /// the board; the admin gets a chat line.
     /// </summary>
-    void DeleteRecord(PlayerSlot slot, RunRecord record);
+    void DeleteRecord(PlayerSlot slot, RunRecord record, string? map = null);
 }
 
 internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITimerModuleListener, IPlayerManagerListener
@@ -107,6 +117,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     // Sub-components
     private readonly MapRecordCache                     _mapCache;
+    private readonly OtherMapRecords                    _otherMaps;
     private readonly PlayerRecordCache                  _playerCache;
     private readonly RecordSaver                        _saver;
     private readonly TaskTracker                        _taskTracker;
@@ -158,6 +169,12 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                                        localization,
                                        logger);
         _taskTracker = new TaskTracker(logger);
+        _otherMaps   = new OtherMapRecords(map => Task.Run(async () => (await request.GetMapRecords(map).ConfigureAwait(false),
+                                                                        await request.GetMapStageRecords(map).ConfigureAwait(false))),
+                                           action => bridge.ModSharp.InvokeFrameActionAsync(action),
+                                           () => Environment.TickCount64,
+                                           _taskTracker.Track,
+                                           logger);
     }
 
     public bool Init()
