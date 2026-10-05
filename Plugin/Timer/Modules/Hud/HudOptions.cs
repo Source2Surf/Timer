@@ -180,13 +180,17 @@ internal static class HudOptions
     public static readonly HudOption Hide   = new (37, "OptHide", OnOff, initial: 1);
     public static readonly HudOption Sounds = new (38, "OptSounds", OnOff);
 
+    // HUD tab: the spectator list
+    public static readonly HudOption Specs     = new (39, "OptSpecs", Shown, ["SpecPanel"]);
+    public static readonly HudOption SizeSpecs = new (40, "SizeSpecs", SizeChoices, ["SpecBody"], SizeDefault);
+
     public static readonly HudOption[] All =
     [
         Run, SizeRun, CSpeed, SizeCSpeed, Info, SizeInfo, Splits, SizeSplits, Keys, SizeKeys,
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
-        Hide, Sounds,
+        Hide, Sounds, Specs, SizeSpecs,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;
@@ -330,6 +334,7 @@ internal enum HudTarget
     Keys,
     Locs,
     Ssj,
+    Spec,
 }
 
 /// <summary>
@@ -368,6 +373,7 @@ internal static class HudTargets
         new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, HudTexts.TargetKeys, 6),
         new ("LocsPanel", "LocsPos", (-42, 0), (13, 21), true, HudTexts.TargetLocs, 7),
         new ("SsjPanel", "SsjPos", (0, 12), (22, 4), true, HudTexts.TargetSsj, 8),
+        new ("SpecPanel", "SpecPos", (44, 0), (11, 18), true, HudTexts.TargetSpecs, 9),
     ];
 
     /// <summary>
@@ -383,6 +389,7 @@ internal static class HudTargets
         ["KeysPanel"]   = HudTarget.Keys,
         ["LocsPanel"]   = HudTarget.Locs,
         ["SsjPanel"]    = HudTarget.Ssj,
+        ["SpecPanel"]   = HudTarget.Spec,
     };
 
     static HudTargets()

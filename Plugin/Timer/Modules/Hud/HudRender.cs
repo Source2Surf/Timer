@@ -226,6 +226,11 @@ internal partial class HudModule
             UpdateSsj(w, p, s, now);
         }
 
+        if (p.IsOn(HudOptions.Specs))
+        {
+            UpdateSpectators(w, p, _spectators[s.Slot]);
+        }
+
         UpdateLocs(w, p, s);
     }
 

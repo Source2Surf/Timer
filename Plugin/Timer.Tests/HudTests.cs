@@ -482,7 +482,7 @@ public sealed class PlayerSettingsCodecTests
             [29] = ("OptSsjRepeat", "On,Off"), [30] = ("OptSsjFirst", "On,Off"), [31] = ("OptSsjSpeedDiff", "On,Off"),
             [32] = ("OptSsjHeight", "On,Off"), [33] = ("OptSsjGain", "On,Off"), [34] = ("OptSsjSync", "On,Off"),
             [35] = ("OptSsjStrafes", "On,Off"), [36] = ("OptSsjEfficiency", "On,Off"), [37] = ("OptHide", "On,Off"),
-            [38] = ("OptSounds", "On,Off"),
+            [38] = ("OptSounds", "On,Off"), [39] = ("OptSpecs", "On,Off"), [40] = ("SizeSpecs", Sizes),
         };
 
         foreach (var (key, (id, choices)) in saved)
@@ -494,7 +494,7 @@ public sealed class PlayerSettingsCodecTests
 
         Assert.Equal(HudOptions.All.Length, HudOptions.All.Select(o => o.Key).Distinct().Count());
 
-        string[] panels = ["Menu", "RunPanel", "CSpeedPanel", "InfoPanel", "SplitsPanel", "KeysPanel", "LocsPanel", "SsjPanel"];
+        string[] panels = ["Menu", "RunPanel", "CSpeedPanel", "InfoPanel", "SplitsPanel", "KeysPanel", "LocsPanel", "SsjPanel", "SpecPanel"];
 
         for (var i = 0; i < panels.Length; i++)
         {
@@ -579,6 +579,15 @@ public sealed class HudLayoutContractTests
                                     "VoteNoteDown", "VoteNoteVote", "VoteNoteNext"]);
 
         foreach (var id in ids)
+        {
+            Assert.Contains(id, Ids);
+        }
+    }
+
+    [Fact]
+    public void EverySpectatorListPanelExists()
+    {
+        foreach (var id in HudModule.SpecNameIds.Concat(["SpecPos", "SpecPanel", "SpecBody", "SpecList", "SpecHead", "SpecMore"]))
         {
             Assert.Contains(id, Ids);
         }

@@ -575,6 +575,10 @@
     "en-us": "SSJ",
     "zh-cn": "SSJ"
   },
+  "ui.target.specs": {
+    "en-us": "spectator list",
+    "zh-cn": "观战列表"
+  },
   "ui.locs.title": {
     "en-us": "Locations",
     "zh-cn": "存点"
@@ -710,6 +714,14 @@
   "ui.panel.keys_desc": {
     "en-us": "Also !showkeys",
     "zh-cn": "也可用 !showkeys"
+  },
+  "ui.panel.specs": {
+    "en-us": "Spectators",
+    "zh-cn": "观战者"
+  },
+  "ui.panel.specs_desc": {
+    "en-us": "Who's watching you, or the player you spectate",
+    "zh-cn": "谁在观战你，或你正在观战的玩家"
   },
   "ui.timer.lines": {
     "en-us": "Lines, top to bottom",
@@ -1178,6 +1190,10 @@
   "hud.nominate.closed": {
     "en-us": "Nominations are closed.",
     "zh-cn": "提名已关闭。"
+  },
+  "hud.specs.head": {
+    "en-us": "Spectators ({0}):",
+    "zh-cn": "观战者 ({0})："
   },
   "hud.records.title": {
     "en-us": "Records",

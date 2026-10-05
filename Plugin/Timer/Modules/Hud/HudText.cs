@@ -247,6 +247,7 @@ internal static class HudTexts
     public static readonly HudText TargetKeys   = new ("ui.target.keys", "keys");
     public static readonly HudText TargetLocs   = new ("ui.target.locs", "locations");
     public static readonly HudText TargetSsj    = new ("ui.target.ssj", "SSJ");
+    public static readonly HudText TargetSpecs  = new ("ui.target.specs", "spectator list");
 
     public static readonly HudText LocsTitle      = new ("ui.locs.title", "Locations");
     public static readonly HudText LocsTitleCount = new ("ui.locs.title_count", "Locations · {0}");
@@ -283,6 +284,8 @@ internal static class HudTexts
     public static readonly HudText PanelSplits    = new ("ui.panel.splits", "Splits");
     public static readonly HudText PanelKeys      = new ("ui.panel.keys", "Keys");
     public static readonly HudText PanelKeysDesc  = new ("ui.panel.keys_desc", "Also !showkeys");
+    public static readonly HudText PanelSpecs     = new ("ui.panel.specs", "Spectators");
+    public static readonly HudText PanelSpecsDesc = new ("ui.panel.specs_desc", "Who's watching you, or the player you spectate");
     public static readonly HudText Lines          = new ("ui.timer.lines", "Lines, top to bottom");
     public static readonly HudText Comparison     = new ("ui.timer.comparison", "Comparison");
     public static readonly HudText CompareAgainst = new ("ui.timer.compare", "Compare against");
@@ -332,6 +335,9 @@ internal static class HudTexts
     public static readonly HudText ThisMap      = new ("ui.profile.this_map", "This map");
     public static readonly HudText TimeHere     = new ("ui.profile.time_here", "Time here");
     public static readonly HudText PersonalBest = new ("ui.profile.pb", "Personal best");
+
+    // ---- spectator list
+    public static readonly HudText SpecHead = new ("hud.specs.head", "Spectators ({0}):");
 
     // ---- records panel
     public static readonly HudText LbTitle      = new ("hud.records.title", "Records");
@@ -459,6 +465,8 @@ internal static class HudLabels
         ("LPanelSplits", HudTexts.PanelSplits),
         ("LPanelKeys", HudTexts.PanelKeys),
         ("LPanelKeysDesc", HudTexts.PanelKeysDesc),
+        ("LPanelSpecs", HudTexts.PanelSpecs),
+        ("LPanelSpecsDesc", HudTexts.PanelSpecsDesc),
         ("LLines", HudTexts.Lines),
         ("LComparison", HudTexts.Comparison),
         ("LCompare", HudTexts.CompareAgainst),

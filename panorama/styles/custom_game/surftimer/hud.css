@@ -36,7 +36,8 @@
 .SplitsPanel,
 .KeysPanel,
 .LocsPanel,
-.SsjPanel {
+.SsjPanel,
+.SpecPanel {
     width: fit-children;
     height: fit-children;
     border: 2px solid #5ab4ff00;
@@ -538,6 +539,44 @@
 
 /* ---- Dragging (menu and every HUD panel) ---- */
 
+/* ---- Spectators ---- */
+
+/* Right centre, in the map vote's spot: in its default spot it gives way while a vote runs. No background: the
+   shadow carries it. */
+.SpecPanel {
+    horizontal-align: right;
+    vertical-align: center;
+    margin-right: 24px;
+    padding: 4px 8px;
+}
+
+.SpecPanel.voting {
+    visibility: collapse;
+}
+
+.SpecList {
+    width: fit-children;
+    height: fit-children;
+    flow-children: down;
+}
+
+.SpecPanel Label {
+    font-family: timerFont;
+    font-weight: bold;
+    color: white;
+    text-shadow: textShadow;
+}
+
+.SpecPanel .SpecHead {
+    margin-bottom: 2px;
+    font-size: 16px;
+    color: #c3cad1;
+}
+
+.SpecPanel .SpecName {
+    font-size: 16px;
+}
+
 /* Full-screen, so its fine x/y offset adds to the panel's coarse one (timer_positions.css). A panel near a screen
    edge sits partly outside its wrapper (and a wrapper partly off-screen), which the default overflow (squish)
    would answer by squeezing the panel to fit: noclip lets it keep its size and simply run past. */
@@ -557,7 +596,8 @@
 .SplitsPanel.placed,
 .KeysPanel.placed,
 .LocsPanel.placed,
-.SsjPanel.placed {
+.SsjPanel.placed,
+.SpecPanel.placed {
     horizontal-align: center;
     vertical-align: center;
     margin: 0px;
@@ -585,7 +625,8 @@
 .SplitsPanel.smooth,
 .KeysPanel.smooth,
 .LocsPanel.smooth,
-.SsjPanel.smooth {
+.SsjPanel.smooth,
+.SpecPanel.smooth {
     transition-property: background-color, border-color, box-shadow, position;
     transition-duration: .1s, .1s, .1s, .12s;
     transition-timing-function: ease, ease, ease, linear;
@@ -600,7 +641,8 @@
 .SplitsPanel.editing,
 .KeysPanel.editing,
 .LocsPanel.editing,
-.SsjPanel.editing {
+.SsjPanel.editing,
+.SpecPanel.editing {
     border-color: #5ab4ff59;
     background-color: #0a0e1359;
 }
@@ -611,7 +653,8 @@
 .SplitsPanel.editing:hover,
 .KeysPanel.editing:hover,
 .LocsPanel.editing:hover,
-.SsjPanel.editing:hover {
+.SsjPanel.editing:hover,
+.SpecPanel.editing:hover {
     border-color: #5ab4ffd9;
     background-color: #0a0e1380;
 }
@@ -623,7 +666,8 @@
 .SplitsPanel.editing.dragging,
 .KeysPanel.editing.dragging,
 .LocsPanel.editing.dragging,
-.SsjPanel.editing.dragging {
+.SsjPanel.editing.dragging,
+.SpecPanel.editing.dragging {
     background-color: #0a0e13b8;
     border-color: accentColor;
     box-shadow: #5ab4ff59 0px 0px 14px 2px;

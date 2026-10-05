@@ -446,6 +446,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
 
         var now = _bridge.GlobalVars.CurTime;
         SyncRoundTime(gameRules, now);
+        RebuildSpectators(now);
 
         foreach (var p in _players)
         {

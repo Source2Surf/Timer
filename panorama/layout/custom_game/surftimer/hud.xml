@@ -160,6 +160,26 @@
 				</Button>
 			</Panel>
 
+			<!-- Spectators (like bhoptimer's): right centre, who watches the HUD's source, one name a line, seven at most.
+			     SpecList is hidden with nobody watching (the panel stays, for dragging). -->
+			<Panel id="SpecPos" class="DragPos" hittest="false">
+				<Button id="SpecPanel" class="SpecPanel">
+					<Panel id="SpecBody" class="PanelBody SpecBody">
+						<Panel id="SpecList" class="SpecList Hidden">
+							<Label id="SpecHead" class="SpecHead" text="{s:text}" />
+							<Label id="SpecName0" class="SpecName Hidden" text="{s:text}" />
+							<Label id="SpecName1" class="SpecName Hidden" text="{s:text}" />
+							<Label id="SpecName2" class="SpecName Hidden" text="{s:text}" />
+							<Label id="SpecName3" class="SpecName Hidden" text="{s:text}" />
+							<Label id="SpecName4" class="SpecName Hidden" text="{s:text}" />
+							<Label id="SpecName5" class="SpecName Hidden" text="{s:text}" />
+							<Label id="SpecName6" class="SpecName Hidden" text="{s:text}" />
+							<Label id="SpecMore" class="SpecName Hidden" text="..." />
+						</Panel>
+					</Panel>
+				</Button>
+			</Panel>
+
 			<!-- SSJ: one line under center speed. The jump the player picked (SSJ tab), its takeoff speed, then the stats
 			     they switched on in fixed slots. Off until turned on; SsjCard gets gone a few seconds after the jump, and
 			     snap from faded out until the next one has come up. -->
@@ -414,6 +434,15 @@
 								<Button id="SizeKeysUp" class="Step"><Label text="+" /></Button>
 							</Panel>
 							<Button id="OptKeys" class="PillButton"><Label id="OptKeysValue" class="MenuValue off" text="{s:value}" /></Button>
+						</Panel>
+						<Panel class="MenuRow static tall">
+							<Panel class="MenuText"><Label id="LPanelSpecs" class="MenuName" text="{s:text}" /><Label id="LPanelSpecsDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Panel class="Stepper">
+								<Button id="SizeSpecsDown" class="Step"><Label text="−" /></Button>
+								<Label id="SizeSpecsValue" class="MenuValue" text="{s:value}" />
+								<Button id="SizeSpecsUp" class="Step"><Label text="+" /></Button>
+							</Panel>
+							<Button id="OptSpecs" class="PillButton"><Label id="OptSpecsValue" class="MenuValue on" text="{s:value}" /></Button>
 						</Panel>
 
 						<Panel class="MenuSection"><Label id="LPlayer" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
