@@ -224,6 +224,11 @@ internal static class ChatTexts
     public static readonly ChatText SpecUnavailable = new ("chat.spec.unavailable", "{0} can't be spectated right now.");
     public static readonly ChatText SpecsList       = new ("chat.specs.list", "Spectating {0} ({1}): {2}");
     public static readonly ChatText SpecsNone       = new ("chat.specs.none", "Nobody is spectating {0}.");
+
+    // ---- sounds
+    public static readonly ChatText SoundsOn  = new ("chat.sounds.on", "Timer sounds are on.");
+    public static readonly ChatText SoundsOff = new ("chat.sounds.off", "Timer sounds are off.");
+
     public static readonly IReadOnlyList<ChatText> All = typeof(ChatTexts).GetFields(BindingFlags.Public | BindingFlags.Static)
                                                                           .Where(f => f.FieldType == typeof(ChatText))
                                                                           .Select(f => (ChatText) f.GetValue(null)!)

@@ -1774,5 +1774,13 @@
   "chat.specs.none": {
     "en-us": "Nobody is spectating {0}.",
     "zh-cn": "没有人在观战 {0}。"
+  },
+  "chat.sounds.on": {
+    "en-us": "Timer sounds are on.",
+    "zh-cn": "已开启计时器音效。"
+  },
+  "chat.sounds.off": {
+    "en-us": "Timer sounds are off.",
+    "zh-cn": "已关闭计时器音效。"
   }
 }
