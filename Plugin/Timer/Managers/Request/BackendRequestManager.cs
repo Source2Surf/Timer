@@ -45,9 +45,28 @@ internal interface IReplayCatalog
 }
 
 /// <summary>
+/// A run an admin deleted. <paramref name="WasBest" />: it was the player's best, so their next-fastest run took its
+/// place on the board, or they left it.
+/// </summary>
+internal sealed record DeletedRun(ulong                 RunId,
+                                  ulong                 SteamId,
+                                  bool                  StageRun,
+                                  int                   Style,
+                                  int                   Track,
+                                  int                   Stage,
+                                  bool                  WasBest,
+                                  IReadOnlyList<string> ReplayUrls);
+
+internal interface IRecordAdministration
+{
+    /// <summary>Deletes one run of the map with its replay rows; null when it is not on that map.</summary>
+    Task<DeletedRun?> DeleteRunAsync(string mapName, ulong runId);
+}
+
+/// <summary>
 /// The timer's storage, on the backend's gRPC storage service. Each call gets the configured deadline.
 /// </summary>
-internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog
+internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog, IRecordAdministration
 {
     // Keeps a request well under the backend's 64 KiB request limit.
     private const int StoredReplayChunkSize = 1000;
@@ -144,6 +163,11 @@ internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog
 
     public async Task RemoveMapRecords(string mapName)
         => await Call.RemoveMapRecordsAsync(mapName, WorkshopId(mapName));
+
+    public async Task<DeletedRun?> DeleteRunAsync(string mapName, ulong runId)
+        => await Call.DeleteRunAsync(mapName, WorkshopId(mapName), runId) is { } deleted
+               ? BackendRpcMapper.ToDeletedRun(deleted)
+               : null;
 
     public async Task<IReadOnlyList<RunCheckpoint>> GetRecordCheckpoints(long recordId)
         => BackendRpcMapper.ToCheckpoints(await Call.GetRecordCheckpointsAsync(recordId));

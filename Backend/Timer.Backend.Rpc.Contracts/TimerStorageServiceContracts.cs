@@ -244,6 +244,38 @@ public sealed class MapStatsDto
 /// <summary>
 /// Score jobs queued by a tier change or recalculation. The scores themselves update asynchronously.
 /// </summary>
+/// <summary>
+/// A run deleted by an admin, so the game server can drop its replay files and reload what it showed.
+/// </summary>
+[MessagePackObject]
+public sealed class DeletedRunDto
+{
+    [Key(0)]
+    public ulong RunId { get; set; }
+
+    [Key(1)]
+    public ulong SteamId { get; set; }
+
+    [Key(2)]
+    public RunKind Kind { get; set; }
+
+    [Key(3)]
+    public int Style { get; set; }
+
+    [Key(4)]
+    public int Track { get; set; }
+
+    [Key(5)]
+    public int Stage { get; set; }
+
+    // It was the player's best, so its board changed.
+    [Key(6)]
+    public bool WasBest { get; set; }
+
+    [Key(7)]
+    public string[] ReplayUrls { get; set; } = Array.Empty<string>();
+}
+
 [MessagePackObject]
 public sealed class ScoreJobsDto
 {
@@ -319,6 +351,9 @@ public interface ITimerStorageServiceV1 : IService<ITimerStorageServiceV1>
     UnaryResult<RecordCheckpointDto[]> GetRecordCheckpointsAsync(long recordId);
 
     UnaryResult RemoveMapRecordsAsync(string mapName, ulong workshopId);
+
+    /// <summary>Deletes one run of the map with its replay rows; null when it is not on this map.</summary>
+    UnaryResult<DeletedRunDto?> DeleteRunAsync(string mapName, ulong workshopId, ulong runId);
 
     UnaryResult<PlayerSummaryDto?> GetPlayerSummaryAsync(ulong steamId);
 

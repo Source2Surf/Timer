@@ -42,6 +42,9 @@ internal sealed class MapRecordCache
     // Capture before starting asynchronous work. Clearing the map invalidates every
     // outstanding load, including loads for a previous visit to the same map name.
     public LoadToken BeginLoad() => new(Volatile.Read(ref _generation), Interlocked.Increment(ref _loadSequence));
+
+    // Bumped on the game thread whenever a board changes; the lists are reused in place.
+    public int Version { get; private set; }
     public LoadToken BeginLoad(LoadToken origin) => new(origin.Generation, Interlocked.Increment(ref _loadSequence));
     public bool IsCurrent(LoadToken load) => load.Generation == Volatile.Read(ref _generation);
 
@@ -93,6 +96,7 @@ internal sealed class MapRecordCache
         list.Clear();
         list.AddRange(records);
         list.Sort();
+        Version++;
     }
 
     public void RefreshStage(int style, int track, int stage, IReadOnlyList<RunRecord> records, LoadToken load)
@@ -113,6 +117,8 @@ internal sealed class MapRecordCache
             list.Sort();
             _stageRecords[key] = list;
         }
+
+        Version++;
     }
 
     public int GetRankForTime(int style, int track, float time)
@@ -185,6 +191,7 @@ internal sealed class MapRecordCache
     public void Clear()
     {
         Interlocked.Increment(ref _generation);
+        Version++;
         _stageRecords.Clear();
         _stageLoads.Clear();
 

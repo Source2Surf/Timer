@@ -115,6 +115,12 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
     public async UnaryResult RemoveMapRecordsAsync(string mapName, ulong workshopId)
         => await RunAsync(token => Done(_storage.RemoveMapRecordsAsync(Map(mapName), workshopId, token)));
 
+    public async UnaryResult<DeletedRunDto?> DeleteRunAsync(string mapName, ulong workshopId, ulong runId)
+        => await RunAsync(async token => await _storage.DeleteRunAsync(Map(mapName), workshopId, runId, _options.StyleFactors, token)
+                                             is { } deleted
+                                             ? TimerStorageRpcMapper.ToDto(deleted)
+                                             : null);
+
     public async UnaryResult<PlayerSummaryDto?> GetPlayerSummaryAsync(ulong steamId)
         => await RunAsync(async token => await _storage.GetPlayerSummaryAsync(steamId, token) is { } summary
                                              ? TimerStorageRpcMapper.ToDto(summary)

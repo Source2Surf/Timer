@@ -80,6 +80,12 @@ internal sealed class HttpReplayStorage : IReplayStorage
 
     public async Task DeleteAsync(string url)
     {
+        // Only what this storage holds; an old row may still point elsewhere.
+        if (!url.StartsWith($"{_baseUrl}/", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         try
         {
             using var response = await _httpClient.DeleteAsync(url);

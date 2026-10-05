@@ -140,6 +140,110 @@ internal sealed partial class StorageServiceImpl
         return (result, ToRunRecord(run), rank);
     }
 
+    /// <summary>
+    /// Deletes one run of the map with its checkpoints and replay rows. When it was the player's best, their
+    /// next-fastest run on the board takes its place, or they leave it, and a main board's scores are requeued.
+    /// Null when the run is not on this map.
+    /// </summary>
+    internal async Task<TimerBackendDeletedRun?> DeleteRunAsync(string mapName, ulong runId,
+                                                                IReadOnlyDictionary<int, double> styleFactors)
+    {
+        // Ids are bigint; PostgreSQL's provider throws on a larger parameter rather than matching nothing.
+        if (runId > long.MaxValue)
+        {
+            return null;
+        }
+
+        var mapId = await ResolveMapIdByNameAsync(mapName);
+        var run = mapId is null
+            ? null
+            : await _db.Queryable<RunEntity>().Where(x => x.Id == runId && x.MapId == mapId.Value).FirstAsync(OperationCancellation);
+
+        if (run is null)
+        {
+            return null;
+        }
+
+        // Local seed gates must always be acquired before database locks.
+        await EnsureBestRunsSeededAsync(run.MapId, run.RunType, run.Style, run.Track, run.Stage);
+
+        TimerBackendDeletedRun? deleted = null;
+        var wakeScoreRecalcWorker = false;
+
+        await WithRecordTransactionAsync(async () =>
+        {
+            deleted = null;
+            wakeScoreRecalcWorker = false;
+            await LockMapAsync(run.MapId);
+
+            // Another delete or a wipe of the map may have won the lock.
+            if (!await _db.Queryable<RunEntity>().Where(x => x.Id == runId).AnyAsync(OperationCancellation))
+            {
+                return;
+            }
+
+            var replays = await _db.Queryable<ReplayEntity>()
+                                   .Where(x => x.RunId == runId)
+                                   .Select(x => x.Replay)
+                                   .ToListAsync(OperationCancellation);
+            await _db.Deleteable<ReplayEntity>().Where(x => x.RunId == runId).ExecuteCommandAsync(OperationCancellation);
+            await _db.Deleteable<RunSegmentEntity>().Where(x => x.RunId == runId).ExecuteCommandAsync(OperationCancellation);
+            await _db.Deleteable<RunEntity>().Where(x => x.Id == runId).ExecuteCommandAsync(OperationCancellation);
+
+            var steamId = run.SteamId;
+            var best = await QueryBestRuns().Where(x => x.SteamId == steamId && x.MapId == run.MapId && x.RunType == run.RunType
+                                                        && x.Style == run.Style && x.Track == run.Track && x.Stage == run.Stage)
+                                            .FirstAsync(OperationCancellation);
+            var wasBest = best is not null && best.RunId == runId;
+
+            if (wasBest)
+            {
+                // Their next-fastest run on the board, the earlier one on a tie; run ids start at 1.
+                var next = await _db.Queryable<RunEntity>()
+                                    .Where(x => x.SteamId == steamId && x.MapId == run.MapId && x.RunType == run.RunType
+                                                && x.Style == run.Style && x.Track == run.Track && x.Stage == run.Stage)
+                                    .OrderBy(x => x.Time)
+                                    .OrderBy(x => x.Id)
+                                    .Select(x => x.Id)
+                                    .FirstAsync(OperationCancellation);
+                var now = DateTime.UtcNow;
+
+                if (next == 0)
+                {
+                    await _db.Deleteable<PlayerBestRunEntity>().Where(x => x.Id == best!.Id).ExecuteCommandAsync(OperationCancellation);
+                }
+                else
+                {
+                    // The time is copied in SQL: a MySQL FLOAT read back rounds to 6 digits.
+                    await _db.Updateable<PlayerBestRunEntity>()
+                             .SetColumns(x => x.RunId == next)
+                             .SetColumns(x => x.BestTime == SqlFunc.Subqueryable<RunEntity>().Where(r => r.Id == next).Select(r => r.Time))
+                             .SetColumns(x => x.UpdatedAt == now)
+                             .Where(x => x.Id == best!.Id)
+                             .ExecuteCommandAsync(OperationCancellation);
+                }
+
+                if (run.RunType == RunType.Main)
+                {
+                    // Like a finish: the style's configured factor, 1 when it has none.
+                    var styleFactor = styleFactors.TryGetValue(run.Style, out var factor) ? factor : 1;
+                    await EnqueueScoreRecalcInCurrentRecordTransactionAsync(run.MapId, run.Style, run.Track, styleFactor, now);
+                    wakeScoreRecalcWorker = true;
+                }
+            }
+
+            deleted = new TimerBackendDeletedRun(runId, unchecked((ulong)run.SteamId), run.RunType == RunType.Stage, run.Style,
+                                                 run.Track, run.Stage, wasBest, replays);
+        });
+
+        if (wakeScoreRecalcWorker)
+        {
+            WakeScoreRecalcWorker();
+        }
+
+        return deleted;
+    }
+
     public async Task RemoveMapRecords(string mapName)
     {
         var mapId = await ResolveMapIdByNameAsync(mapName);

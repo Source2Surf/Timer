@@ -142,6 +142,10 @@ internal static class ChatTexts
     public static readonly ChatText SrBonus     = new ("chat.sr.bonus", "Bonus {0} SR: {1} by {2}");
     public static readonly ChatText SrBonusNone = new ("chat.sr.bonus_none", "No SR found for bonus {0}.");
 
+    public static readonly ChatText RecordDeleted        = new ("chat.record.deleted", "Deleted {0}'s {1} run.");
+    public static readonly ChatText RecordAlreadyDeleted = new ("chat.record.already_deleted", "That run was already deleted.");
+    public static readonly ChatText RecordDeleteFailed   = new ("chat.record.delete_failed", "Couldn't delete that run; see the server log.");
+
     public static readonly ChatText Pb          = new ("chat.pb", "PB: {0} (#{1}/{2})");
     public static readonly ChatText PbNone      = new ("chat.pb.none", "No personal best found for this track.");
     public static readonly ChatText PbStage     = new ("chat.pb.stage", "Stage {0} PB: {1}");

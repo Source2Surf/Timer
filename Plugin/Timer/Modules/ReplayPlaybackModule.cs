@@ -282,8 +282,9 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
                                                                   foreach (var (key, content) in results)
                                                                   {
-                                                                      if (_replayCache.TryGetValue(key, out var existing)
-                                                                          && existing.Header.Time <= content.Header.Time)
+                                                                      if ((_replayCache.TryGetValue(key, out var existing)
+                                                                           && existing.Header.Time <= content.Header.Time)
+                                                                          || IsDeletedReplay(key, content.Header))
                                                                       {
                                                                           continue;
                                                                       }
@@ -331,6 +332,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
         _replayBots.Clear();
         _replayCache.Clear();
         _closestFrameIndices.Clear();
+        _deletedReplays.Clear();
         Array.Clear(_personalBests);
         Array.Clear(_replayBotBySlot, 0, _replayBotBySlot.Length);
         Array.Clear(_configSlotInUse, 0, _configSlotInUse.Length);
@@ -450,13 +452,13 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
     private bool TryStoreReplay(int style, int track, int stage, ReplayContent content, ReplaySaveContext context)
     {
-        if (_replayCache.TryGetValue((style, track, stage), out var existing)
-            && existing.Header.Time <= context.FinishTime)
+        var key = (style, track, stage);
+
+        if ((_replayCache.TryGetValue(key, out var existing) && existing.Header.Time <= context.FinishTime)
+            || IsDeletedReplay(key, content.Header))
         {
             return false;
         }
-
-        var key = (style, track, stage);
 
         // Make the new WR live immediately for bots and HUD lookups.
         _replayCache[key] = content;

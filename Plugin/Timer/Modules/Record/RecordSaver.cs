@@ -436,6 +436,10 @@ internal sealed class RecordSaver
         }, ct).ConfigureAwait(false);
     }
 
+    // Reloads a board after an admin deleted a run from it.
+    public Task RefreshBoardAsync(string mapName, int style, int track, int stage, MapRecordCache.LoadToken origin)
+        => stage == 0 ? RefreshMapRecord(mapName, style, track, origin) : RefreshMapStageRecord(mapName, style, track, stage, origin);
+
     private async Task RefreshMapRecord(string mapName, int style, int track, MapRecordCache.LoadToken origin)
     {
         if (!_mapCache.IsCurrent(origin)) return;

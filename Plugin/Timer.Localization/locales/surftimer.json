@@ -1423,6 +1423,18 @@
     "en-us": "No SR found for this track.",
     "zh-cn": "这条路线还没有 SR。"
   },
+  "chat.record.deleted": {
+    "en-us": "Deleted {0}'s {1} run.",
+    "zh-cn": "已删除 {0} 的 {1} 成绩。"
+  },
+  "chat.record.already_deleted": {
+    "en-us": "That run was already deleted.",
+    "zh-cn": "该成绩已被删除。"
+  },
+  "chat.record.delete_failed": {
+    "en-us": "Couldn't delete that run; see the server log.",
+    "zh-cn": "删除该成绩失败，请查看服务器日志。"
+  },
   "chat.sr.stage": {
     "en-us": "Stage {0} SR: {1} by {2}",
     "zh-cn": "关卡 {0} SR：{1}，保持者 {2}"

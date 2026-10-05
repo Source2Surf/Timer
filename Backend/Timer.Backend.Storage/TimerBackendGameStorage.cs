@@ -101,6 +101,13 @@ public sealed class TimerBackendGameStorage
     public Task RemoveMapRecordsAsync(string mapName, ulong workshopId, CancellationToken cancellationToken = default)
         => OnMapAsync(mapName, workshopId, () => Done(Storage.RemoveMapRecords(mapName)), cancellationToken);
 
+    public Task<TimerBackendDeletedRun?> DeleteRunAsync(string                           mapName,
+                                                        ulong                            workshopId,
+                                                        ulong                            runId,
+                                                        IReadOnlyDictionary<int, double> styleFactors,
+                                                        CancellationToken                cancellationToken = default)
+        => OnMapAsync(mapName, workshopId, () => Storage.DeleteRunAsync(mapName, runId, styleFactors), cancellationToken);
+
     public Task<PlayerSummary?> GetPlayerSummaryAsync(ulong steamId, CancellationToken cancellationToken = default)
         => _owner.ExecuteAsync(() => Storage.GetPlayerSummary(new SteamID(steamId)), cancellationToken);
 

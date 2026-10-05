@@ -73,6 +73,19 @@ internal static class TimerStorageRpcMapper
         return result;
     }
 
+    public static DeletedRunDto ToDto(TimerBackendDeletedRun source)
+        => new()
+        {
+            RunId      = source.RunId,
+            SteamId    = source.SteamId,
+            Kind       = source.StageRun ? RunKind.Stage : RunKind.Main,
+            Style      = source.Style,
+            Track      = source.Track,
+            Stage      = source.Stage,
+            WasBest    = source.WasBest,
+            ReplayUrls = [.. source.ReplayUrls],
+        };
+
     public static RecordCheckpointDto[] ToDto(IReadOnlyList<RunCheckpoint> source)
     {
         var result = new RecordCheckpointDto[source.Count];

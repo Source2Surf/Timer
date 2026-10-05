@@ -113,6 +113,13 @@ public sealed class TimerStorageLoopbackTests : IAsyncLifetime
         Assert.Equal("https://replays.test/a", await _client.GetRunReplayUrlAsync(runId));
         Assert.Equal([runId], await _client.GetStoredReplayRunIdsAsync([runId, runId + 100]));
 
+        var deleted = await _client.DeleteRunAsync("surf_rpc", 0, runId);
+        Assert.NotNull(deleted);
+        Assert.Equal((SteamId, RunKind.Main, true), (deleted.SteamId, deleted.Kind, deleted.WasBest));
+        Assert.Equal(["https://replays.test/a"], deleted.ReplayUrls);
+        Assert.Null(await _client.DeleteRunAsync("surf_rpc", 0, runId));
+        Assert.Empty(await _client.GetMapRecordsAsync("surf_rpc", 0, RunKind.Main, true, 0, 0, 0, 5000));
+
         await _client.RemoveMapRecordsAsync("surf_rpc", 0);
         Assert.Empty(await _client.GetMapRecordsAsync("surf_rpc", 0, RunKind.Main, true, 0, 0, 0, 5000));
     }

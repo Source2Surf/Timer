@@ -207,6 +207,10 @@ internal static class BackendRpcMapper
     public static ScoreQueueResult ToResult(ScoreJobsDto source)
         => new (source.MapFound, source.MapsAffected, source.BoardsQueued, source.FailedMaps);
 
+    public static DeletedRun ToDeletedRun(DeletedRunDto source)
+        => new (source.RunId, source.SteamId, source.Kind == RunKind.Stage, source.Style, source.Track, source.Stage,
+                source.WasBest, source.ReplayUrls ?? []);
+
     private static Vector ToVector(VectorDto source)
         => new (source.X, source.Y, source.Z);
 

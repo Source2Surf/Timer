@@ -54,6 +54,9 @@ internal sealed class BackendReplayProvider : IReplayProvider
     public Task<IReadOnlyCollection<ulong>> GetStoredRunIdsAsync(IReadOnlyList<ulong> runIds)
         => _catalog.GetStoredReplayRunIdsAsync(runIds);
 
+    public Task DeleteStoredAsync(string url)
+        => _replayStorage.DeleteAsync(url);
+
     public Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)
     {
         // Each attempt owns an immutable object key. A partial retry must not truncate an

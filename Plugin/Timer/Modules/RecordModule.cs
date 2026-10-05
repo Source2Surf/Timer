@@ -28,8 +28,10 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Command;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Player;
+using Source2Surf.Timer.Managers.Request;
 using Source2Surf.Timer.Managers.Submission;
 using Source2Surf.Timer.Modules.Practice;
 using Source2Surf.Timer.Modules.Record;
@@ -69,6 +71,21 @@ internal interface IRecordModule
     /// Returns 0 if the player has no active session.
     /// </summary>
     float GetSessionTime(PlayerSlot slot);
+
+    // Raised by !wr and !sr, to open the leaderboard panel.
+    event Action<PlayerSlot>? LeaderboardRequested;
+
+    // Changes whenever a leaderboard of the map is loaded, reloaded or cleared.
+    int RecordsVersion { get; }
+
+    // Admins with timer:records.
+    bool CanDeleteRecords(PlayerSlot slot);
+
+    /// <summary>
+    /// Deletes a run of the current map and its replays, for an admin who <see cref="CanDeleteRecords" />. When it was
+    /// the player's best, their next-fastest run takes its place or they leave the board; the admin gets a chat line.
+    /// </summary>
+    void DeleteRecord(PlayerSlot slot, RunRecord record);
 }
 
 internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITimerModuleListener, IPlayerManagerListener
@@ -84,6 +101,8 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     private readonly IMapInfoModule        _mapInfo;
     private readonly IPracticeModule       _practiceModule;
     private readonly ILocalizationProvider _localization;
+    private readonly IAdminPermissions     _adminPermissions;
+    private readonly IRecordAdministration _recordAdministration;
     private readonly ILogger<RecordModule> _logger;
 
     // Sub-components
@@ -98,6 +117,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     // Late-resolved to avoid circular DI (ReplayRecorderModule depends on IRecordModule)
     private IReplayRecorderModule _replayRecorder = null!;
+    private IRunDeletionListener? _runDeletionListener;
 
     public RecordModule(InterfaceBridge       bridge,
                         ITimerModule          timerModule,
@@ -109,17 +129,21 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                         IConfiguration        configuration,
                         RunSubmissionSender   remoteSubmissionSender,
                         ILocalizationProvider localization,
+                        IAdminPermissions     adminPermissions,
+                        IRecordAdministration recordAdministration,
                         ILogger<RecordModule> logger)
     {
-        _bridge         = bridge;
-        _timerModule    = timerModule;
-        _playerManager  = playerManager;
-        _request        = request;
-        _commandManager = commandManager;
-        _mapInfo        = mapInfoModule;
-        _practiceModule = practiceModule;
-        _localization   = localization;
-        _logger         = logger;
+        _bridge               = bridge;
+        _timerModule          = timerModule;
+        _playerManager        = playerManager;
+        _request              = request;
+        _commandManager       = commandManager;
+        _mapInfo              = mapInfoModule;
+        _practiceModule       = practiceModule;
+        _localization         = localization;
+        _adminPermissions     = adminPermissions;
+        _recordAdministration = recordAdministration;
+        _logger               = logger;
 
         _listenerHub = new ListenerHub<IRecordModuleListener>(logger);
         _mapCache    = new MapRecordCache(logger);
@@ -145,8 +169,10 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         _playerManager.RegisterListener(this);
 
         _commandManager.AddServerCommand("timer_recalc_scores", OnCommandRecalcScores);
+        _adminPermissions.RegisterPermission(DeleteRecordsPermission);
 
         _commandManager.AddClientChatCommand("wr",      OnCommandWR);
+        _commandManager.AddClientChatCommand("sr",      OnCommandWR);
         _commandManager.AddClientChatCommand("pb",      OnCommandPB);
         _commandManager.AddClientChatCommand("rank",    OnCommandRank);
         _commandManager.AddClientChatCommand("top",     OnCommandTop);
@@ -170,7 +196,8 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     public void OnPostInit(ServiceProvider provider)
     {
-        _replayRecorder = provider.GetRequiredService<IReplayRecorderModule>();
+        _replayRecorder      = provider.GetRequiredService<IReplayRecorderModule>();
+        _runDeletionListener = provider.GetService<IRunDeletionListener>();
         if (_replayRecorder is IRecordModuleListener replayListener)
         {
             _saver.SetLateReplayListener(replayListener);

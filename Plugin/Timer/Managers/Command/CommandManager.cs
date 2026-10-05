@@ -33,7 +33,7 @@ using Source2Surf.Timer.Shared.Interfaces;
 
 namespace Source2Surf.Timer.Managers.Command;
 
-internal class CommandManager : IManager, ICommandManager, IClientListener
+internal class CommandManager : IManager, ICommandManager, IClientListener, IAdminPermissions
 {
     private const string AdminManagerLibrary  = "Sharp.Modules.AdminManager";
     private const string CommandCenterLibrary = "Sharp.Modules.CommandCenter";
@@ -42,6 +42,8 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
 
     private readonly Dictionary<string, AdminCommand> _adminChatCommands;
     private readonly HashSet<string>                  _registeredAdminCommands;
+    private readonly HashSet<string>                  _permissions;
+    private          bool                             _permissionsRegistered;
     private readonly InterfaceBridge                  _bridge;
     private readonly ISharedSystem                    _shared;
 
@@ -69,6 +71,7 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
         _serverCommands     = [];
 
         _registeredAdminCommands = new (StringComparer.OrdinalIgnoreCase);
+        _permissions             = new (StringComparer.OrdinalIgnoreCase);
 
         HashSet<char> set = ['!', '/', '.', '！', '．', '／', '。'];
         _commandTriggers = set.ToFrozenSet();
@@ -177,7 +180,7 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
                                    .GetOptionalSharpModuleInterface<IAdminManager>(IAdminManager.Identity);
         }
 
-        if (_registeredAdminCommands.Count == _adminChatCommands.Count)
+        if (_registeredAdminCommands.Count == _adminChatCommands.Count && _permissionsRegistered)
         {
             return true;
         }
@@ -190,7 +193,8 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
         try
         {
             var registry = admins.GetCommandRegistry(ModuleIdentity);
-            registry.RegisterPermissions([.. _adminChatCommands.Values.SelectMany(x => x.Permissions).Distinct()]);
+            registry.RegisterPermissions([.. _adminChatCommands.Values.SelectMany(x => x.Permissions).Concat(_permissions).Distinct()]);
+            _permissionsRegistered = true;
 
             foreach (var (name, permissions, handler) in _adminChatCommands.Values)
             {
@@ -215,8 +219,20 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
             // CommandCenter isn't up yet; retried when it connects.
         }
 
-        return _registeredAdminCommands.Count == _adminChatCommands.Count;
+        return _registeredAdminCommands.Count == _adminChatCommands.Count && _permissionsRegistered;
     }
+
+    public void RegisterPermission(string permission)
+    {
+        if (_permissions.Add(permission))
+        {
+            _permissionsRegistered = false;
+            ConnectAdminManager();
+        }
+    }
+
+    public bool HasPermission(SteamID steamId, string permission)
+        => _adminManager?.Instance?.GetAdmin(steamId)?.HasPermission(permission) is true;
 
     public void OnLibraryDisconnect(string name)
     {
@@ -224,6 +240,7 @@ internal class CommandManager : IManager, ICommandManager, IClientListener
             || name.Equals(CommandCenterLibrary, StringComparison.OrdinalIgnoreCase))
         {
             _registeredAdminCommands.Clear();
+            _permissionsRegistered = false;
         }
     }
 

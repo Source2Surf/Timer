@@ -41,6 +41,7 @@ internal static class ModuleDI
         services.AddSingleton<IReplayModule>(x => x.GetRequiredService<ReplayPlaybackModule>());
         services.AddSingleton<ICentralReplay>(x => x.GetRequiredService<ReplayPlaybackModule>());
         services.AddSingleton<IPersonalBestReplays>(x => x.GetRequiredService<ReplayPlaybackModule>());
+        services.AddSingleton<IRunDeletionListener>(x => x.GetRequiredService<ReplayPlaybackModule>());
         services.ImplSingleton<IReplayRecorderModule, IModule, ReplayRecorderModule>();
         services.AddSingleton<IReplayRewind>(x => x.GetRequiredService<ReplayRecorderModule>());
         services.ImplSingleton<IHudModule, IModule, HudModule>();

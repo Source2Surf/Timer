@@ -111,6 +111,10 @@ internal sealed class ReplayProviderProxy : IDisposable
         return await provider.GetRunReplayAsync(runId);
     }
 
+    /// <summary>Deletes a deleted run's replay from the replay storage; best effort.</summary>
+    public Task DeleteStoredReplayAsync(string url)
+        => _builtIn?.DeleteStoredAsync(url) ?? Task.CompletedTask;
+
     public async Task<IReadOnlyCollection<ulong>> GetStoredRunIdsAsync(IReadOnlyList<ulong> runIds)
     {
         var provider = Volatile.Read(ref _provider);

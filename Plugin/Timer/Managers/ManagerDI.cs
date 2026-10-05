@@ -43,6 +43,7 @@ internal static class ManagerDi
         services.AddSingleton<BackendRequestManager>();
         services.AddSingleton<IRequestManager>(serviceProvider => serviceProvider.GetRequiredService<BackendRequestManager>());
         services.AddSingleton<IReplayCatalog>(serviceProvider => serviceProvider.GetRequiredService<BackendRequestManager>());
+        services.AddSingleton<IRecordAdministration>(serviceProvider => serviceProvider.GetRequiredService<BackendRequestManager>());
 
         // The spool remains owned by the sender, rather than separately registered as IManager.
         services.AddSingleton<RunSubmissionSpool>();
@@ -59,6 +60,7 @@ internal static class ManagerDi
         services.ImplSingleton<IPlayerManager, IManager, PlayerManager>();
 
         services.AddSingleton<CommandManager>();
+        services.AddSingleton<IAdminPermissions>(serviceProvider => serviceProvider.GetRequiredService<CommandManager>());
         services.ImplSingleton<ICommandManager, IManager, CommandManagerProxy>();
         services.ImplSingleton<IPermissionProvider, IManager, PermissionProviderProxy>();
         services.ImplSingleton<ILocalizationProvider, IManager, LocalizationProviderProxy>();

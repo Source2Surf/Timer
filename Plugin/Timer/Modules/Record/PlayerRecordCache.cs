@@ -105,6 +105,28 @@ internal sealed class PlayerRecordCache
         }
     }
 
+    // After an admin deleted the player's best: their next-fastest run, or none.
+    public void ReplaceRecord(PlayerSlot slot, int style, int track, int stage, RunRecord? record)
+    {
+        if (stage == 0)
+        {
+            var records = GetOrAddSlotRecords(slot);
+            if (record is null) records.Remove((style, track));
+            else records[(style, track)] = record;
+
+            return;
+        }
+
+        if (!IsValidStageIndex(stage))
+        {
+            return;
+        }
+
+        var stageRecords = GetOrAddSlotStageRecords(slot);
+        if (record is null) stageRecords.Remove((style, track, stage));
+        else stageRecords[(style, track, stage)] = record;
+    }
+
     public void Clear(PlayerSlot slot)
     {
         _records.Remove(slot);

@@ -229,6 +229,13 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
+        if (LeaderboardRequested is { } open)
+        {
+            open(slot);
+
+            return ECommandAction.Handled;
+        }
+
         var tr             = _localization.For(slot);
         var (style, track) = GetStyleTrack(slot);
 
