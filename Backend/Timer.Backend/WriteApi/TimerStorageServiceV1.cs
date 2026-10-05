@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Grpc.Core;
@@ -23,6 +24,9 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
 {
     // The game server's encoding of every setting stays far below this.
     private const int MaxPlayerSettingsBytes = 256;
+
+    private const int MaxTopPlayers    = 50;
+    private const int MaxRankedLookups = 64; // a full server
 
     private readonly TimerBackendStorage            _owner;
     private readonly TimerBackendGameStorage        _storage;
@@ -139,6 +143,34 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
             var (rank, total) = await _storage.GetPlayerPointsRankAsync(steamId, token);
 
             return new RankDto { Rank = rank, Total = total };
+        });
+
+    public async UnaryResult<RankedPlayerDto[]> GetTopPlayersAsync(int limit)
+        => await RunAsync(async token =>
+        {
+            var players = await _storage.GetTopPlayersAsync(Math.Clamp(limit, 1, MaxTopPlayers), token);
+            var result  = new RankedPlayerDto[players.Count];
+
+            for (var i = 0; i < result.Length; i++)
+            {
+                var p = players[i];
+                result[i] = new RankedPlayerDto { SteamId = p.SteamId, Name = p.Name, Points = p.Points, Rank = p.Rank };
+            }
+
+            return result;
+        });
+
+    public async UnaryResult<PlayersRankDto> GetPlayersPointsRankAsync(ulong[] steamIds)
+        => await RunAsync(async token =>
+        {
+            if (steamIds is not { Length: <= MaxRankedLookups })
+            {
+                throw TimerWriteRpcErrors.InvalidArgument();
+            }
+
+            var (ranks, total) = await _storage.GetPlayersPointsRankAsync(steamIds, token);
+
+            return new PlayersRankDto { SteamIds = ranks.Keys.ToArray(), Ranks = ranks.Values.ToArray(), Total = total };
         });
 
     public async UnaryResult UpdatePlayerMapStatsAsync(ulong steamId, string mapName, ulong workshopId, float deltaSeconds)

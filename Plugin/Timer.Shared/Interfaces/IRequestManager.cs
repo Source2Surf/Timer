@@ -174,6 +174,19 @@ public interface IRequestManager
     Task<(int rank, int total)> GetPlayerPointsRank(SteamID steamId);
 
     /// <summary>
+    /// The points leaderboard's top players, best first. A provider that doesn't implement it returns none.
+    /// </summary>
+    Task<IReadOnlyList<RankedPlayer>> GetTopPlayers(int limit)
+        => Task.FromResult<IReadOnlyList<RankedPlayer>>([]);
+
+    /// <summary>
+    /// Several players' points ranks (unranked players are left out) and how many players are ranked. A provider
+    /// that doesn't implement it ranks no one.
+    /// </summary>
+    Task<(IReadOnlyDictionary<SteamID, int> Ranks, int Total)> GetPlayersPointsRank(IReadOnlyList<SteamID> steamIds)
+        => Task.FromResult<(IReadOnlyDictionary<SteamID, int>, int)>((new Dictionary<SteamID, int>(), 0));
+
+    /// <summary>
     /// Atomically increment a player's per-map play time and play count.
     /// </summary>
     Task UpdatePlayerMapStatsAsync(SteamID steamId, string mapName, float deltaSeconds);

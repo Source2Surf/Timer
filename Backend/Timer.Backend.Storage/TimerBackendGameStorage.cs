@@ -117,6 +117,13 @@ public sealed class TimerBackendGameStorage
                                                                          CancellationToken cancellationToken = default)
         => _owner.ExecuteAsync(() => Storage.GetCompletedMapsAsync(new SteamID(steamId), style, track), cancellationToken);
 
+    public Task<IReadOnlyList<TimerBackendRankedPlayer>> GetTopPlayersAsync(int limit, CancellationToken cancellationToken = default)
+        => _owner.ExecuteAsync(() => Storage.GetTopPlayersAsync(limit), cancellationToken);
+
+    public Task<(IReadOnlyDictionary<ulong, int> ranks, int total)> GetPlayersPointsRankAsync(IReadOnlyList<ulong> steamIds,
+                                                                                           CancellationToken cancellationToken = default)
+        => _owner.ExecuteAsync(() => Storage.GetPlayersPointsRankAsync(steamIds), cancellationToken);
+
     public Task<(int rank, int total)> GetPlayerPointsRankAsync(ulong steamId, CancellationToken cancellationToken = default)
         => _owner.ExecuteAsync(() => Storage.GetPlayerPointsRank(new SteamID(steamId)), cancellationToken);
 

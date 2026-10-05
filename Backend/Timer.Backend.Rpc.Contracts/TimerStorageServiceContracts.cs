@@ -232,6 +232,36 @@ public sealed class RankDto
 }
 
 [MessagePackObject]
+public sealed class RankedPlayerDto
+{
+    [Key(0)]
+    public ulong SteamId { get; set; }
+
+    [Key(1)]
+    public string Name { get; set; } = string.Empty;
+
+    [Key(2)]
+    public uint Points { get; set; }
+
+    [Key(3)]
+    public int Rank { get; set; }
+}
+
+[MessagePackObject]
+public sealed class PlayersRankDto
+{
+    /// <summary>The ranked players among those asked for, with their ranks at the same index; unranked ones are left out.</summary>
+    [Key(0)]
+    public ulong[] SteamIds { get; set; } = Array.Empty<ulong>();
+
+    [Key(1)]
+    public int[] Ranks { get; set; } = Array.Empty<int>();
+
+    [Key(2)]
+    public int Total { get; set; }
+}
+
+[MessagePackObject]
 public sealed class MapStatsDto
 {
     [Key(0)]
@@ -360,6 +390,12 @@ public interface ITimerStorageServiceV1 : IService<ITimerStorageServiceV1>
     UnaryResult<Dictionary<ulong, float>> GetCompletedMapsAsync(ulong steamId, int style, int track);
 
     UnaryResult<RankDto> GetPlayerPointsRankAsync(ulong steamId);
+
+    /// <summary>The points leaderboard's top players, best first.</summary>
+    UnaryResult<RankedPlayerDto[]> GetTopPlayersAsync(int limit);
+
+    /// <summary>Several players' points ranks at once, for titles of everyone on a server.</summary>
+    UnaryResult<PlayersRankDto> GetPlayersPointsRankAsync(ulong[] steamIds);
 
     UnaryResult UpdatePlayerMapStatsAsync(ulong steamId, string mapName, ulong workshopId, float deltaSeconds);
 

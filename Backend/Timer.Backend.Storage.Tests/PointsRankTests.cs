@@ -68,6 +68,42 @@ public sealed class PointsRankTests : IDisposable
         Assert.Equal((0, 0), (rank, total));
     }
 
+    [Fact]
+    public async Task TopPlayersComeBestFirstWithSharedRanks()
+    {
+        await AddPlayerAsync(1, 50);
+        await AddPlayerAsync(2, 100);
+        await AddPlayerAsync(3, 50);
+        await AddPlayerAsync(4, 20);
+        await AddPlayerAsync(5, 0);
+
+        var top = await _storage.GetTopPlayersAsync(10);
+
+        Assert.Equal([Id(2), Id(1), Id(3), Id(4)], top.Select(p => p.SteamId));
+        Assert.Equal([1, 2, 2, 4], top.Select(p => p.Rank));
+        Assert.Equal([100u, 50u, 50u, 20u], top.Select(p => p.Points));
+        Assert.Equal("player 2", top[0].Name);
+        Assert.Equal([Id(2), Id(1)], (await _storage.GetTopPlayersAsync(2)).Select(p => p.SteamId));
+    }
+
+    [Fact]
+    public async Task SeveralRanksMatchTheSingleRank()
+    {
+        await AddPlayerAsync(1, 100);
+        await AddPlayerAsync(2, 50);
+        await AddPlayerAsync(3, 50);
+        await AddPlayerAsync(4, 0);
+
+        var (ranks, total) = await _storage.GetPlayersPointsRankAsync([Id(1), Id(2), Id(3), Id(4), Id(9), Id(2)]);
+
+        Assert.Equal(3, total);
+        Assert.Equal(3, ranks.Count); // unranked and unknown players are left out
+        Assert.Equal(1, ranks[Id(1)]);
+        Assert.Equal(2, ranks[Id(2)]);
+        Assert.Equal(2, ranks[Id(3)]);
+        Assert.Empty((await _storage.GetPlayersPointsRankAsync([])).ranks);
+    }
+
     private static ulong Id(int player) => 76561198000000000UL + (ulong)player;
 
     private async Task AddPlayerAsync(int player, uint points)
