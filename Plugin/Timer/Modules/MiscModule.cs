@@ -23,11 +23,13 @@ using Sharp.Shared.HookParams;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
+using Sharp.Shared.Units;
 using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Patch;
 using Source2Surf.Timer.Native;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Modules;
+using Source2Surf.Timer.Shared.Models.Zone;
 
 namespace Source2Surf.Timer.Modules;
 
@@ -67,6 +69,9 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     private readonly IConVar timer_block_radio;
 
     // ReSharper restore InconsistentNaming
+
+    private readonly bool[] _jumpHeldTick = new bool[PlayerSlot.MaxPlayerCount];
+    private readonly bool[] _jumpCarried  = new bool[PlayerSlot.MaxPlayerCount];
 
     public MiscModule(InterfaceBridge     bridge,
                       ICommandManager     commandManager,
@@ -124,6 +129,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         _bridge.HookManager.PlayerDropWeapon.InstallForward(OnPlayerDropWeapon);
 
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommand);
+        _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnPlayerProcessMovePre);
 
         _bridge.ConVarManager.InstallChangeHook(timer_block_radio, OnBlockRadioChanged);
 
@@ -144,6 +150,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         _bridge.HookManager.PlayerDispatchTraceAttack.RemoveHookPre(OnPlayerDispatchAttackPre);
         _bridge.HookManager.PlayerDropWeapon.RemoveForward(OnPlayerDropWeapon);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommand);
+        _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnPlayerProcessMovePre);
         _bridge.ConVarManager.RemoveChangeHook(timer_block_radio, OnBlockRadioChanged);
 
         // InlineHookManager shuts down first and removes the hook.
@@ -214,22 +221,24 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     private HookReturnValue<EmptyHookReturn> OnPlayerRunCommand(IPlayerRunCommandHookParams      @params,
                                                                 HookReturnValue<EmptyHookReturn> ret)
     {
-        if (!timer_desubtick_jump.GetBool())
+        var slot = @params.Client.Slot;
+
+        _jumpHeldTick[slot] = false;
+
+        if (!timer_desubtick_jump.GetBool()
+            || _timerModule.GetTimerInfo(slot) is not { } timerInfo
+            || timerInfo.InZone == EZoneType.Start
+            || _styleModule.GetStyleSetting(timerInfo.Style) is { AutoBhop: false })
+        {
+            _jumpCarried[slot] = false;
+
             return new ();
+        }
 
-        var client = @params.Client;
-        var slot   = client.Slot;
+        var pressed  = (@params.ScrollButtons & UserCommandButtons.Jump) != 0;
+        var previous = 0.0f;
 
-        if (_timerModule.GetTimerInfo(slot) is not { } timerInfo
-            || _styleModule.GetStyleSetting(timerInfo.Style) is
-            {
-                AutoBhop: false, // we don't remove jump button from subtick moves if autobhop is off, because that will make scroll-jumping stop working
-            })
-            return new ();
-
-        var subtickMoveSize = @params.SubtickMoveSize;
-
-        for (var i = 0; i < subtickMoveSize; i++)
+        for (var i = 0; i < @params.SubtickMoveSize; i++)
         {
             var subtickMove = @params.GetSubtickMove(i);
 
@@ -237,10 +246,27 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
                 continue;
 
             if ((subtickMove->Buttons & UserCommandButtons.Jump) != 0)
+            {
+                pressed               |= subtickMove->Pressed;
                 subtickMove->Buttons &= ~UserCommandButtons.Jump;
+
+                if (subtickMove->Buttons == 0)
+                    subtickMove->When = previous;
+            }
+
+            previous = subtickMove->When;
         }
 
-        return new HookReturnValue<EmptyHookReturn>();
+        _jumpHeldTick[slot] = pressed || _jumpCarried[slot];
+        _jumpCarried[slot]  = pressed && !@params.Pawn.GroundEntityHandle.IsValid();
+
+        return new ();
+    }
+
+    private void OnPlayerProcessMovePre(IPlayerProcessMoveForwardParams @params)
+    {
+        if (_jumpHeldTick[@params.Client.Slot])
+            @params.Service.KeyButtons |= UserCommandButtons.Jump;
     }
 
 #endregion
