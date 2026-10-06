@@ -131,7 +131,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     int IClientListener.ListenerPriority => 0;
 
     private RankTitle? TitleOf(PlayerSlot slot)
-        => _titles.For(_ranks[slot]);
+        => _titles.For(_ranks[slot], _total);
 
     // ------------------------------------------------------------------ ranks
 
@@ -391,7 +391,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     }
 
     private string Named(RankedPlayer p)
-        => _titles.For(p.Rank) is { } title
+        => _titles.For(p.Rank, _total) is { } title
             ? ZString.Concat(title.Color, "[", title.Name, "] ", Utils.Highlight(p.Name))
             : Utils.Highlight(p.Name);
 

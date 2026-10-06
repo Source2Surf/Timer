@@ -12,38 +12,92 @@ namespace Timer.Tests;
 public sealed class RankTitleTests
 {
     [Theory]
-    [InlineData(1, "Legend")]
-    [InlineData(10, "Legend")]
-    [InlineData(11, "Master")]
-    [InlineData(150, "Elite")]
-    [InlineData(600, "Skilled")]
-    [InlineData(601, "Ranked")]
-    [InlineData(100000, "Ranked")]
-    public void DefaultTitlesFollowTheRank(int rank, string title)
-        => Assert.Equal(title, new RankTitles(new RankConfig()).For(rank)?.Name);
+    [InlineData(1, 10000, "Champion")]
+    [InlineData(2, 10000, "Legend")]
+    [InlineData(3, 10000, "Legend")]
+    [InlineData(4, 10000, "Master")]
+    [InlineData(10, 10000, "Master")]
+    [InlineData(11, 10000, "Elite")]
+    [InlineData(100, 10000, "Elite")]
+    [InlineData(101, 10000, "Expert")]
+    [InlineData(500, 10000, "Expert")]
+    [InlineData(501, 10000, "Skilled")]
+    [InlineData(2000, 10000, "Skilled")]
+    [InlineData(2001, 10000, "Ranked")]
+    [InlineData(11, 40, "Ranked")]
+    public void DefaultTitlesFollowTheRank(int rank, int total, string title)
+        => Assert.Equal(title, new RankTitles(new RankConfig()).For(rank, total)?.Name);
 
     [Fact]
     public void UnrankedHasNoTitleUnlessConfigured()
     {
-        Assert.Null(new RankTitles(new RankConfig()).For(0));
-        Assert.Equal("New", new RankTitles(new RankConfig { Unranked = "New" }).For(0)?.Name);
+        Assert.Null(new RankTitles(new RankConfig()).For(0, 100));
+        Assert.Equal("New", new RankTitles(new RankConfig { Unranked = "New" }).For(0, 100)?.Name);
     }
 
     [Fact]
-    public void TitlesAreSortedNamelessOnesSkippedAndColorsResolved()
+    public void TitlesGoTopDownNamelessOnesSkippedAndColorsResolved()
     {
         var titles = new RankTitles(new RankConfig
         {
             Titles =
             [
-                new () { Name = "Rest", MaxRank = 0, Color = "nope" },
                 new () { Name = "", MaxRank = 1 },
                 new () { Name = "Top", MaxRank = 5, Color = "gold" },
+                new () { Name = "Rest", MaxRank = 0, Color = "nope" },
+                new () { Name = "Never", MaxRank = 2 },
             ],
         });
 
-        Assert.Equal(new RankTitle("Top", ChatColor.Gold), titles.For(1));
-        Assert.Equal(new RankTitle("Rest", ChatColor.White), titles.For(6));
+        Assert.Equal(new RankTitle("Top", ChatColor.Gold), titles.For(1, 100));
+        Assert.Equal(new RankTitle("Rest", ChatColor.White), titles.For(6, 100));
+    }
+
+    // A small server's 1% can be narrower than the top 10; Legend still comes first.
+    [Theory]
+    [InlineData(1, 500, "Legend")]
+    [InlineData(10, 500, "Legend")]
+    [InlineData(11, 500, "Elite")]
+    [InlineData(11, 2000, "Master")]
+    [InlineData(20, 2000, "Master")]
+    [InlineData(21, 2000, "Elite")]
+    [InlineData(100, 2000, "Elite")]
+    [InlineData(101, 2000, "Ranked")]
+    [InlineData(11, 50, "Ranked")]
+    [InlineData(200, 20000, "Master")]
+    [InlineData(201, 20000, "Elite")]
+    public void PercentTitlesFollowTheRankedPlayerCount(int rank, int total, string title)
+    {
+        var titles = new RankTitles(new RankConfig
+        {
+            Titles =
+            [
+                new () { Name = "Legend", MaxRank    = 10 },
+                new () { Name = "Master", MaxPercent = 1 },
+                new () { Name = "Elite", MaxPercent  = 5 },
+                new () { Name = "Ranked" },
+            ],
+        });
+
+        Assert.Equal(title, titles.For(rank, total)?.Name);
+    }
+
+    [Fact]
+    public void MaxRankWinsOverMaxPercent()
+    {
+        var titles = new RankTitles(new RankConfig
+        {
+            Titles =
+            [
+                new () { Name = "Both", MaxRank    = 3, MaxPercent = 50 },
+                new () { Name = "Half", MaxPercent = 50 },
+            ],
+        });
+
+        Assert.Equal("Both", titles.For(3, 100)?.Name);
+        Assert.Equal("Half", titles.For(4, 100)?.Name);
+        Assert.Equal("Half", titles.For(50, 100)?.Name);
+        Assert.Null(titles.For(51, 100));
     }
 
     [Fact]
@@ -54,7 +108,8 @@ public sealed class RankTitleTests
                                                              Utils.DeserializerOptions)!;
         var defaults = new RankConfig();
 
-        Assert.Equal(defaults.Titles.Select(t => (t.Name, t.MaxRank, t.Color)), shipped.Titles.Select(t => (t.Name, t.MaxRank, t.Color)));
+        Assert.Equal(defaults.Titles.Select(t => (t.Name, t.MaxRank, t.MaxPercent, t.Color)),
+                     shipped.Titles.Select(t => (t.Name, t.MaxRank, t.MaxPercent, t.Color)));
         Assert.Equal((defaults.Unranked, defaults.ChatTags, defaults.ScoreboardTags), (shipped.Unranked, shipped.ChatTags, shipped.ScoreboardTags));
         Assert.Equal((defaults.ChatFormat, defaults.ChatFormatUntitled, defaults.ScoreboardFormat),
                      (shipped.ChatFormat, shipped.ChatFormatUntitled, shipped.ScoreboardFormat));

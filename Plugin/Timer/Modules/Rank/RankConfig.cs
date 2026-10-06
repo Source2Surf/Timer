@@ -37,12 +37,13 @@ internal sealed class RankConfig
     [JsonPropertyName("titles")]
     public List<RankTitleConfig> Titles { get; set; } =
     [
-        new () { Name = "Legend", MaxRank  = 10, Color  = "Gold" },
-        new () { Name = "Master", MaxRank  = 50, Color  = "LightRed" },
-        new () { Name = "Elite", MaxRank   = 150, Color = "Purple" },
-        new () { Name = "Expert", MaxRank  = 300, Color = "Blue" },
-        new () { Name = "Skilled", MaxRank = 600, Color = "Green" },
-        new () { Name = "Ranked", MaxRank  = 0, Color   = "Silver" },
+        new () { Name = "Champion", MaxRank   = 1, Color  = "Gold" },
+        new () { Name = "Legend", MaxRank     = 3, Color  = "Yellow" },
+        new () { Name = "Master", MaxRank     = 10, Color = "LightRed" },
+        new () { Name = "Elite", MaxPercent   = 1, Color  = "Purple" },
+        new () { Name = "Expert", MaxPercent  = 5, Color  = "Blue" },
+        new () { Name = "Skilled", MaxPercent = 20, Color = "Green" },
+        new () { Name = "Ranked", Color       = "Silver" },
     ];
 
     // Title of players without points; empty for none.
@@ -111,6 +112,10 @@ internal sealed class RankTitleConfig
     [JsonPropertyName("max_rank")]
     public int MaxRank { get; set; }
 
+    // Without a max_rank, the title covers the top this many percent of ranked players instead.
+    [JsonPropertyName("max_percent")]
+    public double MaxPercent { get; set; }
+
     // A ChatColor name, e.g. Gold.
     [JsonPropertyName("color")]
     public string Color { get; set; } = "White";
@@ -119,7 +124,7 @@ internal sealed class RankTitleConfig
 internal readonly record struct RankTitle(string Name, string Color);
 
 /// <summary>
-///     The config's titles in rank order, with their colors resolved.
+///     The config's titles, top one first, with their colors resolved.
 /// </summary>
 internal sealed class RankTitles
 {
@@ -128,30 +133,30 @@ internal sealed class RankTitles
                          .Where(f => f is { IsLiteral: true } && f.FieldType == typeof(string))
                          .ToDictionary(f => f.Name, f => (string) f.GetValue(null)!, StringComparer.OrdinalIgnoreCase);
 
-    private readonly (int MaxRank, RankTitle Title)[] _titles;
-    private readonly RankTitle?                       _unranked;
+    private readonly (int MaxRank, double MaxPercent, RankTitle Title)[] _titles;
+    private readonly RankTitle?                                          _unranked;
 
     public RankTitles(RankConfig config)
     {
         _titles = config.Titles
                         .Where(t => !string.IsNullOrWhiteSpace(t.Name))
-                        .Select(t => (t.MaxRank <= 0 ? int.MaxValue : t.MaxRank, new RankTitle(t.Name, Color(t.Color))))
-                        .OrderBy(t => t.Item1)
+                        .Select(t => (t.MaxRank, t.MaxPercent, new RankTitle(t.Name, Color(t.Color))))
                         .ToArray();
 
         _unranked = string.IsNullOrWhiteSpace(config.Unranked) ? null : new RankTitle(config.Unranked, ChatColor.Grey);
     }
 
-    public RankTitle? For(int rank)
+    // The first title covering the rank among total ranked players.
+    public RankTitle? For(int rank, int total)
     {
         if (rank <= 0)
         {
             return _unranked;
         }
 
-        foreach (var (maxRank, title) in _titles)
+        foreach (var (maxRank, maxPercent, title) in _titles)
         {
-            if (rank <= maxRank)
+            if (maxRank > 0 ? rank <= maxRank : maxPercent <= 0 || rank <= total * maxPercent / 100)
             {
                 return title;
             }

@@ -1,15 +1,17 @@
 {
     // Titles by global points rank, shown as a chat tag ("[Master] Nuko: gg") and as the scoreboard clan tag.
-    // A player gets the first title whose max_rank covers their rank; max_rank 0 covers every rank.
+    // A title covers ranks up to max_rank or, without one, the top max_percent percent of players with points (e.g.
+    // 2.5); with neither it covers every rank. A player gets the first title covering them, top one first.
     // color is a chat color: White, DarkRed, Pink, Green, LightGreen, Lime, Red, Grey, Yellow, Gold, Silver, Blue,
     // DarkBlue, Purple, LightRed.
     "titles": [
-        { "name": "Legend",  "max_rank": 10,  "color": "Gold" },
-        { "name": "Master",  "max_rank": 50,  "color": "LightRed" },
-        { "name": "Elite",   "max_rank": 150, "color": "Purple" },
-        { "name": "Expert",  "max_rank": 300, "color": "Blue" },
-        { "name": "Skilled", "max_rank": 600, "color": "Green" },
-        { "name": "Ranked",  "max_rank": 0,   "color": "Silver" }
+        { "name": "Champion", "max_rank": 1,     "color": "Gold" },
+        { "name": "Legend",   "max_rank": 3,     "color": "Yellow" },
+        { "name": "Master",   "max_rank": 10,    "color": "LightRed" },
+        { "name": "Elite",    "max_percent": 1,  "color": "Purple" },
+        { "name": "Expert",   "max_percent": 5,  "color": "Blue" },
+        { "name": "Skilled",  "max_percent": 20, "color": "Green" },
+        { "name": "Ranked",                      "color": "Silver" }
     ],
 
     // Title of players without points yet; empty for no tag.
