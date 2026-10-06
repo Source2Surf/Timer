@@ -187,11 +187,11 @@ public interface IRequestManager
         => Task.FromResult<IReadOnlyList<RankedPlayer>>([]);
 
     /// <summary>
-    /// Several players' points ranks (unranked players are left out) and how many players are ranked. A provider
-    /// that doesn't implement it ranks no one.
+    /// Several players' points ranks and points (unranked players are left out) and how many players are ranked. A
+    /// provider that doesn't implement it ranks no one.
     /// </summary>
-    Task<(IReadOnlyDictionary<SteamID, int> Ranks, int Total)> GetPlayersPointsRank(IReadOnlyList<SteamID> steamIds)
-        => Task.FromResult<(IReadOnlyDictionary<SteamID, int>, int)>((new Dictionary<SteamID, int>(), 0));
+    Task<(IReadOnlyDictionary<SteamID, (int Rank, uint Points)> Players, int Total)> GetPlayersPointsRank(IReadOnlyList<SteamID> steamIds)
+        => Task.FromResult<(IReadOnlyDictionary<SteamID, (int Rank, uint Points)>, int)>((new Dictionary<SteamID, (int Rank, uint Points)>(), 0));
 
     /// <summary>
     /// Atomically increment a player's per-map play time and play count.

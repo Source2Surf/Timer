@@ -259,6 +259,10 @@ public sealed class PlayersRankDto
 
     [Key(2)]
     public int Total { get; set; }
+
+    /// <summary>Their points, at the same index; empty from a backend from before it was added.</summary>
+    [Key(3)]
+    public uint[] Points { get; set; } = Array.Empty<uint>();
 }
 
 [MessagePackObject]

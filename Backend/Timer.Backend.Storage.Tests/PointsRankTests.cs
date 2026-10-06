@@ -94,14 +94,14 @@ public sealed class PointsRankTests : IDisposable
         await AddPlayerAsync(3, 50);
         await AddPlayerAsync(4, 0);
 
-        var (ranks, total) = await _storage.GetPlayersPointsRankAsync([Id(1), Id(2), Id(3), Id(4), Id(9), Id(2)]);
+        var (players, total) = await _storage.GetPlayersPointsRankAsync([Id(1), Id(2), Id(3), Id(4), Id(9), Id(2)]);
 
         Assert.Equal(3, total);
-        Assert.Equal(3, ranks.Count); // unranked and unknown players are left out
-        Assert.Equal(1, ranks[Id(1)]);
-        Assert.Equal(2, ranks[Id(2)]);
-        Assert.Equal(2, ranks[Id(3)]);
-        Assert.Empty((await _storage.GetPlayersPointsRankAsync([])).ranks);
+        Assert.Equal(3, players.Count); // unranked and unknown players are left out
+        Assert.Equal((1, 100u), players[Id(1)]);
+        Assert.Equal((2, 50u), players[Id(2)]);
+        Assert.Equal((2, 50u), players[Id(3)]);
+        Assert.Empty((await _storage.GetPlayersPointsRankAsync([])).players);
     }
 
     private static ulong Id(int player) => 76561198000000000UL + (ulong)player;

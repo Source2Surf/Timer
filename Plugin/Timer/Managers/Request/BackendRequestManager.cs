@@ -242,7 +242,7 @@ internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog, I
         return result;
     }
 
-    public async Task<(IReadOnlyDictionary<SteamID, int> Ranks, int Total)> GetPlayersPointsRank(IReadOnlyList<SteamID> steamIds)
+    public async Task<(IReadOnlyDictionary<SteamID, (int Rank, uint Points)> Players, int Total)> GetPlayersPointsRank(IReadOnlyList<SteamID> steamIds)
     {
         var ids = new ulong[steamIds.Count];
 
@@ -252,14 +252,14 @@ internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog, I
         }
 
         var response = await Call.GetPlayersPointsRankAsync(ids);
-        var ranks    = new Dictionary<SteamID, int>(response.SteamIds.Length);
+        var players  = new Dictionary<SteamID, (int Rank, uint Points)>(response.SteamIds.Length);
 
         for (var i = 0; i < response.SteamIds.Length && i < response.Ranks.Length; i++)
         {
-            ranks[new SteamID(response.SteamIds[i])] = response.Ranks[i];
+            players[new SteamID(response.SteamIds[i])] = (response.Ranks[i], i < response.Points.Length ? response.Points[i] : 0);
         }
 
-        return (ranks, response.Total);
+        return (players, response.Total);
     }
 
     public async Task UpdatePlayerMapStatsAsync(SteamID steamId, string mapName, float deltaSeconds)

@@ -30,15 +30,15 @@ internal sealed partial class StorageServiceImpl
         return result;
     }
 
-    // Several players' points ranks from one statement (each counts the players ahead on the points index).
+    // Several players' points ranks and points from one statement (each counts the players ahead on the points index).
     // A player without points, or without a row, is left out: unranked.
-    public async Task<(IReadOnlyDictionary<ulong, int> ranks, int total)> GetPlayersPointsRankAsync(IReadOnlyList<ulong> steamIds)
+    public async Task<(IReadOnlyDictionary<ulong, (int Rank, uint Points)> players, int total)> GetPlayersPointsRankAsync(IReadOnlyList<ulong> steamIds)
     {
         var ids = steamIds.Select(x => unchecked((long) x)).Distinct().ToList();
 
         if (ids.Count == 0)
         {
-            return (new Dictionary<ulong, int>(), 0);
+            return (new Dictionary<ulong, (int Rank, uint Points)>(), 0);
         }
 
         var rows = await _db.Queryable<PlayerEntity>()
@@ -46,14 +46,15 @@ internal sealed partial class StorageServiceImpl
                             .Select(me => new PlayerRanksRow
                             {
                                 SteamId = me.SteamId,
+                                Points  = me.Points,
                                 Ahead   = SqlFunc.Subqueryable<PlayerEntity>().Where(other => other.Points > me.Points).Count(),
                             })
                             .ToListAsync(OperationCancellation);
 
-        var ranks = rows.ToDictionary(x => unchecked((ulong) x.SteamId), x => x.Ahead + 1);
-        var total = await GetRankedPlayerCountAsync();
+        var players = rows.ToDictionary(x => unchecked((ulong) x.SteamId), x => (Rank: x.Ahead + 1, x.Points));
+        var total   = await GetRankedPlayerCountAsync();
 
-        return (ranks, (int) System.Math.Max(total, ranks.Count == 0 ? 0 : ranks.Values.Max()));
+        return (players, (int) System.Math.Max(total, players.Count == 0 ? 0 : players.Values.Max(p => p.Rank)));
     }
 
     // Projections the queries are generated from.
@@ -67,6 +68,7 @@ internal sealed partial class StorageServiceImpl
     private sealed class PlayerRanksRow
     {
         public long SteamId { get; set; }
+        public uint Points  { get; set; }
         public int  Ahead   { get; set; }
     }
 }

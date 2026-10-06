@@ -189,9 +189,15 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
                 throw TimerWriteRpcErrors.InvalidArgument();
             }
 
-            var (ranks, total) = await _storage.GetPlayersPointsRankAsync(steamIds, token);
+            var (players, total) = await _storage.GetPlayersPointsRankAsync(steamIds, token);
 
-            return new PlayersRankDto { SteamIds = ranks.Keys.ToArray(), Ranks = ranks.Values.ToArray(), Total = total };
+            return new PlayersRankDto
+            {
+                SteamIds = players.Keys.ToArray(),
+                Ranks    = players.Values.Select(p => p.Rank).ToArray(),
+                Points   = players.Values.Select(p => p.Points).ToArray(),
+                Total    = total,
+            };
         });
 
     public async UnaryResult UpdatePlayerMapStatsAsync(ulong steamId, string mapName, ulong workshopId, float deltaSeconds)

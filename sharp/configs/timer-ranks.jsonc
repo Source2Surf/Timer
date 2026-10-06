@@ -33,6 +33,9 @@
 
     "scoreboard_tags": true,
 
+    // The scoreboard score is the player's points, so the scoreboard lists the best first.
+    "scoreboard_score": true,
+
     // The scoreboard clan tag. Tokens: {title} {rank} {total}, e.g. "#{rank} {title}".
     "scoreboard_format": "{title}"
 }

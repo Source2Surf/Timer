@@ -68,6 +68,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     private readonly RankTitles _titles;
 
     private readonly int[]     _ranks       = new int[PlayerSlot.MaxPlayerCount];
+    private readonly uint[]    _points      = new uint[PlayerSlot.MaxPlayerCount];
     private readonly string?[] _appliedTags = new string?[PlayerSlot.MaxPlayerCount];
     private          int       _total;
     private          bool      _refreshing;
@@ -138,6 +139,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     public void OnClientPutInServer(PlayerSlot slot)
     {
         _ranks[slot]       = 0;
+        _points[slot]      = 0;
         _appliedTags[slot] = null;
         RefreshAfter(AfterJoinDelay);
     }
@@ -145,6 +147,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     public void OnClientDisconnected(PlayerSlot slot)
     {
         _ranks[slot]       = 0;
+        _points[slot]      = 0;
         _appliedTags[slot] = null;
     }
 
@@ -198,12 +201,12 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
 
     private async Task RefreshAsync(List<(PlayerSlot Slot, SteamID SteamId)> players)
     {
-        IReadOnlyDictionary<SteamID, int>? ranks = null;
-        var                                total = 0;
+        IReadOnlyDictionary<SteamID, (int Rank, uint Points)>? ranked = null;
+        var                                                    total  = 0;
 
         try
         {
-            (ranks, total) = await _request.GetPlayersPointsRank(players.ConvertAll(p => p.SteamId)).ConfigureAwait(false);
+            (ranked, total) = await _request.GetPlayersPointsRank(players.ConvertAll(p => p.SteamId)).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -214,7 +217,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
         {
             _refreshing = false;
 
-            if (ranks is not null && !_shutDown)
+            if (ranked is not null && !_shutDown)
             {
                 _total = total;
 
@@ -223,8 +226,9 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
                     // The slot may have changed hands while the request ran.
                     if (_bridge.ClientManager.GetGameClient(slot) is { } client && client.SteamId == steamId)
                     {
-                        _ranks[slot] = ranks.GetValueOrDefault(steamId);
+                        (_ranks[slot], _points[slot]) = ranked.GetValueOrDefault(steamId);
                         ApplyClanTag(slot);
+                        ApplyScore(slot);
                     }
                 }
             }
@@ -250,6 +254,26 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     {
         _appliedTags[@params.Controller.PlayerSlot] = null;
         ApplyClanTag(@params.Controller.PlayerSlot);
+        ApplyScore(@params.Controller.PlayerSlot);
+    }
+
+    // The scoreboard lists players by score, so points put the best first. Dying changes the score, so it's set again
+    // on spawning.
+    private void ApplyScore(PlayerSlot slot)
+    {
+        if (!_config.ScoreboardScore
+            || !_bridge.TryGetController(slot, out var controller)
+            || controller.IsFakeClient)
+        {
+            return;
+        }
+
+        var score = (int) Math.Min(_points[slot], int.MaxValue);
+
+        if (controller.Score != score)
+        {
+            controller.Score = score;
+        }
     }
 
     // A player without a title keeps their own tag, unless they had one of ours.

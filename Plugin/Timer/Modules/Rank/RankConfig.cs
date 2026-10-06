@@ -75,6 +75,10 @@ internal sealed class RankConfig
     [JsonPropertyName("scoreboard_tags")]
     public bool ScoreboardTags { get; set; } = true;
 
+    // The scoreboard score is the player's points, which the scoreboard sorts by.
+    [JsonPropertyName("scoreboard_score")]
+    public bool ScoreboardScore { get; set; } = true;
+
     // The clan tag: {title} {rank} {total}.
     [JsonPropertyName("scoreboard_format")]
     public string ScoreboardFormat { get; set; } = "{title}";
