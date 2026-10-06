@@ -64,6 +64,11 @@ internal interface IMapInfoModule
     float GetGameModeWishSpeed();
 
     MapProfile GetCurrentMapProfile();
+
+    /// <summary>
+    ///     !mapinfo, for a map info panel to open; without a handler the info goes to chat.
+    /// </summary>
+    event Action<PlayerSlot>? MapInfoRequested;
 }
 
 internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
@@ -436,11 +441,20 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         return hours > 0 ? tr.Format(ChatTexts.Hours, hours, minutes) : tr.Format(ChatTexts.Minutes, minutes);
     }
 
+    public event Action<PlayerSlot>? MapInfoRequested;
+
     private ECommandAction OnCommandMapInfo(PlayerSlot slot, StringCommand command)
     {
         if (_bridge.ClientManager.GetGameClient(slot) is not { } client
             || client.GetPlayerController() is not { IsValidEntity: true } controller)
         {
+            return ECommandAction.Handled;
+        }
+
+        if (MapInfoRequested is { } openPanel)
+        {
+            openPanel(slot);
+
             return ECommandAction.Handled;
         }
 

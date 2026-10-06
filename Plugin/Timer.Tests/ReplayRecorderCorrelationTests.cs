@@ -517,6 +517,10 @@ public sealed class ReplayRecorderCorrelationTests
 
         public bool RequiresCheckpoints(int track) => true;
 
+#pragma warning disable CS0067 // never raised here
+        public event Action<PlayerSlot>? MapInfoRequested;
+#pragma warning restore CS0067
+
         public EGameMode GetCurrentGameMode() => EGameMode.None;
 
         public float? GetZoneExitSpeedOverride(int track) => null;
