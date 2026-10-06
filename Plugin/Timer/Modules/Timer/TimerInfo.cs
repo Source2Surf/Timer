@@ -62,7 +62,8 @@ internal class TimerInfo : ITimerInfo
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Reset(bool resetJumps)
     {
-        TimerTick = 0;
+        TimerTick        = 0;
+        _state.TickCarry = 0;
 
         if (resetJumps)
         {
@@ -183,6 +184,32 @@ internal class TimerInfo : ITimerInfo
         Track      = track;
         Checkpoint = 0;
         CheckpointInfoInternal.Clear();
+    }
+
+    /// <summary>
+    ///     A tick at the style's timescale: at 0.5 every other one counts. True when one did.
+    /// </summary>
+    public bool Advance(float timescale)
+    {
+        if (timescale == 1f)
+        {
+            TimerTick++;
+
+            return true;
+        }
+
+        _state.TickCarry += timescale;
+
+        var counted = false;
+
+        while (_state.TickCarry >= 1f)
+        {
+            TimerTick++;
+            _state.TickCarry -= 1f;
+            counted          =  true;
+        }
+
+        return counted;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

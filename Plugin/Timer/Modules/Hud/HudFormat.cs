@@ -234,8 +234,8 @@ internal static class HudFormat
     ///     How far into a replay its bot is: from where the run starts (the pre-run frames before it don't count)
     ///     to where it ends.
     /// </summary>
-    public static float ReplayElapsed(int currentFrame, int preFrame, int postFrame)
-        => (Math.Clamp(currentFrame, preFrame, Math.Max(preFrame, postFrame)) - preFrame) * TimerConstants.TickInterval;
+    public static float ReplayElapsed(int currentFrame, int preFrame, int postFrame, float timescale = 1f)
+        => (Math.Clamp(currentFrame, preFrame, Math.Max(preFrame, postFrame)) - preFrame) * TimerConstants.TickInterval * timescale;
 
     /// <summary>
     ///     Progress in steps of 2% (0 to 50), for the progress bar's width classes.

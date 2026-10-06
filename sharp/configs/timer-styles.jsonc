@@ -56,6 +56,18 @@
         "block_s": false,
         "block_a": false,
         "block_d": false
+
+        // Optional, as bhoptimer's styles (defaults shown where they do something):
+        // "force_hsw": 0,            // 1 = half-sideways (W+A or W+D); 2 = surf HSW (W+A/S+D or W+D/S+A, the first used in the run)
+        // "a_or_d_only": false,      // only A or only D, the first used in the run
+        // "force_backwards": false,  // input only counts while looking back along where you move (~143°+)
+        // "force_groundkeys": false, // the three above hold on the ground too, not just in the air
+        // "gravity": 1.0,
+        // "speed": 1.0,              // movement speed; the timer runs as usual
+        // "timescale": 1.0,          // movement and timer both: 0.5 = half speed, half the time counted
+        // Each jump: horizontal speed times velocity, plus bonus_velocity, at least min_velocity, at most velocity_limit;
+        // vertical speed times jump_multiplier, plus jump_bonus. 0 = off.
+        // "velocity": 1.0, "bonus_velocity": 0, "min_velocity": 0, "velocity_limit": 0, "jump_multiplier": 0, "jump_bonus": 0
     },
     {
         "name": "Sideways",

@@ -26,12 +26,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
+using Sharp.Shared.GameObjects;
 using Sharp.Shared.HookParams;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -91,6 +93,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private readonly string _styleConfigPath;
 
     private readonly ICommandManager       _commandManager;
+    private readonly IEventHookManager     _eventHook;
     private readonly ILocalizationProvider _localization;
 
     private readonly IZoneModule          _zoneModule;
@@ -120,15 +123,20 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private int  _lastStyleIndex = -1;
     private bool _lastInStartZone;
 
+    // By slot: the keys force_hsw 2 or a_or_d_only settled on this run, -1 until then.
+    private readonly int[] _keyCombo = Enumerable.Repeat(-1, PlayerSlot.MaxPlayerCount).ToArray();
+
     public StyleModule(InterfaceBridge       bridge,
                        ICommandManager       commandManager,
                        IZoneModule           zoneModule,
                        IMapInfoModule        mapInfoModule,
                        IRequestManager       request,
                        ILocalizationProvider localization,
+                       IEventHookManager     eventHook,
                        ILogger<StyleModule>  logger)
     {
         _bridge         = bridge;
+        _eventHook      = eventHook;
         _localization   = localization;
         _commandManager = commandManager;
         _zoneModule     = zoneModule;
@@ -160,6 +168,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
         _commandManager.AddServerCommand("reload_styles", OnCommandReloadStyles);
         _commandManager.AddClientChatCommand("style", OnCommandStyle);
+        _eventHook.ListenEvent("player_jump", OnPlayerJump);
 
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnProcessMovementPre);
         _bridge.HookManager.PlayerGetMaxSpeed.InstallHookPre(OnPlayerGetMaxSpeed);
@@ -278,6 +287,12 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
         if (pawn.ActualMoveType == MoveType.Walk)
         {
+            // As bhoptimer: a map that puts gravity back to normal gets the style's again.
+            if (style.Gravity != 1f && pawn.GravityScale is 1f or 0f)
+            {
+                pawn.SetGravityScale(style.Gravity);
+            }
+
             if (style.BlockW && (mv->ForwardMove > 0 || (service.KeyButtons & UserCommandButtons.Forward) != 0))
             {
                 mv->ForwardMove    =  0;
@@ -301,7 +316,182 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
                 mv->SideMove       =  0;
                 service.KeyButtons &= ~UserCommandButtons.MoveRight;
             }
+
+            if ((style.ForceHsw > 0 || style.AOrDOnly || style.ForceBackwards)
+                && (style.ForceGroundKeys || !pawn.GroundEntityHandle.IsValid()))
+            {
+                ApplyInputRules(client, style, mv, service, inStartZone);
+            }
         }
+    }
+
+    // As bhoptimer's: input the style doesn't allow is dropped. Left is a positive SideMove.
+    private unsafe void ApplyInputRules(IGameClient client, StyleSetting style, MoveData* mv, IPlayerMovementService service,
+                                        bool inStartZone)
+    {
+        var keys    = service.KeyButtons;
+        var forward = mv->ForwardMove > 0 && (keys & UserCommandButtons.Forward) != 0;
+        var back    = mv->ForwardMove < 0 && (keys & UserCommandButtons.Back) != 0;
+        var left    = mv->SideMove > 0 && (keys & UserCommandButtons.MoveLeft) != 0;
+        var right   = mv->SideMove < 0 && (keys & UserCommandButtons.MoveRight) != 0;
+        var slot    = client.Slot;
+
+        var verdict = new InputVerdict(false, false, _keyCombo[slot]);
+
+        if (style.ForceHsw > 0)
+        {
+            verdict = Hsw(style.ForceHsw, verdict.Combo, inStartZone, forward, back, left, right);
+
+            // Surf HSW tells the player which pair it settled on.
+            if (_keyCombo[slot] == -1 && verdict.Combo != -1 && _bridge.TryGetController(slot, out var controller))
+            {
+                controller.PrintToChat(_localization.For(slot)[verdict.Combo == 0 ? ChatTexts.ShswCombo0 : ChatTexts.ShswCombo1]);
+            }
+        }
+        else if (style.AOrDOnly)
+        {
+            verdict = AOrD(verdict.Combo, left, right);
+        }
+
+        if (style.ForceBackwards && !Backwards(mv->ViewAngles.Y, mv->Velocity))
+        {
+            verdict = verdict with { DropForward = true, DropSide = true };
+        }
+
+        _keyCombo[slot] = verdict.Combo;
+
+        if (verdict.DropForward)
+        {
+            mv->ForwardMove    =  0;
+            service.KeyButtons &= ~(UserCommandButtons.Forward | UserCommandButtons.Back);
+        }
+
+        if (verdict.DropSide)
+        {
+            mv->SideMove       =  0;
+            service.KeyButtons &= ~(UserCommandButtons.MoveLeft | UserCommandButtons.MoveRight);
+        }
+    }
+
+    internal readonly record struct InputVerdict(bool DropForward, bool DropSide, int Combo);
+
+    // force_hsw 1: W with A or D. Surf HSW (2) out of the start zone: W+A/S+D (0) or W+D/S+A (1), the first used.
+    internal static InputVerdict Hsw(int mode, int combo, bool inStartZone, bool forward, bool back, bool left, bool right)
+    {
+        if (mode == 2 && !inStartZone)
+        {
+            var pair = (forward && left) || (back && right) ? 0
+                : (forward && right) || (back && left)     ? 1
+                                                             : -1;
+
+            if (combo == -1)
+            {
+                combo = pair;
+            }
+
+            var drop = pair == -1 || pair != combo;
+
+            return new (drop, drop, combo);
+        }
+
+        var side = left || right;
+
+        return new ((back && side) || (forward && !side), side && !forward, combo);
+    }
+
+    // A or D, whichever comes first.
+    internal static InputVerdict AOrD(int combo, bool left, bool right)
+    {
+        var pair = left ? 0 : right ? 1 : -1;
+
+        if (combo == -1)
+        {
+            combo = pair;
+        }
+
+        return new (false, pair != -1 && pair != combo, combo);
+    }
+
+    // The view at most this dot from the horizontal velocity, about 143° away; standing still counts.
+    private const float BackwardsMaxDot = -0.8f;
+
+    internal static bool Backwards(float viewYaw, Vector velocity)
+    {
+        var speed = MathF.Sqrt((velocity.X * velocity.X) + (velocity.Y * velocity.Y));
+
+        if (speed == 0f)
+        {
+            return true;
+        }
+
+        var yaw = viewYaw * (MathF.PI / 180f);
+
+        return ((MathF.Cos(yaw) * velocity.X) + (MathF.Sin(yaw) * velocity.Y)) / speed <= BackwardsMaxDot;
+    }
+
+    // Each jump's velocity changes, a frame after it as bhoptimer does, outside the movement.
+    private void OnPlayerJump(IGameEvent e)
+    {
+        if (e.GetPlayerController("userid") is not { IsValidEntity: true } controller
+            || controller.IsFakeClient
+            || _timerModule.GetTimerInfo(controller.PlayerSlot) is not { } timer
+            || GetStyleSetting(timer.Style) is not { ChangesJumps: true } style)
+        {
+            return;
+        }
+
+        var slot = controller.PlayerSlot;
+
+        _bridge.ModSharp.InvokeFrameAction(() =>
+        {
+            if (_bridge.TryGetController(slot, out var deferred)
+                && deferred.GetPlayerPawn() is { IsAlive: true } pawn)
+            {
+                pawn.SetAbsVelocity(JumpVelocity(pawn.GetAbsVelocity(), style));
+            }
+        });
+    }
+
+    internal static Vector JumpVelocity(Vector velocity, StyleSetting style)
+    {
+        var speed = MathF.Sqrt((velocity.X * velocity.X) + (velocity.Y * velocity.Y));
+        var scale = 1f;
+
+        if (speed > 0f)
+        {
+            if (style.VelocityMultiplier != 0f)
+            {
+                scale *= style.VelocityMultiplier;
+            }
+
+            if (style.BonusVelocity != 0f)
+            {
+                scale *= (speed + style.BonusVelocity) / speed;
+            }
+
+            if (style.MinVelocity > 0f && speed < style.MinVelocity)
+            {
+                scale *= style.MinVelocity / speed;
+            }
+        }
+
+        var z = velocity.Z;
+
+        if (style.JumpMultiplier != 0f)
+        {
+            z *= style.JumpMultiplier;
+        }
+
+        z += style.JumpBonus;
+
+        var limited = speed * scale;
+
+        if (style.VelocityLimit > 0f && limited > style.VelocityLimit)
+        {
+            scale *= style.VelocityLimit / limited;
+        }
+
+        return new (velocity.X * scale, velocity.Y * scale, z);
     }
 
     private void OnPlayerSpawn(IPlayerSpawnForwardParams param)
@@ -314,11 +504,28 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         }
 
         ReplicateClientCvars(client, info.Style);
+        ApplyStylePhysics(param.Controller, param.Pawn, GetStyleOrDefault(info.Style));
+    }
+
+    private static void ApplyStylePhysics(IPlayerController controller, IPlayerPawn pawn, StyleSetting style)
+    {
+        if (pawn.GravityScale != style.Gravity)
+        {
+            pawn.SetGravityScale(style.Gravity);
+        }
+
+        var speed = style.Speed * style.TimerScale;
+
+        if (controller.LaggedMovement != speed)
+        {
+            controller.LaggedMovement = speed;
+        }
     }
 
     public void OnPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, ITimerInfo info)
     {
         var slot = controller.PlayerSlot;
+        _keyCombo[slot] = -1;
 
         if (_bridge.ClientManager.GetGameClient(slot) is not { } client)
         {
@@ -328,6 +535,12 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         var style = GetStyleOrDefault(info.Style);
 
         sv_autobunnyhopping.ReplicateToClient(client, style.AutoBhop.ToString());
+
+        // Normal styles leave a map's gravity and speed alone.
+        if (style.Gravity != 1f || style.Speed * style.TimerScale != 1f)
+        {
+            ApplyStylePhysics(controller, pawn, style);
+        }
     }
 
     public void OnZoneStartTouch(IZoneInfo zoneInfo, IPlayerController controller, IPlayerPawn pawn)

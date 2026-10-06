@@ -182,9 +182,11 @@ internal partial class TimerModule
 
         var leftmove = service.GetNetVar<float>("m_flLeftMove");
 
+        var timescale = _styleModule.GetStyleSetting(timerInfo.Style).TimerScale;
+
         if (mainRunning)
         {
-            timerInfo.TimerTick++;
+            var counted = timerInfo.Advance(timescale);
 
             UpdatePlayerStats(pawn,
                               service,
@@ -197,8 +199,11 @@ internal partial class TimerModule
 
             if (timerInfo.CurrentCheckpointInfo is { } currentCp)
             {
-                currentCp.AverageVelocity
-                    += (velocity - currentCp.AverageVelocity) / (timerInfo.TimerTick - currentCp.TimerTick);
+                if (counted)
+                {
+                    currentCp.AverageVelocity
+                        += (velocity - currentCp.AverageVelocity) / (timerInfo.TimerTick - currentCp.TimerTick);
+                }
 
                 if (velocity.LengthSqr() > currentCp.MaxVelocity.LengthSqr())
                 {
@@ -211,7 +216,7 @@ internal partial class TimerModule
 
         if (stageRunning)
         {
-            stageTimer.TimerTick++;
+            stageTimer.Advance(timescale);
 
             UpdatePlayerStats(pawn,
                               service,

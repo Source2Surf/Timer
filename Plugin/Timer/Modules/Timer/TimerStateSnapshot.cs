@@ -35,6 +35,9 @@ internal struct TimerCoreState
 
     public uint TimerTick;
 
+    // A timescale's part of a tick not counted yet.
+    public float TickCarry;
+
     public int Jumps;
     public int Strafes;
     public int TotalMeasures;

@@ -386,7 +386,8 @@ internal partial class HudModule
 
         if (watching)
         {
-            var elapsed = HudFormat.ReplayElapsed(bot!.CurrentFrame, header!.PreFrame, header.PostFrame);
+            var elapsed = HudFormat.ReplayElapsed(bot!.CurrentFrame, header!.PreFrame, header.PostFrame,
+                                                  _styleModule.GetStyleSetting(bot.Style).TimerScale);
 
             w.Text("RmNowName", "text", header.PlayerName);
             w.Text("RmNowTag", "text", ReplayTagOf(tr, bot));

@@ -1042,7 +1042,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
 
         var frames = ticks[stage - 1] - header.PreFrame;
 
-        return frames > 0 ? frames * TimerConstants.TickInterval : null;
+        return frames > 0 ? frames * TimerConstants.TickInterval * _styleModule.GetStyleSetting(style).TimerScale : null;
     }
 
     /// <summary>

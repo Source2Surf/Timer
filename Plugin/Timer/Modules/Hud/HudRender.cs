@@ -699,7 +699,8 @@ internal partial class HudModule
             view.TimeLabel  = p.Tr[HudTexts.Time];
 
             // A central bot's pause and speed, as its controller set them.
-            var elapsed = HudFormat.FormatTime(HudFormat.ReplayElapsed(bot.CurrentFrame, header.PreFrame, header.PostFrame));
+            var elapsed = HudFormat.FormatTime(HudFormat.ReplayElapsed(bot.CurrentFrame, header.PreFrame, header.PostFrame,
+                                                                       _styleModule.GetStyleSetting(bot.Style).TimerScale));
             view.Time = bot.Paused ? ZString.Concat(elapsed, " ", p.Tr[HudTexts.ReplayPaused])
                 : bot.Speed != 1f  ? ZString.Concat(elapsed, " [", HudFormat.SpeedTag(bot.Speed), ']')
                                      : elapsed;
@@ -885,7 +886,9 @@ internal partial class HudModule
 
         // Spatially identical frames are common while stationary and at route crossings. Prefer the frame nearest
         // the player's elapsed-time projection, so an exact spatial tie can't jump to an unrelated point.
-        var projectedFrame = replay.Header.PreFrame + ((double) timerInfo.Time / TimerConstants.TickInterval);
+        // A timescale style's frames each hold less than a tick of its time.
+        var frameTime      = TimerConstants.TickInterval * _styleModule.GetStyleSetting(timerInfo.Style).TimerScale;
+        var projectedFrame = replay.Header.PreFrame + ((double) timerInfo.Time / frameTime);
         var preferredFrame = (int) Math.Clamp(Math.Round(projectedFrame), 0d, replay.Frames.Count - 1d);
 
         // No distance limit, like bhoptimer: only the replay's end bounds it, past which the player is beyond its route.
@@ -908,7 +911,7 @@ internal partial class HudModule
             return null;
         }
 
-        var delta = HudFormat.DiffMillis(timerInfo.Time, recordFrames * TimerConstants.TickInterval);
+        var delta = HudFormat.DiffMillis(timerInfo.Time, recordFrames * frameTime);
 
         return delta is < -MaxAbsPositionDelta or > MaxAbsPositionDelta ? null : delta;
     }

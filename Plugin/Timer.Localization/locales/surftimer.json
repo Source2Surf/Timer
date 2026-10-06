@@ -1915,6 +1915,14 @@
     "en-us": "{0}: {1} - {2}",
     "zh-cn": "{0}：{1} - {2}"
   },
+  "chat.style.shsw_combo0": {
+    "en-us": "Surf HSW: your keys are W+A and S+D for this run.",
+    "zh-cn": "滑翔半侧身：本次计时的按键组合为 W+A 和 S+D。"
+  },
+  "chat.style.shsw_combo1": {
+    "en-us": "Surf HSW: your keys are W+D and S+A for this run.",
+    "zh-cn": "滑翔半侧身：本次计时的按键组合为 W+D 和 S+A。"
+  },
   "chat.loc.replay_busy": {
     "en-us": "Saving a stage replay, try again in a moment.",
     "zh-cn": "正在保存关卡回放，请稍后再试。"
