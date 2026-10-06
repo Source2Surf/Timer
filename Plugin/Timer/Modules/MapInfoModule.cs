@@ -102,6 +102,14 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         "ms_override_team_limit 1",
     ];
 
+    // After every config: MiscModule skips the GameCommencing round restart, and warmup then starts without it, leaving
+    // clients' warmup panel up until they rejoin.
+    private static readonly string[] ForcedCvars =
+    [
+        "mp_warmup_online_enabled 0",
+        "mp_warmup_offline_enabled 0",
+    ];
+
     private static readonly GameModeConfig DefaultConfig = new(
         prefix: "", fileName: "", specificCvars: [],
         gameMode: EGameMode.None,
@@ -236,6 +244,11 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     {
         LoadGameModeConfig();
         LoadMapConfig();
+
+        foreach (var cvar in ForcedCvars)
+        {
+            _bridge.ModSharp.ServerCommand(cvar);
+        }
     }
 
     public void OnGamePreShutdown()
