@@ -291,8 +291,10 @@ internal sealed class HudPlayer
     // The texts this player reads, in their language where there's a translation.
     public HudTr Tr;
 
-    // The saved-locations panel, which walk + inspect shows and hides; for this visit only.
+    // The saved-locations panel, which walk + inspect shows and hides and the first saved location shows; for this
+    // visit only.
     public bool LocsShown;
+    public int  LocsCount;    // saved locations at the last refresh
     public bool LocsWasShown; // on the last refresh
     public bool LocsRecheck;  // flipped each time it shows, so its key caps look their keys up again
 

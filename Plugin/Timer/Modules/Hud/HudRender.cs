@@ -238,10 +238,20 @@ internal partial class HudModule
 
     /// <summary>
     ///     The saved-locations panel: the practice actions with the key the player bound to each. Shown with walk +
-    ///     inspect, or while the menu is open so it can be dragged; only on the player's own run.
+    ///     inspect, by the first saved location, or while the menu is open so it can be dragged; only on the player's own
+    ///     run.
     /// </summary>
     private void UpdateLocs(HudWriter w, HudPlayer p, HudSource s)
     {
+        var count = _practiceModule.GetLocCount(p.Slot);
+
+        if (count > 0 && p.LocsCount == 0)
+        {
+            p.LocsShown = true;
+        }
+
+        p.LocsCount = count;
+
         var shown = (p.LocsShown || p.MenuOpen) && s.Replay is null && s.Slot == p.Slot;
         w.Class("LocsPanel", "Hidden", !shown);
 
@@ -263,8 +273,7 @@ internal partial class HudModule
             return;
         }
 
-        var tr    = p.Tr;
-        var count = _practiceModule.GetLocCount(p.Slot);
+        var tr = p.Tr;
 
         w.Text("LocsTitle", "text", count > 0 ? tr.Format(HudTexts.LocsTitleCount, count) : tr[HudTexts.LocsTitle]);
         w.Text("LocsSave", "text", tr[HudTexts.LocsSave]);
