@@ -174,8 +174,6 @@ internal sealed partial class PracticeManager : IModule,
         // A pending clear-all was armed for the old list; don't let its confirming call take this new loc too.
         _clearConfirmUntil[slot] = 0;
 
-        _state[slot] |= segmented ? EPracticeFlags.Segmented : EPracticeFlags.Practice;
-
         controller.PrintToChat(_localization.For(slot).Format(ChatTexts.LocSaved, locs.Count));
         return true;
     }
