@@ -184,13 +184,17 @@ internal static class HudOptions
     public static readonly HudOption Specs     = new (39, "OptSpecs", Shown, ["SpecPanel"]);
     public static readonly HudOption SizeSpecs = new (40, "SizeSpecs", SizeChoices, ["SpecBody"], SizeDefault);
 
+    // HUD tab: every menu's size, for very low or high resolutions
+    public static readonly HudOption SizeMenus =
+        new (41, "SizeMenus", SizeChoices, ["Menu", "RMenu", "PfMenu", "NMenu", "ZnMenu", "LbMenu", "VotePanel", "ZnPrompt"], SizeDefault);
+
     public static readonly HudOption[] All =
     [
         Run, SizeRun, CSpeed, SizeCSpeed, Info, SizeInfo, Splits, SizeSplits, Keys, SizeKeys,
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
-        Hide, Sounds, Specs, SizeSpecs,
+        Hide, Sounds, Specs, SizeSpecs, SizeMenus,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;

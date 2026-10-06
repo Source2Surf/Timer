@@ -723,6 +723,14 @@
     "en-us": "Who's watching you, or the player you spectate",
     "zh-cn": "谁在观战你，或你正在观战的玩家"
   },
+  "ui.panel.menus": {
+    "en-us": "Menus",
+    "zh-cn": "菜单"
+  },
+  "ui.panel.menus_desc": {
+    "en-us": "Settings, replays, records, votes and prompts",
+    "zh-cn": "设置、回放、记录、投票和提示"
+  },
   "ui.timer.lines": {
     "en-us": "Lines, top to bottom",
     "zh-cn": "显示行（从上到下）"

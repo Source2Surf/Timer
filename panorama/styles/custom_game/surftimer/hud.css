@@ -4,7 +4,7 @@
 
 /* Monodigit = fixed-width digits, so the running time and speed don't jitter. */
 @define timerFont: Stratum2 Bold Monodigit, Stratum2, 'Arial Unicode MS';
-@define textShadow: 0px 1px 3px 3.0 #000000d0;     /* no panel backgrounds, so the shadow carries legibility */
+@define textShadow: 0px 1px 1px 2.0 #000000d9;     /* no panel backgrounds, so the shadow carries legibility; tight, so text stays crisp */
 @define lineGap: 20px;              /* one empty line of the original hint text */
 
 @define gainColor: #7ce27c;
@@ -53,6 +53,16 @@
     height: fit-children;
     flow-children: down;
 }
+
+/* Menus size setting (SizeMenus): the same scales on every menu, the vote panel and the zone prompt. */
+.Menu.size-70, .VotePanel.size-70, .ZnPrompt.size-70 { ui-scale: 70%; }
+.Menu.size-80, .VotePanel.size-80, .ZnPrompt.size-80 { ui-scale: 80%; }
+.Menu.size-90, .VotePanel.size-90, .ZnPrompt.size-90 { ui-scale: 90%; }
+.Menu.size-110, .VotePanel.size-110, .ZnPrompt.size-110 { ui-scale: 110%; }
+.Menu.size-120, .VotePanel.size-120, .ZnPrompt.size-120 { ui-scale: 120%; }
+.Menu.size-130, .VotePanel.size-130, .ZnPrompt.size-130 { ui-scale: 130%; }
+.Menu.size-140, .VotePanel.size-140, .ZnPrompt.size-140 { ui-scale: 140%; }
+.Menu.size-150, .VotePanel.size-150, .ZnPrompt.size-150 { ui-scale: 150%; }
 
 /* Size setting: ui-scale on the panel's body, which scales everything inside it. */
 .PanelBody.size-70  { ui-scale: 70%; }
@@ -169,7 +179,7 @@
     font-size: 34px;
     font-weight: bold;
     color: white;
-    text-shadow: 0px 1px 3px 3.0 #000000d9;
+    text-shadow: 0px 1px 1px 2.0 #000000d9;
 
     transition-property: color;
     transition-duration: .15s;
@@ -434,7 +444,7 @@
 .LocsPanel .LocsNote {
     width: 260px;
     margin-top: 8px;
-    font-size: 13px;
+    font-size: 14px;
     color: #ffffffb3;
 }
 
@@ -726,7 +736,7 @@
 }
 
 .DragToast .ToastWhat {
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     text-transform: uppercase;
     color: accentColor;
@@ -823,7 +833,7 @@
 .Menu .MenuGrip {
     vertical-align: center;
     padding: 3px 8px;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 2px;
     text-transform: uppercase;
     color: mutedColor;
@@ -870,7 +880,7 @@
     horizontal-align: center;
     vertical-align: center;
     padding-top: 3px;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 1px;
     text-transform: uppercase;
     text-align: center;
@@ -904,7 +914,7 @@
 
 .Menu .MenuSectionLabel {
     vertical-align: center;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 1px;
     text-transform: uppercase;
     color: mutedColor;
@@ -972,7 +982,7 @@
 }
 
 .Menu .MenuDesc {
-    font-size: 12px;
+    font-size: 13px;
     color: mutedColor;
 }
 
@@ -982,7 +992,7 @@
     height: 22px;
     min-width: 38px;
     padding: 3px 8px 0px 8px;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     text-transform: uppercase;
     text-align: center;
@@ -1005,7 +1015,7 @@
 
 .Menu .MenuTip {
     margin: 4px 8px 6px 8px;
-    font-size: 12px;
+    font-size: 13px;
     color: mutedColor;
 }
 
@@ -1172,7 +1182,7 @@
 .Menu .PfSmall {
     vertical-align: center;
     margin-left: 6px;
-    font-size: 12px;
+    font-size: 13px;
     color: mutedColor;
 }
 
@@ -1207,14 +1217,14 @@
 .Menu .PfStageName {
     horizontal-align: center;
     margin-top: 4px;
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 1px;
     color: mutedColor;
 }
 
 .Menu .PfStageTime {
     horizontal-align: center;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .Menu .PfStageTime.none {
@@ -1274,7 +1284,7 @@
 .Menu .RmJump Label {
     horizontal-align: center;
     vertical-align: center;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 1px;
     text-transform: uppercase;
     text-align: center;
@@ -1322,7 +1332,7 @@
 .Menu .RmRank {
     width: 26px;
     vertical-align: center;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1346,7 +1356,7 @@
     width: 84px;
     vertical-align: center;
     text-align: right;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1378,7 +1388,7 @@
 .Menu .RmPage {
     vertical-align: center;
     margin: 0px 12px;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1391,7 +1401,7 @@
 
 .Menu .RmStatus {
     width: 100%;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1420,7 +1430,7 @@
 
 .Menu .RmNowTag {
     margin: 2px 0px 0px 6px;
-    font-size: 12px;
+    font-size: 13px;
     color: mutedColor;
 }
 
@@ -1552,7 +1562,7 @@
 .Menu .RmAlongText {
     width: fill-parent-flow( 1 );
     vertical-align: center;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1576,17 +1586,18 @@
 
 /* ---- Map vote (Timer.MapChooser) ---- */
 
-/* On the right while a vote runs, on a light dark background like the locations panel. No cursor. */
+/* On the right while a vote runs, on a dark background. No cursor. Sized for 800p too: the HUD scales with the
+   screen's height, so nothing here is under 14px. */
 .VotePanel {
     horizontal-align: right;
     vertical-align: center;
     margin-right: 48px;
-    width: 340px;
+    width: 380px;
     height: fit-children;
-    padding: 12px 14px 12px 14px;
+    padding: 14px 16px 14px 16px;
     flow-children: down;
     border-radius: 6px;
-    background-color: #0a0e139e;
+    background-color: #0a0e13b8;
 }
 
 .VotePanel Label {
@@ -1605,18 +1616,18 @@
 
 .VotePanel .VoteTitle {
     width: fill-parent-flow( 1 );
-    font-size: 16px;
+    font-size: 19px;
 }
 
 .VotePanel .VoteTime {
-    font-size: 16px;
+    font-size: 19px;
     color: finishColor;
 }
 
 /* No flow: the bar sits behind the line. */
 .VoteRow {
     width: 100%;
-    height: 30px;
+    height: 34px;
     margin-top: 3px;
     border-radius: 4px;
     border-left: 2px solid #00000000;
@@ -1661,16 +1672,16 @@
 }
 
 .VotePanel .VoteNum {
-    width: 18px;
+    width: 22px;
     vertical-align: center;
-    font-size: 13px;
-    color: #ffffff80;
+    font-size: 15px;
+    color: #ffffffa6;
 }
 
 .VotePanel .VoteMap {
-    max-width: 210px;
+    max-width: 230px;
     vertical-align: center;
-    font-size: 16px;
+    font-size: 18px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -1682,7 +1693,7 @@
 .VotePanel .VoteTick {
     vertical-align: center;
     margin-left: 6px;
-    font-size: 14px;
+    font-size: 16px;
     color: gainColor;
 }
 
@@ -1690,15 +1701,15 @@
     width: fill-parent-flow( 1 );
     vertical-align: center;
     text-align: right;
-    font-size: 13px;
-    color: #ffffff99;
+    font-size: 15px;
+    color: #ffffffb3;
 }
 
 .VotePanel .VoteCount {
-    width: 30px;
+    width: 34px;
     vertical-align: center;
     text-align: right;
-    font-size: 16px;
+    font-size: 18px;
 }
 
 /* Wraps rather than clipping when the binds are long (MOUSE5, NOT BOUND). */
@@ -1710,11 +1721,11 @@
 }
 
 .VotePanel .VoteCap {
-    min-width: 30px;
+    min-width: 34px;
     vertical-align: center;
     margin-right: 4px;
-    padding: 3px 6px;
-    font-size: 12px;
+    padding: 4px 7px;
+    font-size: 14px;
     letter-spacing: 1px;
     text-align: center;
     color: #ffffffd9;
@@ -1726,21 +1737,21 @@
 .VotePanel .VoteArrow {
     vertical-align: center;
     margin-left: 2px;
-    font-size: 14px;
+    font-size: 16px;
     color: #ffffffd9;
 }
 
 .VotePanel .VoteKeyText {
     vertical-align: center;
     margin: 0px 12px 0px 2px;
-    font-size: 13px;
-    color: #ffffffb3;
+    font-size: 15px;
+    color: #ffffffcc;
 }
 
 .VotePanel .VoteChat {
     margin-top: 6px;
-    font-size: 13px;
-    color: #ffffffb3;
+    font-size: 15px;
+    color: #ffffffcc;
 }
 
 /* The bind note, a line per command. */
@@ -1754,9 +1765,8 @@
 .VotePanel .VoteNote {
     width: 100%;
     margin-top: 1px;
-    font-size: 12px;
-    font-weight: normal;
-    color: #ffffff80;
+    font-size: 14px;
+    color: #ffffffa6;
 }
 
 /* ---- Nominate menu (Timer.MapChooser) ---- */
@@ -1768,7 +1778,7 @@
 
 .Menu .NomCount {
     vertical-align: center;
-    font-size: 12px;
+    font-size: 13px;
     color: mutedColor;
 }
 
@@ -1799,7 +1809,7 @@
 .Menu .NomChipLabel {
     horizontal-align: center;
     vertical-align: center;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     color: mutedColor;
 }
@@ -1839,7 +1849,7 @@
 
 .Menu .NomSearch {
     margin: 4px 8px 0px 8px;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1876,7 +1886,7 @@
 .Menu .NomTier {
     width: 36px;
     vertical-align: center;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1919,7 +1929,7 @@
     height: 40px;
     margin-top: 8px;
     padding: 0px 8px;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -1974,7 +1984,7 @@
 .Menu .ZnGoHint {
     vertical-align: center;
     margin-left: 8px;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     color: accentColor;
     opacity: 0;
@@ -2001,7 +2011,7 @@
 
 .Menu .ZnMapTag {
     vertical-align: center;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     color: mutedColor;
 }
@@ -2027,7 +2037,7 @@
 
 .ZnDel Label {
     vertical-align: center;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: bold;
     letter-spacing: 1px;
     color: mutedColor;
@@ -2056,7 +2066,7 @@
 .Menu .ZnStatusSub {
     width: 100%;
     margin-top: 2px;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -2094,7 +2104,7 @@
 
 .ZnPrompt .ZnPromptTrack {
     vertical-align: center;
-    font-size: 13px;
+    font-size: 14px;
     color: #ffffff99;
 }
 
@@ -2140,7 +2150,7 @@
 .ZnPrompt .ZnStep {
     vertical-align: center;
     margin-left: 8px;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     text-transform: uppercase;
     color: #ffffff99;
@@ -2162,7 +2172,7 @@
     min-width: 30px;
     vertical-align: center;
     padding: 3px 6px;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     text-align: center;
     color: #ffffffd9;
@@ -2174,7 +2184,7 @@
 .ZnPrompt .ZnPromptNote {
     width: 100%;
     margin-top: 6px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: normal;
     color: #ffffff8c;
 }
@@ -2223,7 +2233,7 @@
 .Menu .LbCardSub {
     width: 100%;
     margin-top: 2px;
-    font-size: 13px;
+    font-size: 14px;
     color: mutedColor;
 }
 
@@ -2232,7 +2242,7 @@
     width: 100%;
     margin-top: 8px;
     padding: 0px 8px;
-    font-size: 12px;
+    font-size: 13px;
     color: mutedColor;
 }
 
