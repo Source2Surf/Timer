@@ -33,6 +33,9 @@ internal record ZoneConfig
     [JsonPropertyName("exit_speed_limit")]
     public float? ExitSpeedLimit { get; set; } = null;
 
+    /// <summary>
+    /// Jumps allowed in the start zone. null = no override (falls back to Style/GameMode default), negative = unlimited.
+    /// </summary>
     [JsonPropertyName("max_jumps")]
     public int? MaxJumps { get; set; } = null;
 

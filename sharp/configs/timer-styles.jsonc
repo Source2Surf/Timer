@@ -31,6 +31,12 @@
         // Used only when custom_prespeed is true.
         "prespeed": 375,
 
+        // Start-zone jump limit override, under a map's max_jumps.
+        // false = use map/game-mode default.
+        "custom_prejumps": false,
+        // Used only when custom_prejumps is true. -1 = no limit, 0 = no jumping in the start zone.
+        "prejumps": 1,
+
         // Base movement cvars replicated to player.
         "runspeed": 260,
         "accelerate": 5,

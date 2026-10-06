@@ -78,11 +78,12 @@ internal partial class TimerModule
 
         if (!onGround && (inMainStartZone || inStageStartZone))
         {
-            var maxJumps    = _mapInfoModule.GetMaxPrejumps(timerInfo.Track);
+            var maxJumps    = GetEffectiveMaxPrejumps(timerInfo.Track, _styleModule.GetStyleSetting(timerInfo.Style));
             var shouldBlock = false;
 
             // Check each timer independently based on which zone the player is in
             if (inMainStartZone
+                && maxJumps >= 0
                 && timerInfo.WasOnGround
                 && timerInfo.OnGroundTick <= PrejumpGraceTicks
                 && timerInfo.Jumps        >= maxJumps)
@@ -92,6 +93,7 @@ internal partial class TimerModule
             }
 
             if (inStageStartZone
+                && maxJumps >= 0
                 && stageTimer.WasOnGround
                 && stageTimer.OnGroundTick <= PrejumpGraceTicks
                 && stageTimer.Jumps        >= maxJumps)

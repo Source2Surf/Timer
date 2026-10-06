@@ -64,6 +64,15 @@ public record StyleSetting
     [JsonPropertyName("prespeed")]
     public float PreSpeed { get; init; } = 375.0f;
 
+    /// <summary>
+    /// Start-zone jump limit override, under a map's max_jumps; <see cref="Prejumps" /> -1 is no limit.
+    /// </summary>
+    [JsonPropertyName("custom_prejumps")]
+    public bool CustomPrejumps { get; init; } = false;
+
+    [JsonPropertyName("prejumps")]
+    public int Prejumps { get; init; } = 1;
+
     [JsonPropertyName("accelerate")]
     public float Accelerate { get; init; } = 5.0f;
 

@@ -509,7 +509,9 @@ public sealed class ReplayRecorderCorrelationTests
 
         public float GetEnterSpeedLimit(int track) => 0;
 
-        public int GetMaxPrejumps(int track) => 0;
+        public int? GetZoneMaxJumpsOverride(int track) => null;
+
+        public int GetGameModeMaxPrejumps() => 0;
 
         public EGameMode GetCurrentGameMode() => EGameMode.None;
 

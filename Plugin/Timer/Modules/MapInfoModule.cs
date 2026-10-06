@@ -40,7 +40,9 @@ internal interface IMapInfoModule
 {
     float GetEnterSpeedLimit(int track);
 
-    int GetMaxPrejumps(int track);
+    int? GetZoneMaxJumpsOverride(int track);
+
+    int GetGameModeMaxPrejumps();
 
     EGameMode GetCurrentGameMode();
 
@@ -573,16 +575,11 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         return _currentGameModeConfig.EnterSpeedLimit;
     }
 
-    public int GetMaxPrejumps(int track)
-    {
-        if (_currentMapConfig != null
-            && _currentMapConfig.ZoneConfigs.TryGetValue(track, out var zone)
-            && zone.MaxJumps is { } maxJumps)
-        {
-            return maxJumps;
-        }
-        return _currentGameModeConfig.MaxPrejumps;
-    }
+    public int? GetZoneMaxJumpsOverride(int track)
+        => _currentMapConfig != null && _currentMapConfig.ZoneConfigs.TryGetValue(track, out var zone) ? zone.MaxJumps : null;
+
+    public int GetGameModeMaxPrejumps()
+        => _currentGameModeConfig.MaxPrejumps;
 
     public EGameMode GetCurrentGameMode()
         => _currentGameMode;

@@ -21,8 +21,8 @@
             // Default: 375 (surf), 290 (bhop).
             "exit_speed_limit": null,
 
-            // Maximum number of pre-jumps allowed in the start zone.
-            // Default: game mode default.
+            // Maximum number of pre-jumps allowed in the start zone. -1 = no limit.
+            // Default: the style's, or else the game mode's (1).
             "max_jumps": null,
 
             // Stage zone overrides — only applies to stage zones on this track.

@@ -125,7 +125,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     // (DuckedHull.Maxs.Z) below the origin.
     private const float SurfTraceDepth = 54f;
 
-    // Prejump-limit grace window: jumps only count against GetMaxPrejumps while the
+    // Prejump-limit grace window: jumps only count against the start zone's limit while the
     // player has been grounded for at most this many ticks.
     private const int PrejumpGraceTicks = 10;
 
@@ -793,6 +793,13 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
         return true;
     }
+
+    private int GetEffectiveMaxPrejumps(int track, StyleSetting style)
+        => ResolveMaxPrejumps(_mapInfoModule.GetZoneMaxJumpsOverride(track), style, _mapInfoModule.GetGameModeMaxPrejumps());
+
+    // ZoneConfig > Style > GameMode, like the exit speed; negative is no limit.
+    internal static int ResolveMaxPrejumps(int? zone, StyleSetting style, int gameMode)
+        => zone ?? (style.CustomPrejumps ? style.Prejumps : gameMode);
 
     private float GetEffectiveExitSpeedLimit(int track, StyleSetting style)
     {
