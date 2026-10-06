@@ -620,24 +620,28 @@
     "zh-cn": "再按一次清除全部 {0} 个存点"
   },
   "ui.locs.note": {
-    "en-us": "Bind keys in the console, like: bind mouse4 saveloc",
-    "zh-cn": "在控制台绑定按键，例如：bind mouse4 saveloc"
+    "en-us": "Bind keys in the console, like:",
+    "zh-cn": "在控制台绑定按键，例如："
   },
   "ui.locs.note_saveloc": {
-    "en-us": "saveloc: save where you are",
-    "zh-cn": "saveloc：保存当前位置"
+    "en-us": "save where you are",
+    "zh-cn": "保存当前位置"
   },
   "ui.locs.note_loc": {
-    "en-us": "loc: teleport to the current saved one",
-    "zh-cn": "loc：传送到当前保存的位置"
+    "en-us": "teleport to the current saved one",
+    "zh-cn": "传送到当前存点"
   },
-  "ui.locs.note_prevnext": {
-    "en-us": "prevloc / nextloc: teleport to the previous / next one",
-    "zh-cn": "prevloc / nextloc：传送到上一个 / 下一个"
+  "ui.locs.note_prev": {
+    "en-us": "teleport to the previous one",
+    "zh-cn": "传送到上一个"
+  },
+  "ui.locs.note_next": {
+    "en-us": "teleport to the next one",
+    "zh-cn": "传送到下一个"
   },
   "ui.locs.note_clearloc": {
-    "en-us": "clearloc: clear them all",
-    "zh-cn": "clearloc：清除全部"
+    "en-us": "clear them all",
+    "zh-cn": "清除全部"
   },
   "ui.locs.note_update": {
     "en-us": "Hide and show this panel to update the keys.",
@@ -1112,20 +1116,20 @@
     "zh-cn": "或在聊天中输入 !{0} ~ !{1}"
   },
   "hud.vote.note": {
-    "en-us": "Bind keys in the console, like: bind f3 {0}",
-    "zh-cn": "在控制台绑定按键，例如：bind f3 {0}"
+    "en-us": "Bind keys in the console, like:",
+    "zh-cn": "在控制台绑定按键，例如："
   },
   "hud.vote.note_up": {
-    "en-us": "{0}: move up",
-    "zh-cn": "{0}：上移"
+    "en-us": "move up",
+    "zh-cn": "上移"
   },
   "hud.vote.note_down": {
-    "en-us": "{0}: move down",
-    "zh-cn": "{0}：下移"
+    "en-us": "move down",
+    "zh-cn": "下移"
   },
   "hud.vote.note_vote": {
-    "en-us": "{0}: vote",
-    "zh-cn": "{0}：投票"
+    "en-us": "vote",
+    "zh-cn": "投票"
   },
   "hud.vote.note_next": {
     "en-us": "New binds show from the next vote.",

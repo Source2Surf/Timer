@@ -468,9 +468,8 @@
     color: #ffffffb3;
 }
 
-.LocsPanel .LocsNoteCmd {
-    margin-top: 1px;
-    color: #ffffffd9;
+.LocsPanel .LocsExample {
+    color: accentColor;
 }
 
 /* ---- SSJ ---- */
@@ -1787,6 +1786,10 @@
     flow-children: down;
 }
 
+.VotePanel .VoteExample {
+    color: accentColor;
+}
+
 .VotePanel .VoteNote {
     width: 100%;
     margin-top: 1px;
@@ -2408,4 +2411,30 @@
 
 .Menu .PfValue.none {
     color: mutedColor;
+}
+
+/* ---- Bind notes (saved locations, map vote): a command a line, in its own colour, descriptions in one column ---- */
+
+.NoteCmdRow {
+    width: 100%;
+    height: fit-children;
+    margin-top: 1px;
+    flow-children: right;
+}
+
+.NoteCmdRow .NoteCmd {
+    width: 76px;
+    font-size: 14px;
+    color: accentColor;
+}
+
+/* The vote's commands are longer (lookatweapon). */
+.NoteCmdRow .NoteCmd.VoteCmd {
+    width: 112px;
+}
+
+.NoteCmdRow .NoteCmdDesc {
+    width: fill-parent-flow( 1 );
+    font-size: 14px;
+    color: #ffffffd9;
 }

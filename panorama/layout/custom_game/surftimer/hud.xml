@@ -157,10 +157,12 @@
 						<Panel class="LocsRow"><Label id="LocsKeyHide" class="LocsCap" text="{g:csgo_key:editkey} + {g:csgo_key:editkey2}{s:nonce}" /><Label id="LocsHide" class="LocsAct" text="{s:text}" /></Panel>
 						<Panel class="LocsNotes">
 							<Label id="LocsNote" class="LocsNote" text="{s:text}" />
-							<Label id="LocsNoteSave" class="LocsNote LocsNoteCmd" text="{s:text}" />
-							<Label id="LocsNoteLoc" class="LocsNote LocsNoteCmd" text="{s:text}" />
-							<Label id="LocsNotePrevNext" class="LocsNote LocsNoteCmd" text="{s:text}" />
-							<Label id="LocsNoteClear" class="LocsNote LocsNoteCmd" text="{s:text}" />
+							<Label id="LocsNoteExample" class="LocsNote LocsExample" text="{s:text}" />
+							<Panel class="NoteCmdRow"><Label id="LocsCmdSave" class="NoteCmd" text="{s:text}" /><Label id="LocsNoteSave" class="NoteCmdDesc" text="{s:text}" /></Panel>
+							<Panel class="NoteCmdRow"><Label id="LocsCmdLoc" class="NoteCmd" text="{s:text}" /><Label id="LocsNoteLoc" class="NoteCmdDesc" text="{s:text}" /></Panel>
+							<Panel class="NoteCmdRow"><Label id="LocsCmdPrev" class="NoteCmd" text="{s:text}" /><Label id="LocsNotePrev" class="NoteCmdDesc" text="{s:text}" /></Panel>
+							<Panel class="NoteCmdRow"><Label id="LocsCmdNext" class="NoteCmd" text="{s:text}" /><Label id="LocsNoteNext" class="NoteCmdDesc" text="{s:text}" /></Panel>
+							<Panel class="NoteCmdRow"><Label id="LocsCmdClear" class="NoteCmd" text="{s:text}" /><Label id="LocsNoteClear" class="NoteCmdDesc" text="{s:text}" /></Panel>
 							<Label id="LocsNoteUpdate" class="LocsNote" text="{s:text}" />
 							<Label id="LocsNoteFirst" class="LocsNote Hidden" text="{s:text}" />
 						</Panel>
@@ -348,9 +350,10 @@
 			<Label id="VoteChat" class="VoteChat" text="{s:text}" />
 			<Panel class="VoteNotes">
 				<Label id="VoteNote" class="VoteNote" text="{s:text}" />
-				<Label id="VoteNoteUp" class="VoteNote" text="{s:text}" />
-				<Label id="VoteNoteDown" class="VoteNote" text="{s:text}" />
-				<Label id="VoteNoteVote" class="VoteNote" text="{s:text}" />
+				<Label id="VoteNoteExample" class="VoteNote VoteExample" text="{s:text}" />
+				<Panel class="NoteCmdRow"><Label id="VoteCmdUp" class="NoteCmd VoteCmd" text="{s:text}" /><Label id="VoteNoteUp" class="NoteCmdDesc" text="{s:text}" /></Panel>
+				<Panel class="NoteCmdRow"><Label id="VoteCmdDown" class="NoteCmd VoteCmd" text="{s:text}" /><Label id="VoteNoteDown" class="NoteCmdDesc" text="{s:text}" /></Panel>
+				<Panel class="NoteCmdRow"><Label id="VoteCmdVote" class="NoteCmd VoteCmd" text="{s:text}" /><Label id="VoteNoteVote" class="NoteCmdDesc" text="{s:text}" /></Panel>
 				<Label id="VoteNoteNext" class="VoteNote" text="{s:text}" />
 			</Panel>
 		</Panel>

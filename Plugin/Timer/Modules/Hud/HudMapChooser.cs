@@ -190,10 +190,14 @@ internal partial class HudModule
         }
 
         w.Text("VoteChat", "text", tr.Format(HudTexts.VoteChat, 1, options.Count));
-        w.Text("VoteNote", "text", tr.Format(HudTexts.VoteNote, keys.Up));
-        w.Text("VoteNoteUp", "text", tr.Format(HudTexts.VoteNoteUp, keys.Up));
-        w.Text("VoteNoteDown", "text", tr.Format(HudTexts.VoteNoteDown, keys.Down));
-        w.Text("VoteNoteVote", "text", tr.Format(HudTexts.VoteNoteVote, keys.Select));
+        w.Text("VoteNote", "text", tr[HudTexts.VoteNote]);
+        w.Text("VoteNoteExample", "text", ZString.Concat("bind f3 ", keys.Up));
+        w.Text("VoteCmdUp", "text", keys.Up);
+        w.Text("VoteCmdDown", "text", keys.Down);
+        w.Text("VoteCmdVote", "text", keys.Select);
+        w.Text("VoteNoteUp", "text", tr[HudTexts.VoteNoteUp]);
+        w.Text("VoteNoteDown", "text", tr[HudTexts.VoteNoteDown]);
+        w.Text("VoteNoteVote", "text", tr[HudTexts.VoteNoteVote]);
     }
 
     // ------------------------------------------------------------------ nominate

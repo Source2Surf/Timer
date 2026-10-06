@@ -622,7 +622,9 @@ public sealed class HudLayoutContractTests
     [Fact]
     public void TheLocationsNoteHasACommandALine()
     {
-        foreach (var id in new[] { "LocsNote", "LocsNoteSave", "LocsNoteLoc", "LocsNotePrevNext", "LocsNoteClear", "LocsNoteUpdate", "LocsNoteFirst" })
+        foreach (var id in new[] { "LocsNote", "LocsNoteSave", "LocsNoteLoc", "LocsNotePrev", "LocsNoteNext", "LocsNoteClear", "LocsNoteUpdate", "LocsNoteFirst",
+                                "VoteNoteExample", "VoteCmdUp", "VoteCmdDown", "VoteCmdVote", "LocsNoteExample", "LocsCmdSave", "LocsCmdLoc",
+                                "LocsCmdPrev", "LocsCmdNext", "LocsCmdClear" })
         {
             Assert.Contains(id, Ids);
         }

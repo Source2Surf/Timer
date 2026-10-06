@@ -238,6 +238,12 @@ internal partial class HudModule
 
     // ------------------------------------------------------------------ saved locations
 
+    private static readonly (string Id, string Command)[] LocsCommands =
+    [
+        ("LocsNoteExample", "bind mouse4 saveloc"), ("LocsCmdSave", "saveloc"), ("LocsCmdLoc", "loc"), ("LocsCmdPrev", "prevloc"),
+        ("LocsCmdNext", "nextloc"), ("LocsCmdClear", "clearloc"),
+    ];
+
     /// <summary>
     ///     The saved-locations panel: the practice actions with the key the player bound to each. Shown with walk +
     ///     inspect, by the first saved location, or while the menu is open so it can be dragged; only on the player's own
@@ -298,9 +304,17 @@ internal partial class HudModule
         // How to bind, a command a line, and how to see a new bind; until the run is in practice, also what teleporting
         // back does to it here (saving alone doesn't change it).
         w.Text("LocsNote", "text", tr[HudTexts.LocsNote]);
+
+        // The console commands themselves, the same in every language.
+        foreach (var (id, command) in LocsCommands)
+        {
+            w.Text(id, "text", command);
+        }
+
         w.Text("LocsNoteSave", "text", tr[HudTexts.LocsNoteSave]);
         w.Text("LocsNoteLoc", "text", tr[HudTexts.LocsNoteLoc]);
-        w.Text("LocsNotePrevNext", "text", tr[HudTexts.LocsNotePrevNext]);
+        w.Text("LocsNotePrev", "text", tr[HudTexts.LocsNotePrev]);
+        w.Text("LocsNoteNext", "text", tr[HudTexts.LocsNoteNext]);
         w.Text("LocsNoteClear", "text", tr[HudTexts.LocsNoteClear]);
         w.Text("LocsNoteUpdate", "text", tr[HudTexts.LocsNoteUpdate]);
         var practice = _practiceModule.IsInPractice(p.Slot);
