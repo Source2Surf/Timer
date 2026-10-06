@@ -120,6 +120,18 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     private readonly List<ZoneInfo>[,] _zonesByTrackType
         = new List<ZoneInfo>[TimerConstants.MAX_TRACK, ZoneTypeCount];
 
+    private static readonly TraceShapeRay TeleportHull = new (new TraceShapeHull
+    {
+        Mins = new (-16, -16, 0),
+        Maxs = new (16, 16, 72),
+    });
+
+    // How far below the zone's bottom the floor may be; under the ducked hull height so the player still touches it.
+    private const float TeleportGroundMargin = 32f;
+
+    // Landing flush with the floor gets the player stuck in it.
+    private const float TeleportGroundLift = 2f;
+
     // ReSharper disable InconsistentNaming
     private unsafe delegate* unmanaged<Vector*, Vector*, Vector*, nint> CreateTrigger;
 
@@ -496,9 +508,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             return false;
         }
 
-        var zoneInfo = bucket[0];
-
-        pawn.Teleport(zoneInfo.TeleportOrigin ?? zoneInfo.Origin, null, new Vector());
+        pawn.Teleport(GetTeleportPosition(bucket[0], pawn), null, new Vector());
 
         return true;
     }
@@ -517,12 +527,57 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                 continue;
             }
 
-            pawn.Teleport(zoneInfo.TeleportOrigin ?? zoneInfo.Origin, null, new Vector());
+            pawn.Teleport(GetTeleportPosition(zoneInfo, pawn), null, new Vector());
 
             return true;
         }
 
         return false;
+    }
+
+    // Without a set teleport point, land on the floor under the zone's center, else on its bottom like bhoptimer;
+    // traced on first use.
+    private Vector GetTeleportPosition(ZoneInfo info, IPlayerPawn pawn)
+    {
+        if (info.TeleportOrigin is { } teleport)
+        {
+            return teleport;
+        }
+
+        if (info.GroundOrigin is { } ground)
+        {
+            return ground;
+        }
+
+        if (pawn.GetCollisionProperty() is not { } collision)
+        {
+            return info.Origin;
+        }
+
+        var bottom = Math.Min(info.Corner1.Z, info.Corner2.Z);
+        var top    = Math.Max(info.Corner1.Z, info.Corner2.Z);
+
+        var start = (info.Corner1 + info.Corner2) / 2.0f;
+        start.Z = Math.Clamp(info.Origin.Z, bottom, top);
+
+        ground   = start;
+        ground.Z = bottom + TeleportGroundLift;
+
+        var end = start;
+        end.Z = bottom - TeleportGroundMargin;
+
+        var attribute = RnQueryShapeAttr.PlayerMovement(collision.CollisionAttribute.InteractsWith);
+        var result    = _bridge.PhysicsQueryManager.TraceShapeNoPlayers(TeleportHull, start, end, attribute);
+
+        if (result.DidHit() && !result.StartInSolid)
+        {
+            ground   =  result.EndPosition;
+            ground.Z += TeleportGroundLift;
+        }
+
+        info.GroundOrigin = ground;
+
+        return ground;
     }
 
     public bool IsCurrentTrackLinear(int track)

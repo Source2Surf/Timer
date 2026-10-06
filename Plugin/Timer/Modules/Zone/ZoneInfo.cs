@@ -43,6 +43,9 @@ internal class ZoneInfo : IZoneInfo
 
     public Vector Origin { get; set; } = new ();
 
+    [JsonIgnore]
+    public Vector? GroundOrigin { get; set; }
+
     public bool Prebuilt { get; init; }
 
     public int Data { get; set; } = 0; // Stage number for Stage zones, checkpoint index for Checkpoint zones
