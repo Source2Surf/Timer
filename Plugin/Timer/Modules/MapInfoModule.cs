@@ -363,6 +363,11 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         return ECommandAction.Handled;
     }
 
+    private static string Date(ChatTr tr, long unixMilliseconds)
+        => unixMilliseconds > 0
+            ? DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : tr[ChatTexts.MapDateUnknown];
+
     private static string Playtime(ChatTr tr, float totalSeconds)
     {
         var hours   = (int) (totalSeconds / 3600f);
@@ -427,6 +432,11 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         controller.PrintToChat(tr.Format(ChatTexts.MapPlayed,
                                          Utils.Highlight(profile.PlayCount),
                                          Utils.Highlight(Playtime(tr, profile.TotalPlayTime))));
+
+        // Line 5: when it was added and last played (before this visit), as UTC dates
+        controller.PrintToChat(tr.Format(ChatTexts.MapDates,
+                                         Utils.Highlight(Date(tr, profile.AddedAt)),
+                                         Utils.Highlight(Date(tr, profile.LastPlayedAt))));
 
         return ECommandAction.Handled;
     }

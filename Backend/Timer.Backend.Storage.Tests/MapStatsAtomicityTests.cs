@@ -41,6 +41,22 @@ public sealed class MapStatsAtomicityTests : IDisposable
         Assert.Equal(3, saved.Tier);
     }
 
+    [Fact]
+    public async Task ANewMapIsDatedAndASessionMarksItPlayed()
+    {
+        var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var map    = await _first.GetMapInfo($"surf_stats_dates_{Guid.NewGuid():N}");
+
+        Assert.InRange(map.AddedAt, before, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        Assert.Equal(0, map.LastPlayedAt);
+
+        await _first.IncrementMapStatsAsync(map.MapName, 10f);
+
+        var played = await _second.GetMapInfo(map.MapName);
+        Assert.Equal(map.AddedAt, played.AddedAt);
+        Assert.InRange(played.LastPlayedAt, map.AddedAt, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+
     [Theory]
     [InlineData(float.NaN)]
     [InlineData(float.PositiveInfinity)]

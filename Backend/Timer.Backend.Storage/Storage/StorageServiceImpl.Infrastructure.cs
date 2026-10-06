@@ -180,10 +180,11 @@ internal sealed partial class StorageServiceImpl
         {
             mapEntity = new ()
             {
-                File       = mapKey,
-                Tier       = 1,
-                Stages     = 0,
-                WorkshopId = GetWorkshopId(mapKey),
+                File                    = mapKey,
+                Tier                    = 1,
+                Stages                  = 0,
+                WorkshopId              = GetWorkshopId(mapKey),
+                AddedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             };
 
             try

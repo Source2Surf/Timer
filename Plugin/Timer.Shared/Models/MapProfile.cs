@@ -39,4 +39,8 @@ public class MapProfile
 
     public float TotalPlayTime { get; set; }
     public int   PlayCount     { get; set; }
+
+    // Unix milliseconds; 0 = unknown.
+    public long AddedAt      { get; set; }
+    public long LastPlayedAt { get; set; }
 }

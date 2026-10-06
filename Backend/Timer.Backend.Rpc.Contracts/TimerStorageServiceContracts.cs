@@ -55,6 +55,13 @@ public sealed class MapInfoDto
 
     [Key(7)]
     public int PlayCount { get; set; }
+
+    /// <summary>When the map was first seen and when a session on it last ended, in Unix milliseconds; 0 = unknown.</summary>
+    [Key(8)]
+    public long AddedAt { get; set; }
+
+    [Key(9)]
+    public long LastPlayedAt { get; set; }
 }
 
 /// <summary>

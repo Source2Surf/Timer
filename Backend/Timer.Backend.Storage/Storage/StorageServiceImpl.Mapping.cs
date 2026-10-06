@@ -32,6 +32,8 @@ internal sealed partial class StorageServiceImpl
             Tier          = tiers,
             PlayCount     = mapInfo.PlayCount,
             TotalPlayTime = mapInfo.TotalPlayTime,
+            AddedAt       = mapInfo.AddedAtUnixMilliseconds,
+            LastPlayedAt  = mapInfo.LastPlayedAtUnixMilliseconds,
         };
     }
 

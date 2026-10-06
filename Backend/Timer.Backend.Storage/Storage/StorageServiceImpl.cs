@@ -579,12 +579,14 @@ internal sealed partial class StorageServiceImpl
         ValidatePlayTimeDelta(deltaSeconds);
         var maximumCurrentTime = (double)MaximumStoredPlayTimeSeconds - deltaSeconds;
         var mapId = await EnsureMapIdByNameAsync(mapName);
+        var now   = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await WithRecordTransactionAsync(async () =>
         {
             await LockMapAsync(mapId);
             var updated = await _db.Updateable<MapEntity>()
                                    .SetColumns(x => x.PlayCount == x.PlayCount + 1)
                                    .SetColumns(x => x.TotalPlayTime == x.TotalPlayTime + deltaSeconds)
+                                   .SetColumns(x => x.LastPlayedAtUnixMilliseconds == now)
                                    .Where(x => x.MapId == mapId && x.PlayCount >= 0 && x.PlayCount < int.MaxValue
                                                && x.TotalPlayTime >= 0 && x.TotalPlayTime <= maximumCurrentTime)
                                    .ExecuteCommandAsync(OperationCancellation);

@@ -200,6 +200,8 @@ internal static class ChatTexts
     public static readonly ChatText MapSr          = new ("chat.map.sr", "SR: {0} | Completions: {1}");
     public static readonly ChatText MapNoSr        = new ("chat.map.no_sr", "None");
     public static readonly ChatText MapPlayed      = new ("chat.map.played", "Played: {0} times | Total: {1}");
+    public static readonly ChatText MapDates       = new ("chat.map.dates", "Added: {0} | Last played: {1}");
+    public static readonly ChatText MapDateUnknown = new ("chat.map.date_unknown", "unknown");
 
     // ---- practice
     public static readonly ChatText UsageTele        = new ("chat.usage.tele", "Usage: !tele <n>  (1-based loc index)");

@@ -43,4 +43,12 @@ internal sealed class MapEntity
     // then maintains. Lets a restarted backend skip re-seeding the map.
     [SugarColumn(DefaultValue = "0")]
     public int BestRunsSeeded { get; set; }
+
+    // When the map was first seen and when a session on it last ended, in Unix milliseconds; 0 = unknown (maps from
+    // before these columns).
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long AddedAtUnixMilliseconds { get; set; }
+
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long LastPlayedAtUnixMilliseconds { get; set; }
 }

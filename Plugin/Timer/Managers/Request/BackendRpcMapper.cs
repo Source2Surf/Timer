@@ -42,6 +42,8 @@ internal static class BackendRpcMapper
             Tier          = tier,
             TotalPlayTime = source.TotalPlayTime,
             PlayCount     = source.PlayCount,
+            AddedAt       = source.AddedAt,
+            LastPlayedAt  = source.LastPlayedAt,
         };
     }
 

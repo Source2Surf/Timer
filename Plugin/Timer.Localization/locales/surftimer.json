@@ -1707,6 +1707,14 @@
     "en-us": "Played: {0} times | Total: {1}",
     "zh-cn": "游玩次数：{0} | 总时长：{1}"
   },
+  "chat.map.dates": {
+    "en-us": "Added: {0} | Last played: {1}",
+    "zh-cn": "添加于：{0} | 上次游玩：{1}"
+  },
+  "chat.map.date_unknown": {
+    "en-us": "unknown",
+    "zh-cn": "未知"
+  },
   "chat.usage.tele": {
     "en-us": "Usage: !tele <n>  (1-based loc index)",
     "zh-cn": "用法：!tele <n>（存点编号，从 1 开始）"
