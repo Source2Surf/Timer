@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Source2Surf.Timer;
 using Source2Surf.Timer.Modules;
+using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models.Style;
 using Xunit;
 
@@ -36,7 +37,7 @@ public sealed class StyleIdTests
     [Fact]
     public void ATakenOrOutOfRangeIdLeavesTheStyleOut()
     {
-        var (byId, enabled) = Resolve(new () { Name = "A", Id = 2 }, new () { Name = "B", Id = 2 }, new () { Name = "C", Id = 16 });
+        var (byId, enabled) = Resolve(new () { Name = "A", Id = 2 }, new () { Name = "B", Id = 2 }, new () { Name = "C", Id = TimerConstants.MAX_STYLE });
 
         Assert.Equal("A", byId[2]!.Name);
         Assert.Single(byId.OfType<StyleSetting>());

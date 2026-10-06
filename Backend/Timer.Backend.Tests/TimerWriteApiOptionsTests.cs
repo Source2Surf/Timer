@@ -105,7 +105,7 @@ public sealed class TimerWriteApiOptionsTests
 
     [Theory]
     [InlineData("-1")]
-    [InlineData("16")]
+    [InlineData("64")]
     public void StyleOutsideRangeFailsFast(string style)
     {
         var values = EnabledValues();

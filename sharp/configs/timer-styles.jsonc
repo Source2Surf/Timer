@@ -8,7 +8,7 @@
         // Chat commands (aliases) separated by ';'.
         "command": "normal;n",
 
-        // Runs and replays are stored under the id (0-15), so keep it when reordering or removing styles.
+        // Runs and replays are stored under the id (0-63), so keep it when reordering or removing styles.
         // Without one, a style's id is its place in this list.
         "id": 0,
 

@@ -60,8 +60,8 @@ public sealed class ApiRouteValidationTests
 
     [Theory]
     [InlineData("0", true)]
-    [InlineData("15", true)]
-    [InlineData("16", false)]
+    [InlineData("63", true)]
+    [InlineData("64", false)]
     [InlineData("-1", false)]
     public void StyleUsesTimerBounds(string raw, bool expected)
         => Assert.Equal(expected, ApiRouteValidation.TryParseOptionalStyle(raw, out _, out _));

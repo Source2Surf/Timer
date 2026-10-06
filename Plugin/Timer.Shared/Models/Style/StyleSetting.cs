@@ -30,7 +30,7 @@ public record StyleSetting
     public string Command { get; init; } = "normal;n";
 
     /// <summary>
-    /// Runs and replays are stored under this, so it stays with the style however the list changes: 0-15. Without one
+    /// Runs and replays are stored under this, so it stays with the style however the list changes: 0-63. Without one
     /// (-1), a style's id is its place in the list.
     /// </summary>
     [JsonPropertyName("id")]

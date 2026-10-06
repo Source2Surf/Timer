@@ -21,7 +21,7 @@ public static class TimerConstants
 {
     public const float TickInterval = 1 / 64f;
     public const int   Tickrate     = 64;
-    public const int   MAX_STYLE    = 16;
+    public const int   MAX_STYLE    = 64;
     public const int   MAX_TRACK    = 32;
     public const int   MAX_STAGE    = 64;
 }
