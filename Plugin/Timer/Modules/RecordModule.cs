@@ -187,6 +187,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
         _commandManager.AddServerCommand("timer_recalc_scores", OnCommandRecalcScores);
         _adminPermissions.RegisterPermission(DeleteRecordsPermission);
+        _commandManager.AddAdminChatCommand("wipeplayer", [DeleteRecordsPermission], OnCommandWipePlayer);
 
         _commandManager.AddClientChatCommand("wr",      OnCommandWR);
         _commandManager.AddClientChatCommand("sr",      OnCommandWR);

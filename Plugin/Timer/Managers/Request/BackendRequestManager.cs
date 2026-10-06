@@ -57,10 +57,20 @@ internal sealed record DeletedRun(ulong                 RunId,
                                   bool                  WasBest,
                                   IReadOnlyList<string> ReplayUrls);
 
+/// <summary>
+/// Every run of a player an admin removed, on every map; a dry run only counts them.
+/// </summary>
+internal sealed record WipedPlayer(int Maps, int Runs, IReadOnlyList<WipedRun> Deleted);
+
+internal sealed record WipedRun(string MapName, float Time, DeletedRun Run);
+
 internal interface IRecordAdministration
 {
     /// <summary>Deletes one run of the map with its replay rows; null when it is not on that map.</summary>
     Task<DeletedRun?> DeleteRunAsync(string mapName, ulong runId);
+
+    /// <summary>Deletes every run of a player on every map with their replay rows; a dry run only counts them.</summary>
+    Task<WipedPlayer> WipePlayerAsync(ulong steamId, bool dryRun);
 }
 
 /// <summary>
@@ -168,6 +178,9 @@ internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog, I
         => await Call.DeleteRunAsync(mapName, WorkshopId(mapName), runId) is { } deleted
                ? BackendRpcMapper.ToDeletedRun(deleted)
                : null;
+
+    public async Task<WipedPlayer> WipePlayerAsync(ulong steamId, bool dryRun)
+        => BackendRpcMapper.ToWipedPlayer(await Call.WipePlayerRunsAsync(steamId, dryRun));
 
     public async Task<IReadOnlyList<RunCheckpoint>> GetRecordCheckpoints(long recordId)
         => BackendRpcMapper.ToCheckpoints(await Call.GetRecordCheckpointsAsync(recordId));

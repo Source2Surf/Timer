@@ -1535,6 +1535,26 @@
     "en-us": "Couldn't delete that run; see the server log.",
     "zh-cn": "删除该成绩失败，请查看服务器日志。"
   },
+  "chat.wipe.usage": {
+    "en-us": "Usage: !wipeplayer <SteamID64 or name>",
+    "zh-cn": "用法：!wipeplayer <SteamID64 或玩家名>"
+  },
+  "chat.wipe.nothing": {
+    "en-us": "{0} has no runs.",
+    "zh-cn": "{0} 没有任何成绩。"
+  },
+  "chat.wipe.confirm": {
+    "en-us": "{0} has {1} runs on {2} maps. Type !wipeplayer {3} again within 30 seconds to delete them all.",
+    "zh-cn": "{0} 在 {2} 张地图上共有 {1} 条成绩。30 秒内再次输入 !wipeplayer {3} 以全部删除。"
+  },
+  "chat.wipe.done": {
+    "en-us": "Deleted all {1} runs of {0} on {2} maps.",
+    "zh-cn": "已删除 {0} 在 {2} 张地图上的全部 {1} 条成绩。"
+  },
+  "chat.wipe.failed": {
+    "en-us": "Couldn't wipe {0}'s runs; see the server log.",
+    "zh-cn": "清除 {0} 的成绩失败，请查看服务器日志。"
+  },
   "chat.sr.stage": {
     "en-us": "Stage {0} SR: {1} by {2}",
     "zh-cn": "关卡 {0} SR：{1}，保持者 {2}"

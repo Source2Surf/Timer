@@ -153,6 +153,13 @@ internal static class ChatTexts
     public static readonly ChatText RecordAlreadyDeleted = new ("chat.record.already_deleted", "That run was already deleted.");
     public static readonly ChatText RecordDeleteFailed   = new ("chat.record.delete_failed", "Couldn't delete that run; see the server log.");
 
+    public static readonly ChatText WipeUsage   = new ("chat.wipe.usage", "Usage: !wipeplayer <SteamID64 or name>");
+    public static readonly ChatText WipeNothing = new ("chat.wipe.nothing", "{0} has no runs.");
+    public static readonly ChatText WipeConfirm = new ("chat.wipe.confirm",
+                                                       "{0} has {1} runs on {2} maps. Type !wipeplayer {3} again within 30 seconds to delete them all.");
+    public static readonly ChatText WipeDone   = new ("chat.wipe.done", "Deleted all {1} runs of {0} on {2} maps.");
+    public static readonly ChatText WipeFailed = new ("chat.wipe.failed", "Couldn't wipe {0}'s runs; see the server log.");
+
     public static readonly ChatText Pb          = new ("chat.pb", "PB: {0} (#{1}/{2})");
     public static readonly ChatText PbNone      = new ("chat.pb.none", "No personal best found for this track.");
     public static readonly ChatText PbStage     = new ("chat.pb.stage", "Stage {0} PB: {1}");

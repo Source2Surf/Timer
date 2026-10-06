@@ -86,6 +86,19 @@ internal static class TimerStorageRpcMapper
             ReplayUrls = [.. source.ReplayUrls],
         };
 
+    public static WipedPlayerDto ToDto(TimerBackendWipedPlayer source)
+    {
+        var deleted = new WipedRunDto[source.Deleted.Count];
+
+        for (var i = 0; i < deleted.Length; i++)
+        {
+            var run = source.Deleted[i];
+            deleted[i] = new WipedRunDto { MapName = run.MapName, Time = run.Time, Run = ToDto(run.Run) };
+        }
+
+        return new WipedPlayerDto { Maps = source.Maps, Runs = source.Runs, Deleted = deleted };
+    }
+
     public static RecordCheckpointDto[] ToDto(IReadOnlyList<RunCheckpoint> source)
     {
         var result = new RecordCheckpointDto[source.Count];

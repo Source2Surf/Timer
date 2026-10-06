@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Sharp.Shared.Types;
 using Source2Surf.Timer.Backend.Rpc.Contracts;
 using Source2Surf.Timer.Shared.Models;
@@ -210,6 +211,10 @@ internal static class BackendRpcMapper
     public static DeletedRun ToDeletedRun(DeletedRunDto source)
         => new (source.RunId, source.SteamId, source.Kind == RunKind.Stage, source.Style, source.Track, source.Stage,
                 source.WasBest, source.ReplayUrls ?? []);
+
+    public static WipedPlayer ToWipedPlayer(WipedPlayerDto source)
+        => new (source.Maps, source.Runs,
+                (source.Deleted ?? []).Select(x => new WipedRun(x.MapName, x.Time, ToDeletedRun(x.Run))).ToArray());
 
     private static Vector ToVector(VectorDto source)
         => new (source.X, source.Y, source.Z);

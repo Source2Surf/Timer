@@ -310,6 +310,35 @@ public sealed class DeletedRunDto
     public string[] ReplayUrls { get; set; } = Array.Empty<string>();
 }
 
+/// <summary>
+/// Every run of a player an admin removed, on every map; a dry run only counts them.
+/// </summary>
+[MessagePackObject]
+public sealed class WipedPlayerDto
+{
+    [Key(0)]
+    public int Maps { get; set; }
+
+    [Key(1)]
+    public int Runs { get; set; }
+
+    [Key(2)]
+    public WipedRunDto[] Deleted { get; set; } = Array.Empty<WipedRunDto>();
+}
+
+[MessagePackObject]
+public sealed class WipedRunDto
+{
+    [Key(0)]
+    public string MapName { get; set; } = string.Empty;
+
+    [Key(1)]
+    public float Time { get; set; }
+
+    [Key(2)]
+    public DeletedRunDto Run { get; set; } = new DeletedRunDto();
+}
+
 [MessagePackObject]
 public sealed class ScoreJobsDto
 {
@@ -388,6 +417,9 @@ public interface ITimerStorageServiceV1 : IService<ITimerStorageServiceV1>
 
     /// <summary>Deletes one run of the map with its replay rows; null when it is not on this map.</summary>
     UnaryResult<DeletedRunDto?> DeleteRunAsync(string mapName, ulong workshopId, ulong runId);
+
+    /// <summary>Deletes every run of a player on every map with their replay rows; a dry run only counts them.</summary>
+    UnaryResult<WipedPlayerDto> WipePlayerRunsAsync(ulong steamId, bool dryRun);
 
     UnaryResult<PlayerSummaryDto?> GetPlayerSummaryAsync(ulong steamId);
 

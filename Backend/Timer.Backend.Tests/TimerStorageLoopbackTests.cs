@@ -120,6 +120,14 @@ public sealed class TimerStorageLoopbackTests : IAsyncLifetime
         Assert.Null(await _client.DeleteRunAsync("surf_rpc", 0, runId));
         Assert.Empty(await _client.GetMapRecordsAsync("surf_rpc", 0, RunKind.Main, true, 0, 0, 0, 5000));
 
+        var (_, again, _) = await _store.AddPlayerRecord(new SteamID(SteamId), "surf_rpc", new RecordRequest { Time = 50 });
+        var counted = await _client.WipePlayerRunsAsync(SteamId, true);
+        Assert.Equal((1, 1, 0), (counted.Maps, counted.Runs, counted.Deleted.Length));
+        var wiped = await _client.WipePlayerRunsAsync(SteamId, false);
+        var run   = Assert.Single(wiped.Deleted);
+        Assert.Equal(("surf_rpc", 50f, (ulong)again.Id, SteamId, true), (run.MapName, run.Time, run.Run.RunId, run.Run.SteamId, run.Run.WasBest));
+        Assert.Empty(await _client.GetMapRecordsAsync("surf_rpc", 0, RunKind.Main, true, 0, 0, 0, 5000));
+
         await _client.RemoveMapRecordsAsync("surf_rpc", 0);
         Assert.Empty(await _client.GetMapRecordsAsync("surf_rpc", 0, RunKind.Main, true, 0, 0, 0, 5000));
     }

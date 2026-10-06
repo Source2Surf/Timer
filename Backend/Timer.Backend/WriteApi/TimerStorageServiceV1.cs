@@ -130,6 +130,10 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
                                              ? TimerStorageRpcMapper.ToDto(deleted)
                                              : null);
 
+    public async UnaryResult<WipedPlayerDto> WipePlayerRunsAsync(ulong steamId, bool dryRun)
+        => await RunAsync(async token => TimerStorageRpcMapper.ToDto(
+                              await _storage.WipePlayerRunsAsync(steamId, dryRun, _options.StyleFactors, token)));
+
     public async UnaryResult<PlayerSummaryDto?> GetPlayerSummaryAsync(ulong steamId)
         => await RunAsync(async token => await _storage.GetPlayerSummaryAsync(steamId, token) is { } summary
                                              ? TimerStorageRpcMapper.ToDto(summary)

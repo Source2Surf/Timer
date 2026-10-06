@@ -108,6 +108,12 @@ public sealed class TimerBackendGameStorage
                                                         CancellationToken                cancellationToken = default)
         => OnMapAsync(mapName, workshopId, () => Storage.DeleteRunAsync(mapName, runId, styleFactors), cancellationToken);
 
+    public Task<TimerBackendWipedPlayer> WipePlayerRunsAsync(ulong                            steamId,
+                                                             bool                             dryRun,
+                                                             IReadOnlyDictionary<int, double> styleFactors,
+                                                             CancellationToken                cancellationToken = default)
+        => _owner.ExecuteAsync(() => Storage.WipePlayerRunsAsync(new SteamID(steamId), dryRun, styleFactors), cancellationToken);
+
     public Task<PlayerSummary?> GetPlayerSummaryAsync(ulong steamId, CancellationToken cancellationToken = default)
         => _owner.ExecuteAsync(() => Storage.GetPlayerSummary(new SteamID(steamId)), cancellationToken);
 
