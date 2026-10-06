@@ -84,6 +84,7 @@ internal partial class HudModule
             CloseZonePanel(p);
             CloseRecords(p);
             CloseStyles(p);
+            CloseMapInfo(p);
         }
 
         // Opened while playing, it starts on the player's own track and style.

@@ -217,6 +217,7 @@ internal partial class HudModule
             CloseZonePanel(p);
             CloseRecords(p);
             CloseStyles(p);
+            CloseMapInfo(p);
             c.Page         = 0;
             c.Note         = null;
         }

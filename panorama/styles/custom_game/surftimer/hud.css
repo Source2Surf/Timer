@@ -2381,3 +2381,18 @@
 .Menu .StySwitchLabel.disabled {
     color: mutedColor;
 }
+
+/* ---- Map info (!mapinfo) ---- */
+
+/* Collapsed when closed, so its buttons can't take another menu's clicks. The rest is the profile card's. */
+.MiMenu.Closed {
+    visibility: collapse;
+}
+
+.Menu .PfSub.MiWarn {
+    color: #ffa94d;
+}
+
+.Menu .PfValue.none {
+    color: mutedColor;
+}

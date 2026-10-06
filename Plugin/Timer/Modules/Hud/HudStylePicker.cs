@@ -74,6 +74,7 @@ internal partial class HudModule
         CloseNominateMenu(p);
         CloseZonePanel(p);
         CloseRecords(p);
+        CloseMapInfo(p);
 
         // It opens on the player's style, picked.
         var m       = p.Styles;

@@ -1199,6 +1199,86 @@
     "en-us": "Nominations are closed.",
     "zh-cn": "提名已关闭。"
   },
+  "hud.mapinfo.title": {
+    "en-us": "Map info",
+    "zh-cn": "地图信息"
+  },
+  "hud.mapinfo.tier": {
+    "en-us": "Tier {0}",
+    "zh-cn": "难度 {0}"
+  },
+  "hud.mapinfo.surf": {
+    "en-us": "Surf",
+    "zh-cn": "滑翔"
+  },
+  "hud.mapinfo.bhop": {
+    "en-us": "Bhop",
+    "zh-cn": "连跳"
+  },
+  "hud.mapinfo.unranked": {
+    "en-us": "Unranked: it earns no points",
+    "zh-cn": "不计分：本图不获得积分"
+  },
+  "hud.mapinfo.layout": {
+    "en-us": "Layout",
+    "zh-cn": "结构"
+  },
+  "hud.mapinfo.type": {
+    "en-us": "Type",
+    "zh-cn": "类型"
+  },
+  "hud.mapinfo.staged": {
+    "en-us": "Staged",
+    "zh-cn": "分关"
+  },
+  "hud.mapinfo.stages": {
+    "en-us": "{0} stages",
+    "zh-cn": "{0} 关"
+  },
+  "hud.mapinfo.checkpoints": {
+    "en-us": "{0} checkpoints",
+    "zh-cn": "{0} 个检查点"
+  },
+  "hud.mapinfo.bonuses": {
+    "en-us": "Bonuses",
+    "zh-cn": "奖励关"
+  },
+  "hud.mapinfo.records": {
+    "en-us": "Records · {0}",
+    "zh-cn": "记录 · {0}"
+  },
+  "hud.mapinfo.sr": {
+    "en-us": "Server record",
+    "zh-cn": "服务器记录"
+  },
+  "hud.mapinfo.completions": {
+    "en-us": "Completions",
+    "zh-cn": "完成次数"
+  },
+  "hud.mapinfo.activity": {
+    "en-us": "Activity",
+    "zh-cn": "活跃度"
+  },
+  "hud.mapinfo.played": {
+    "en-us": "Times played",
+    "zh-cn": "游玩次数"
+  },
+  "hud.mapinfo.time": {
+    "en-us": "Total play time",
+    "zh-cn": "总时长"
+  },
+  "hud.mapinfo.added": {
+    "en-us": "Added",
+    "zh-cn": "添加于"
+  },
+  "hud.mapinfo.last": {
+    "en-us": "Last played",
+    "zh-cn": "上次游玩"
+  },
+  "hud.mapinfo.records_button": {
+    "en-us": "Records",
+    "zh-cn": "记录"
+  },
   "hud.styles.title": {
     "en-us": "Styles",
     "zh-cn": "风格"

@@ -1295,5 +1295,68 @@
 				</Button>
 			</Panel>
 		</Panel>
+
+		<!-- Map info (!mapinfo / !mi): the map's tier, mode and layout, its record on the player's style, and how much it's
+		     been played. Cursor mode, in the replay menu's spot; laid out like the profile card. -->
+		<Panel id="MiMenu" class="Menu MiMenu Closed">
+			<Panel class="MenuHeader RMenuHeader">
+				<Label id="LMiTitle" class="MenuTitle" text="{s:text}" />
+			</Panel>
+			<Label id="MiName" class="PfName" text="{s:text}" />
+			<Label id="MiSub" class="PfSub" text="{s:text}" />
+			<Label id="MiUnranked" class="PfSub MiWarn Hidden" text="{s:text}" />
+			<Panel class="MenuSection"><Label id="LMiLayout" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+			<Panel class="PfSection">
+				<Panel class="PfRow">
+					<Label id="LMiType" class="PfLabel" text="{s:text}" />
+					<Label id="MiLayout" class="PfValue" text="{s:text}" />
+					<Label id="MiLayoutNote" class="PfSmall" text="{s:text}" />
+				</Panel>
+				<Panel class="PfRow">
+					<Label id="LMiBonuses" class="PfLabel" text="{s:text}" />
+					<Label id="MiBonuses" class="PfValue" text="{s:text}" />
+					<Label id="MiBonusesNote" class="PfSmall" text="{s:text}" />
+				</Panel>
+			</Panel>
+			<Panel class="MenuSection"><Label id="MiRecordsTitle" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+			<Panel class="PfSection">
+				<Panel class="PfRow">
+					<Label id="LMiSr" class="PfLabel" text="{s:text}" />
+					<Label id="MiSr" class="PfValue" text="{s:text}" />
+					<Label id="MiSrNote" class="PfSmall" text="{s:text}" />
+				</Panel>
+				<Panel class="PfRow">
+					<Label id="LMiDone" class="PfLabel" text="{s:text}" />
+					<Label id="MiDone" class="PfValue" text="{s:text}" />
+				</Panel>
+			</Panel>
+			<Panel class="MenuSection"><Label id="LMiActivity" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
+			<Panel class="PfSection">
+				<Panel class="PfRow">
+					<Label id="LMiPlayed" class="PfLabel" text="{s:text}" />
+					<Label id="MiPlayed" class="PfValue" text="{s:text}" />
+				</Panel>
+				<Panel class="PfRow">
+					<Label id="LMiTime" class="PfLabel" text="{s:text}" />
+					<Label id="MiTime" class="PfValue" text="{s:text}" />
+				</Panel>
+				<Panel class="PfRow">
+					<Label id="LMiAdded" class="PfLabel" text="{s:text}" />
+					<Label id="MiAdded" class="PfValue" text="{s:text}" />
+				</Panel>
+				<Panel class="PfRow">
+					<Label id="LMiLast" class="PfLabel" text="{s:text}" />
+					<Label id="MiLast" class="PfValue" text="{s:text}" />
+				</Panel>
+			</Panel>
+			<Panel class="MenuFooter">
+				<Button id="MiRecordsButton" class="MenuButton">
+					<Label id="LMiRecordsButton" text="{s:text}" />
+				</Button>
+				<Button id="MiClose" class="MenuButton MenuButton--primary">
+					<Label id="LMiClose" text="{s:text}" />
+				</Button>
+			</Panel>
+		</Panel>
 	</Panel>
 </root>

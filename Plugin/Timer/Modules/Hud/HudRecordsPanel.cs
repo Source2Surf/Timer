@@ -74,6 +74,7 @@ internal partial class HudModule
         CloseNominateMenu(p);
         CloseZonePanel(p);
         CloseStyles(p);
+        CloseMapInfo(p);
 
         // The player's own style, and on this map their track.
         var info = _timerModule.GetTimerInfo(p.Slot);

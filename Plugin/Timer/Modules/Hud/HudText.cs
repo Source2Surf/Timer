@@ -341,6 +341,28 @@ internal static class HudTexts
     // ---- spectator list
     public static readonly HudText SpecHead = new ("hud.specs.head", "Spectators ({0}):");
 
+    // ---- map info card
+    public static readonly HudText MiTitle           = new ("hud.mapinfo.title", "Map info");
+    public static readonly HudText MiTier            = new ("hud.mapinfo.tier", "Tier {0}");
+    public static readonly HudText MiSurf            = new ("hud.mapinfo.surf", "Surf");
+    public static readonly HudText MiBhop            = new ("hud.mapinfo.bhop", "Bhop");
+    public static readonly HudText MiUnranked        = new ("hud.mapinfo.unranked", "Unranked: it earns no points");
+    public static readonly HudText MiLayoutSection   = new ("hud.mapinfo.layout", "Layout");
+    public static readonly HudText MiType            = new ("hud.mapinfo.type", "Type");
+    public static readonly HudText MiStaged          = new ("hud.mapinfo.staged", "Staged");
+    public static readonly HudText MiStages          = new ("hud.mapinfo.stages", "{0} stages");
+    public static readonly HudText MiCheckpoints     = new ("hud.mapinfo.checkpoints", "{0} checkpoints");
+    public static readonly HudText MiBonusesLabel    = new ("hud.mapinfo.bonuses", "Bonuses");
+    public static readonly HudText MiRecords         = new ("hud.mapinfo.records", "Records · {0}");
+    public static readonly HudText MiSrLabel         = new ("hud.mapinfo.sr", "Server record");
+    public static readonly HudText MiDoneLabel       = new ("hud.mapinfo.completions", "Completions");
+    public static readonly HudText MiActivitySection = new ("hud.mapinfo.activity", "Activity");
+    public static readonly HudText MiPlayedLabel     = new ("hud.mapinfo.played", "Times played");
+    public static readonly HudText MiTimeLabel       = new ("hud.mapinfo.time", "Total play time");
+    public static readonly HudText MiAddedLabel      = new ("hud.mapinfo.added", "Added");
+    public static readonly HudText MiLastLabel       = new ("hud.mapinfo.last", "Last played");
+    public static readonly HudText MiRecordsButton   = new ("hud.mapinfo.records_button", "Records");
+
     // ---- style picker
     public static readonly HudText StylesTitle   = new ("hud.styles.title", "Styles");
     public static readonly HudText StylesCount   = new ("hud.styles.count", "{0} styles");
@@ -576,6 +598,24 @@ internal static class HudLabels
         ("LNomClose", HudTexts.Close),
     ];
 
+    public static readonly (string Id, HudText Text)[] MapInfo =
+    [
+        ("LMiTitle", HudTexts.MiTitle),
+        ("MiUnranked", HudTexts.MiUnranked),
+        ("LMiLayout", HudTexts.MiLayoutSection),
+        ("LMiType", HudTexts.MiType),
+        ("LMiBonuses", HudTexts.MiBonusesLabel),
+        ("LMiSr", HudTexts.MiSrLabel),
+        ("LMiDone", HudTexts.MiDoneLabel),
+        ("LMiActivity", HudTexts.MiActivitySection),
+        ("LMiPlayed", HudTexts.MiPlayedLabel),
+        ("LMiTime", HudTexts.MiTimeLabel),
+        ("LMiAdded", HudTexts.MiAddedLabel),
+        ("LMiLast", HudTexts.MiLastLabel),
+        ("LMiRecordsButton", HudTexts.MiRecordsButton),
+        ("LMiClose", HudTexts.Close),
+    ];
+
     public static readonly (string Id, HudText Text)[] Styles =
     [
         ("LStyTitle", HudTexts.StylesTitle),
@@ -627,7 +667,7 @@ internal static class HudLabels
     ];
 
     public static IEnumerable<(string Id, HudText Text)> All
-        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate).Concat(Zones).Concat(ZonePrompt).Concat(Records).Concat(Styles)
+        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate).Concat(Zones).Concat(ZonePrompt).Concat(Records).Concat(Styles).Concat(MapInfo)
                 .Append(("SplitsEmpty", HudTexts.SplitsEmpty))
                 .Append(("SsjEmpty", HudTexts.SsjEmpty));
 }

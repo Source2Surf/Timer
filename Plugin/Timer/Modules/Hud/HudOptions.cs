@@ -191,7 +191,7 @@ internal static class HudOptions
 
     // HUD tab: every menu's size, for very low or high resolutions
     public static readonly HudOption SizeMenus =
-        new (41, "SizeMenus", SizeChoices, ["Menu", "RMenu", "PfMenu", "NMenu", "ZnMenu", "LbMenu", "StyMenu", "VotePanel", "ZnPrompt"], SizeDefault);
+        new (41, "SizeMenus", SizeChoices, ["Menu", "RMenu", "PfMenu", "NMenu", "ZnMenu", "LbMenu", "StyMenu", "MiMenu", "VotePanel", "ZnPrompt"], SizeDefault);
 
     // !footsteps and !stopsound
     public static readonly HudOption Footsteps    = new (43, "OptFootsteps", OnOff) { InMenu = false };

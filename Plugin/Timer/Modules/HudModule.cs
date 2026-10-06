@@ -70,6 +70,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
     private readonly IMapChooser        _mapChooser;
     private readonly IRecordModule      _recordModule;
     private readonly IZoneModule        _zoneModule;
+    private readonly IMapInfoModule     _mapInfo;
     private readonly IStyleModule       _styleModule;
     private readonly IPracticeModule    _practiceModule;
     private readonly IPlayerManager     _playerManager;
@@ -103,6 +104,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
                      IMapChooser        mapChooser,
                      IRecordModule      recordModule,
                      IZoneModule        zoneModule,
+                     IMapInfoModule     mapInfo,
                      IStyleModule       styleModule,
                      IPracticeModule    practiceModule,
                      IPlayerManager     playerManager,
@@ -122,6 +124,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         _mapChooser     = mapChooser;
         _recordModule   = recordModule;
         _zoneModule     = zoneModule;
+        _mapInfo        = mapInfo;
         _styleModule    = styleModule;
         _practiceModule = practiceModule;
         _playerManager  = playerManager;
@@ -159,6 +162,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         _zoneModule.EditorRequested += OnZoneEditorRequested;
         _recordModule.LeaderboardRequested += OnLeaderboardRequested;
         _styleModule.StyleMenuRequested    += OnStyleMenuRequested;
+        _mapInfo.MapInfoRequested          += OnMapInfoRequested;
         _playerManager.RegisterListener(this);
 
         _commandManager.AddClientChatCommand("hud", OnCommandHud);
@@ -178,6 +182,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         _zoneModule.EditorRequested -= OnZoneEditorRequested;
         _recordModule.LeaderboardRequested -= OnLeaderboardRequested;
         _styleModule.StyleMenuRequested    -= OnStyleMenuRequested;
+        _mapInfo.MapInfoRequested          -= OnMapInfoRequested;
         _playerManager.UnregisterListener(this);
 
         _panorama.RemoveClickListener(OnHudClicked);
@@ -704,6 +709,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
             CloseZonePanel(p);
             CloseRecords(p);
             CloseStyles(p);
+            CloseMapInfo(p);
         }
         else
         {
@@ -739,6 +745,10 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         else if (buttonId.StartsWith("Sty", StringComparison.Ordinal))
         {
             ClickStyles(p, buttonId);
+        }
+        else if (buttonId.StartsWith("Mi", StringComparison.Ordinal))
+        {
+            ClickMapInfo(p, buttonId);
         }
         else if (buttonId.StartsWith("Pf", StringComparison.Ordinal))
         {

@@ -620,6 +620,21 @@ public sealed class HudLayoutContractTests
     }
 
     [Fact]
+    public void EveryMapInfoPanelExists()
+    {
+        string[] ids =
+        [
+            "MiMenu", "MiName", "MiSub", "MiUnranked", "MiLayout", "MiLayoutNote", "MiBonuses", "MiBonusesNote", "MiRecordsTitle",
+            "MiSr", "MiSrNote", "MiDone", "MiPlayed", "MiTime", "MiAdded", "MiLast", "MiRecordsButton", "MiClose",
+        ];
+
+        foreach (var id in ids)
+        {
+            Assert.Contains(id, Ids);
+        }
+    }
+
+    [Fact]
     public void EveryStylePickerPanelExists()
     {
         var ids = HudModule.StyleRowIds.Concat(HudModule.StyleNameIds).Concat(HudModule.StyleCmdIds).Concat(HudModule.StyleDescIds)

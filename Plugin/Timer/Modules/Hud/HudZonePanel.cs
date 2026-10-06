@@ -81,6 +81,7 @@ internal partial class HudModule
         CloseNominateMenu(p);
         CloseRecords(p);
         CloseStyles(p);
+        CloseMapInfo(p);
 
         if (z.Number == 0 && ZoneEdit.IsNumbered(z.Type))
         {

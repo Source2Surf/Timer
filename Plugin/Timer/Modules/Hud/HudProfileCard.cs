@@ -135,6 +135,7 @@ internal partial class HudModule
         CloseZonePanel(p);
         CloseRecords(p);
         CloseStyles(p);
+        CloseMapInfo(p);
 
         var f = p.Profile;
         f.Open            = true;

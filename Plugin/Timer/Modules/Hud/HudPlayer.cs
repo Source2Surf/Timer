@@ -95,6 +95,16 @@ internal sealed class HudReplayMenu
 /// <summary>
 ///     The style picker (!style).
 /// </summary>
+/// <summary>
+///     The map info card (!mapinfo).
+/// </summary>
+internal sealed class HudMapInfo
+{
+    public bool Open;
+    public bool Dirty;
+    public int  Version = -1; // the record module's RecordsVersion, when last drawn
+}
+
 internal sealed class HudStyles
 {
     public bool    Open;
@@ -253,6 +263,7 @@ internal sealed class HudPlayer
         Chooser.VoteSecond  = -1;
         Zones.Version       = -1;
         Records.Version     = -1;
+        MapInfo.Version     = -1;
         Zones.PromptShown   = false;
     }
 
@@ -295,9 +306,10 @@ internal sealed class HudPlayer
     public readonly HudZones   Zones   = new ();
     public readonly HudRecords Records = new ();
     public readonly HudStyles  Styles  = new ();
+    public readonly HudMapInfo MapInfo = new ();
 
     // Any menu takes the mouse.
-    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null || Zones.Open || Records.Open || Styles.Open;
+    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null || Zones.Open || Records.Open || Styles.Open || MapInfo.Open;
 
     // HUD settings, the nominate menu and the zone panel also keep the player from moving.
     public bool MovementLocked => MenuOpen || Chooser.Menu is not null || Zones.Open;
