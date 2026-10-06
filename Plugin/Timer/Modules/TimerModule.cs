@@ -268,6 +268,18 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             }
             case EZoneType.End:
             {
+                if (MissedBeforeEnd(_zoneModule.IsCurrentTrackLinear(timerInfo.Track) ? 0 : _zoneModule.GetTotalStages(timerInfo.Track),
+                                    stageTimer.IsTimerRunning() ? stageTimer.Stage : 0,
+                                    _zoneModule.GetLastCheckpoint(timerInfo.Track),
+                                    timerInfo.IsTimerRunning() ? timerInfo.Checkpoint : -1) is { } missed)
+                {
+                    timerInfo.StopTimer();
+                    stageTimer.StopTimer();
+                    controller.PrintToChat(_localization.For(controller.PlayerSlot)[missed]);
+
+                    return;
+                }
+
                 if (stageTimer.IsTimerRunning())
                 {
                     stageTimer.EndVelocity = velocity;
@@ -547,6 +559,26 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                 break;
             }
         }
+    }
+
+    /// <summary>
+    ///     A skipped stage or checkpoint is caught at the next one, so the End has to catch the last ones: a running stage
+    ///     timer short of the last stage, or a running timer short of the last checkpoint. 0 stages or a stage of 0, and a
+    ///     checkpoint of -1, mean there's nothing to check.
+    /// </summary>
+    internal static ChatText? MissedBeforeEnd(int stages, int stage, int lastCheckpoint, int checkpoint)
+    {
+        if (stages > 1 && stage > 0 && stage < stages)
+        {
+            return ChatTexts.MissingStages;
+        }
+
+        if (checkpoint >= 0 && checkpoint < lastCheckpoint)
+        {
+            return ChatTexts.MissingCheckpoints;
+        }
+
+        return null;
     }
 
     public ITimerInfo? GetTimerInfo(PlayerSlot slot)

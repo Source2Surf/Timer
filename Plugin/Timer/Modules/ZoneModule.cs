@@ -59,6 +59,9 @@ internal interface IZoneModule
 
     int GetCurrentTrackCheckpointCount(int track);
 
+    // The highest checkpoint number; a map can have several triggers for one checkpoint.
+    int GetLastCheckpoint(int track);
+
     bool TeleportToStage(IPlayerPawn pawn, int track, int stage);
 
     // Raised when an admin runs !zone without arguments, to open the zone editor.
@@ -594,6 +597,18 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
     public int GetCurrentTrackCheckpointCount(int track)
         => GetZoneBucket(track, EZoneType.Checkpoint)?.Count ?? 0;
+
+    public int GetLastCheckpoint(int track)
+    {
+        var last = 0;
+
+        foreach (var zone in GetZoneBucket(track, EZoneType.Checkpoint) ?? [])
+        {
+            last = Math.Max(last, zone.Data);
+        }
+
+        return last;
+    }
 
     private List<ZoneInfo>? GetZoneBucket(int track, EZoneType type)
     {
