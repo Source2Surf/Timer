@@ -155,7 +155,15 @@
 						<Panel class="LocsRow"><Label id="LocsKeyNext" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsNext" class="LocsAct" text="{s:text}" /></Panel>
 						<Panel class="LocsRow"><Label id="LocsKeyClear" class="LocsCap" text="{g:csgo_key:editkey}{s:nonce}" /><Label id="LocsClear" class="LocsAct" text="{s:text}" /></Panel>
 						<Panel class="LocsRow"><Label id="LocsKeyHide" class="LocsCap" text="{g:csgo_key:editkey} + {g:csgo_key:editkey2}{s:nonce}" /><Label id="LocsHide" class="LocsAct" text="{s:text}" /></Panel>
-						<Label id="LocsNote" class="LocsNote" text="{s:text}" />
+						<Panel class="LocsNotes">
+							<Label id="LocsNote" class="LocsNote" text="{s:text}" />
+							<Label id="LocsNoteSave" class="LocsNote LocsNoteCmd" text="{s:text}" />
+							<Label id="LocsNoteLoc" class="LocsNote LocsNoteCmd" text="{s:text}" />
+							<Label id="LocsNotePrevNext" class="LocsNote LocsNoteCmd" text="{s:text}" />
+							<Label id="LocsNoteClear" class="LocsNote LocsNoteCmd" text="{s:text}" />
+							<Label id="LocsNoteUpdate" class="LocsNote" text="{s:text}" />
+							<Label id="LocsNoteFirst" class="LocsNote Hidden" text="{s:text}" />
+						</Panel>
 					</Panel>
 				</Button>
 			</Panel>

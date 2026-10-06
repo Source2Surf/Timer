@@ -259,9 +259,14 @@ internal static class HudTexts
     public static readonly HudText LocsHide       = new ("ui.locs.hide", "Hide");
     public static readonly HudText LocsClear      = new ("ui.locs.clear", "Clear all");
     public static readonly HudText LocsClearAsk   = new ("ui.locs.clear_ask", "Press again to clear all {0}");
-    public static readonly HudText LocsNote       = new ("ui.locs.note", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys.");
-    public static readonly HudText LocsNoteFirst  = new ("ui.locs.note_first", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys. Saving puts your run in practice.");
-    public static readonly HudText LocsNoteFirstSegmented = new ("ui.locs.note_first_segmented", "Bind keys in the console, like: bind mouse4 saveloc (also loc, prevloc, nextloc, clearloc). Hide and show this panel to update the keys. On this segmented style, saving keeps your run record-eligible.");
+    public static readonly HudText LocsNote               = new ("ui.locs.note", "Bind keys in the console, like: bind mouse4 saveloc");
+    public static readonly HudText LocsNoteSave           = new ("ui.locs.note_saveloc", "saveloc: save where you are");
+    public static readonly HudText LocsNoteLoc            = new ("ui.locs.note_loc", "loc: teleport to the current saved one");
+    public static readonly HudText LocsNotePrevNext       = new ("ui.locs.note_prevnext", "prevloc / nextloc: teleport to the previous / next one");
+    public static readonly HudText LocsNoteClear          = new ("ui.locs.note_clearloc", "clearloc: clear them all");
+    public static readonly HudText LocsNoteUpdate         = new ("ui.locs.note_update", "Hide and show this panel to update the keys.");
+    public static readonly HudText LocsNoteFirst          = new ("ui.locs.note_first", "Teleporting to a saved location puts your run in practice.");
+    public static readonly HudText LocsNoteFirstSegmented = new ("ui.locs.note_first_segmented", "On this segmented style, teleporting back keeps your run record-eligible.");
 
     public static readonly HudText MenuTitle      = new ("ui.menu.title", "HUD settings");
     public static readonly HudText MenuMove       = new ("ui.menu.move", "Move");

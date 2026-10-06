@@ -620,6 +620,15 @@ public sealed class HudLayoutContractTests
     }
 
     [Fact]
+    public void TheLocationsNoteHasACommandALine()
+    {
+        foreach (var id in new[] { "LocsNote", "LocsNoteSave", "LocsNoteLoc", "LocsNotePrevNext", "LocsNoteClear", "LocsNoteUpdate", "LocsNoteFirst" })
+        {
+            Assert.Contains(id, Ids);
+        }
+    }
+
+    [Fact]
     public void EveryMapInfoPanelExists()
     {
         string[] ids =

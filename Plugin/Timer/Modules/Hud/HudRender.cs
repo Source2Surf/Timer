@@ -295,11 +295,19 @@ internal partial class HudModule
         w.Class("LocsClear", "warn", asking);
         w.Class("LocsKeyClear", "warn", asking);
 
-        // How to bind, and how to see a new bind; before the first save, also what saving does on this style.
-        var note = count > 0 ? HudTexts.LocsNote
-            : _practiceModule.IsOnSegmentedStyle(p.Slot) ? HudTexts.LocsNoteFirstSegmented
-                                                         : HudTexts.LocsNoteFirst;
-        w.Text("LocsNote", "text", tr[note]);
+        // How to bind, a command a line, and how to see a new bind; before the first save, also what saving does here.
+        w.Text("LocsNote", "text", tr[HudTexts.LocsNote]);
+        w.Text("LocsNoteSave", "text", tr[HudTexts.LocsNoteSave]);
+        w.Text("LocsNoteLoc", "text", tr[HudTexts.LocsNoteLoc]);
+        w.Text("LocsNotePrevNext", "text", tr[HudTexts.LocsNotePrevNext]);
+        w.Text("LocsNoteClear", "text", tr[HudTexts.LocsNoteClear]);
+        w.Text("LocsNoteUpdate", "text", tr[HudTexts.LocsNoteUpdate]);
+        w.Class("LocsNoteFirst", "Hidden", count > 0);
+
+        if (count == 0)
+        {
+            w.Text("LocsNoteFirst", "text", tr[_practiceModule.IsOnSegmentedStyle(p.Slot) ? HudTexts.LocsNoteFirstSegmented : HudTexts.LocsNoteFirst]);
+        }
 
         // The command each key cap shows the key of (the practice module's console commands); the client fills in the
         // bound key, or NOT BOUND.

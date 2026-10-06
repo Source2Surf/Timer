@@ -453,11 +453,24 @@
     color: #ffb1a9;
 }
 
-.LocsPanel .LocsNote {
+/* How to bind, then a command a line. */
+.LocsNotes {
     width: 260px;
+    height: fit-children;
     margin-top: 8px;
+    flow-children: down;
+}
+
+.LocsPanel .LocsNote {
+    width: 100%;
+    margin-top: 2px;
     font-size: 14px;
     color: #ffffffb3;
+}
+
+.LocsPanel .LocsNoteCmd {
+    margin-top: 1px;
+    color: #ffffffd9;
 }
 
 /* ---- SSJ ---- */
