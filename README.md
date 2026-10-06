@@ -61,6 +61,8 @@ Commands:
   player on the server. For a picked style it shows maps and bonuses completed and
   the records held across every map, then this map's PB, stage PBs and time
   played, for a picked track.
+- `!style` lists the styles with their descriptions; `!style <name>` (or any of
+  a style's commands) switches to it.
 - `!replay` opens the replay menu. A player picks a track, stage, style and a
   time on its leaderboard, and watches it on the central replay bot. Pressing E
   while spectating that bot opens the menu too.

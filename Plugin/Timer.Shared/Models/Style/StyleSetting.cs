@@ -30,6 +30,12 @@ public record StyleSetting
     public string Command { get; init; } = "normal;n";
 
     /// <summary>
+    /// What the style is about, for the style list; may use {colour} chat tags.
+    /// </summary>
+    [JsonPropertyName("description")]
+    public string Description { get; init; } = "";
+
+    /// <summary>
     /// Runs and replays are stored under this, so it stays with the style however the list changes: 0-63. Without one
     /// (-1), a style's id is its place in the list.
     /// </summary>

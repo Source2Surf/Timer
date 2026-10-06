@@ -75,6 +75,21 @@ public sealed class StyleIdTests
         Assert.Equal(expected, module.StepStyle(style, step));
     }
 
+    [Theory]
+    [InlineData("Sideways", 4)]
+    [InlineData("SW", 4)]
+    [InlineData("!n", 0)]
+    [InlineData("hsw", null)] // disabled
+    [InlineData("nope", null)]
+    public void StylesAreFoundByNameOrCommand(string text, int? expected)
+    {
+        var module = Module(new () { Name = "Normal", Command = "normal;n", Id = 0 },
+                            new () { Name = "Sideways", Command = "sideways;sw", Id = 4 },
+                            new () { Name = "Half-sideways", Command = "hsw", Id = 5, Enabled = false });
+
+        Assert.Equal(expected, module.FindStyle(text));
+    }
+
     [Fact]
     public void IdAndEnabledAreReadFromTheConfig()
     {

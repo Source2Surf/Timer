@@ -8,6 +8,9 @@
         // Chat commands (aliases) separated by ';'.
         "command": "normal;n",
 
+        // Shown by !style; {colour} chat tags work.
+        "description": "Auto bunnyhop, all keys.",
+
         // Runs and replays are stored under the id (0-63), so keep it when reordering or removing styles.
         // Without one, a style's id is its place in this list.
         "id": 0,
@@ -57,6 +60,7 @@
     {
         "name": "Sideways",
         "command": "sideways;sw",
+        "description": "Only W and S.",
         "id": 1,
         "autobhop": true,
         "allow_bunnyhopping": true,

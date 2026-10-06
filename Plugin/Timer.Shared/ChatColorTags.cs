@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Frozen;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -16,6 +17,15 @@ namespace Source2Surf.Timer.Shared;
 public static class ChatColorTags
 {
     public const string DefaultPrefix = "{lime}Timer{white} | ";
+
+    /// <summary>
+    ///     The tag names, as in <see cref="ChatColor" />, for anything showing tagged text outside chat.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Names =
+        typeof(ChatColor).GetFields(BindingFlags.Public | BindingFlags.Static)
+                         .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+                         .Select(f => f.Name)
+                         .ToArray();
 
     private static readonly FrozenDictionary<string, string>.AlternateLookup<ReadOnlySpan<char>> Colors =
         typeof(ChatColor).GetFields(BindingFlags.Public | BindingFlags.Static)

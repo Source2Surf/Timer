@@ -32,6 +32,7 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
@@ -70,6 +71,17 @@ internal interface IStyleModule
     ///     The next or previous style players can pick, stopping at the ends.
     /// </summary>
     int StepStyle(int style, int step);
+
+    /// <summary>
+    ///     Puts the player on the style, stopping their timers and respawning them, as its chat command does. False when
+    ///     players can't pick it.
+    /// </summary>
+    bool SwitchStyle(PlayerSlot slot, int style);
+
+    /// <summary>
+    ///     Plain !style, for a style menu to open; without a handler the styles are listed in chat.
+    /// </summary>
+    event Action<PlayerSlot>? StyleMenuRequested;
 }
 
 internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener, ITimerModuleListener, IZoneModuleListener
@@ -78,7 +90,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
     private readonly string _styleConfigPath;
 
-    private readonly ICommandManager _commandManager;
+    private readonly ICommandManager       _commandManager;
+    private readonly ILocalizationProvider _localization;
 
     private readonly IZoneModule          _zoneModule;
     private          ITimerModule         _timerModule = null!;
@@ -107,14 +120,16 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private int  _lastStyleIndex = -1;
     private bool _lastInStartZone;
 
-    public StyleModule(InterfaceBridge      bridge,
-                       ICommandManager      commandManager,
-                       IZoneModule          zoneModule,
-                       IMapInfoModule       mapInfoModule,
-                       IRequestManager      request,
-                       ILogger<StyleModule> logger)
+    public StyleModule(InterfaceBridge       bridge,
+                       ICommandManager       commandManager,
+                       IZoneModule           zoneModule,
+                       IMapInfoModule        mapInfoModule,
+                       IRequestManager       request,
+                       ILocalizationProvider localization,
+                       ILogger<StyleModule>  logger)
     {
         _bridge         = bridge;
+        _localization   = localization;
         _commandManager = commandManager;
         _zoneModule     = zoneModule;
         _mapInfoModule  = mapInfoModule;
@@ -144,6 +159,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         _bridge.ModSharp.InstallGameListener(this);
 
         _commandManager.AddServerCommand("reload_styles", OnCommandReloadStyles);
+        _commandManager.AddClientChatCommand("style", OnCommandStyle);
 
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnProcessMovementPre);
         _bridge.HookManager.PlayerGetMaxSpeed.InstallHookPre(OnPlayerGetMaxSpeed);
@@ -517,44 +533,115 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
             ECommandAction OnStyleCommand(PlayerSlot slot, StringCommand _)
             {
-                if (_bridge.ClientManager.GetGameClient(slot) is not { } client
-                    || client.GetPlayerController() is not { IsValidEntity: true } controller
-                    || _timerModule.GetTimerInfo(slot) is not { } timerInfo
-                    || _timerModule.GetStageTimerInfo(slot) is not { } stageTimer)
-                {
-                    return ECommandAction.Handled;
-                }
-
-                var oldStyle = timerInfo.Style;
-                NotifyClientStyleChanged(slot, oldStyle, styleIndex);
-                timerInfo.ChangeStyle(styleIndex);
-                stageTimer.ChangeStyle(styleIndex);
-
-                _bridge.ModSharp.InvokeFrameAction(() =>
-                {
-                    if (_bridge.ClientManager.GetGameClient(slot) is not { } deferredClient)
-                    {
-                        return;
-                    }
-
-                    if (deferredClient.GetPlayerController() is not { IsValidEntity: true } deferredController)
-                    {
-                        return;
-                    }
-
-                    if (deferredController.Team <= CStrikeTeam.Spectator)
-                    {
-                        deferredController.SwitchTeam((CStrikeTeam) Random.Shared.Next(2, 4));
-                    }
-
-                    deferredController.Respawn();
-
-                    ReplicateClientCvars(deferredClient, styleIndex);
-                });
+                SwitchStyle(slot, styleIndex);
 
                 return ECommandAction.Handled;
             }
         }
+    }
+
+    public event Action<PlayerSlot>? StyleMenuRequested;
+
+    public bool SwitchStyle(PlayerSlot slot, int style)
+    {
+        if (!IsStyleEnabled(style)
+            || _bridge.ClientManager.GetGameClient(slot) is not { } client
+            || client.GetPlayerController() is not { IsValidEntity: true }
+            || _timerModule.GetTimerInfo(slot) is not { } timerInfo
+            || _timerModule.GetStageTimerInfo(slot) is not { } stageTimer)
+        {
+            return false;
+        }
+
+        NotifyClientStyleChanged(slot, timerInfo.Style, style);
+        timerInfo.ChangeStyle(style);
+        stageTimer.ChangeStyle(style);
+
+        _bridge.ModSharp.InvokeFrameAction(() =>
+        {
+            if (_bridge.ClientManager.GetGameClient(slot) is not { } deferredClient)
+            {
+                return;
+            }
+
+            if (deferredClient.GetPlayerController() is not { IsValidEntity: true } deferredController)
+            {
+                return;
+            }
+
+            if (deferredController.Team <= CStrikeTeam.Spectator)
+            {
+                deferredController.SwitchTeam((CStrikeTeam) Random.Shared.Next(2, 4));
+            }
+
+            deferredController.Respawn();
+
+            ReplicateClientCvars(deferredClient, style);
+        });
+
+        return true;
+    }
+
+    // !style lists the styles players can pick; !style <name or command> switches to one.
+    private ECommandAction OnCommandStyle(PlayerSlot slot, StringCommand command)
+    {
+        if (!_bridge.TryGetController(slot, out var controller))
+        {
+            return ECommandAction.Handled;
+        }
+
+        var arg = command.ArgString.Trim();
+
+        if (arg.Length > 0 && FindStyle(arg) is { } style)
+        {
+            SwitchStyle(slot, style);
+
+            return ECommandAction.Handled;
+        }
+
+        if (arg.Length == 0 && StyleMenuRequested is { } openMenu)
+        {
+            openMenu(slot);
+
+            return ECommandAction.Handled;
+        }
+
+        var tr      = _localization.For(slot);
+        var current = _timerModule.GetTimerInfo(slot)?.Style ?? DefaultStyle;
+
+        controller.PrintToChat(tr.Format(ChatTexts.StyleList, Utils.Highlight(GetStyleSetting(current).Name)));
+
+        foreach (var id in _ids)
+        {
+            var setting = _byId[id]!;
+            var aliases = string.Join(' ', setting.Command.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                                         .Select(c => "!" + c));
+
+            controller.PrintToChat(setting.Description.Length > 0
+                                       ? tr.Format(ChatTexts.StyleRowDescribed, Utils.Highlight(setting.Name), aliases,
+                                                   ChatColorTags.Apply(setting.Description))
+                                       : tr.Format(ChatTexts.StyleRow, Utils.Highlight(setting.Name), aliases));
+        }
+
+        return ECommandAction.Handled;
+    }
+
+    // An enabled style by its name or one of its commands, in any case.
+    internal int? FindStyle(string nameOrCommand)
+    {
+        foreach (var id in _ids)
+        {
+            var setting = _byId[id]!;
+
+            if (setting.Name.Equals(nameOrCommand, StringComparison.OrdinalIgnoreCase)
+                || setting.Command.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                          .Any(c => c.Equals(nameOrCommand.TrimStart('!'), StringComparison.OrdinalIgnoreCase)))
+            {
+                return id;
+            }
+        }
+
+        return null;
     }
 
     private void ReplicateClientCvars(IGameClient client, int styleIndex)

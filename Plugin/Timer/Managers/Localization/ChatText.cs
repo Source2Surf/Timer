@@ -217,6 +217,10 @@ internal static class ChatTexts
     public static readonly ChatText LocBadIndex      = new ("chat.loc.bad_index", "Invalid loc index. Valid: 1..{0}");
     public static readonly ChatText LocTelePaused    = new ("chat.loc.tele_paused", "Cannot teleport while the timer is paused.");
     public static readonly ChatText LocOtherStyle    = new ("chat.loc.other_style", "That location was saved on a different style.");
+
+    public static readonly ChatText StyleList          = new ("chat.style.list", "Styles (you're on {0}); !style <name> switches:");
+    public static readonly ChatText StyleRow           = new ("chat.style.row", "{0}: {1}");
+    public static readonly ChatText StyleRowDescribed  = new ("chat.style.row_described", "{0}: {1} - {2}");
     public static readonly ChatText LocReplayBusy    = new ("chat.loc.replay_busy", "Saving a stage replay, try again in a moment.");
     public static readonly ChatText LocReplayLost    = new ("chat.loc.replay_lost", "This location's replay is gone, so the run continues as practice.");
     public static readonly ChatText LocTeleported    = new ("chat.loc.teleported", "Teleported to loc #{0}/{1}.");

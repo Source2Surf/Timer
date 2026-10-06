@@ -1771,6 +1771,18 @@
     "en-us": "That location was saved on a different style.",
     "zh-cn": "这个存点是在其他模式下保存的。"
   },
+  "chat.style.list": {
+    "en-us": "Styles (you're on {0}); !style <name> switches:",
+    "zh-cn": "模式（当前：{0}）；用 !style <名称> 切换："
+  },
+  "chat.style.row": {
+    "en-us": "{0}: {1}",
+    "zh-cn": "{0}：{1}"
+  },
+  "chat.style.row_described": {
+    "en-us": "{0}: {1} - {2}",
+    "zh-cn": "{0}：{1} - {2}"
+  },
   "chat.loc.replay_busy": {
     "en-us": "Saving a stage replay, try again in a moment.",
     "zh-cn": "正在保存关卡回放，请稍后再试。"
