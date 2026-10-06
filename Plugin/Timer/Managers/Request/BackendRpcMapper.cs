@@ -44,6 +44,7 @@ internal static class BackendRpcMapper
             PlayCount     = source.PlayCount,
             AddedAt       = source.AddedAt,
             LastPlayedAt  = source.LastPlayedAt,
+            Ranked        = source.Ranked,
         };
     }
 

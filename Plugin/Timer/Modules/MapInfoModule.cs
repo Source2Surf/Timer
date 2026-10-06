@@ -165,6 +165,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         _bridge.ModSharp.InstallGameListener(this);
 
         _commandManager.AddAdminChatCommand("set_tier", ["timer:tier"], OnCommandSetTier);
+        _commandManager.AddAdminChatCommand("set_ranked", ["timer:tier"], OnCommandSetRanked);
         _commandManager.AddClientChatCommand("mi", OnCommandMapInfo);
         _commandManager.AddClientChatCommand("mapinfo", OnCommandMapInfo);
         _commandManager.AddClientChatCommand("tier", OnCommandTier);
@@ -278,6 +279,65 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         PersistCurrentMapStats();
     }
 
+    // !set_ranked 0 takes the map out of the points, !set_ranked 1 puts it back.
+    private ECommandAction OnCommandSetRanked(PlayerSlot slot, StringCommand command)
+    {
+        if (!_bridge.TryGetController(slot, out var controller))
+        {
+            return ECommandAction.Handled;
+        }
+
+        if (command.ArgCount < 1 || !command.TryGetArg<int>(1, out var value) || value is not (0 or 1))
+        {
+            controller.PrintToChat(_localization.For(slot)[ChatTexts.MapRankedUsage]);
+
+            return ECommandAction.Handled;
+        }
+
+        var mapName = _bridge.CurrentMapName;
+        var ranked  = value == 1;
+
+        _taskTracker.Track(Task.Run(async () =>
+        {
+            try
+            {
+                var result = await RetryHelper.RetryAsync(() => _requestManager.SetMapRankedAsync(mapName, ranked),
+                                                          RetryHelper.IsTransient, _logger, "SetMapRankedAsync")
+                                              .ConfigureAwait(false);
+
+                if (!result.MapFound)
+                {
+                    _logger.LogWarning("set_ranked: map {map} isn't stored yet.", mapName);
+
+                    return;
+                }
+
+                await _bridge.ModSharp.InvokeFrameActionAsync(() =>
+                {
+                    if (string.Equals(_currentMapProfileInfo.MapName, mapName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _currentMapProfileInfo.Ranked = ranked;
+                    }
+
+                    if (_bridge.TryGetController(slot, out var admin))
+                    {
+                        admin.PrintToChat(_localization.For(slot).Format(ranked ? ChatTexts.MapRankedSet : ChatTexts.MapUnrankedSet,
+                                                                         Utils.Highlight(mapName)));
+                    }
+                }).ConfigureAwait(false);
+
+                _logger.LogInformation("Set {map} {ranked}; queued {boards} score board(s) for recalculation.",
+                                       mapName, ranked ? "ranked" : "unranked", result.BoardsQueued);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error when setting whether {map} is ranked", mapName);
+            }
+        }, _bridge.CancellationToken));
+
+        return ECommandAction.Handled;
+    }
+
     private ECommandAction OnCommandSetTier(PlayerSlot slot, StringCommand command)
     {
         if (command.ArgCount < 1 || !command.TryGetArg<byte>(1, out var tier) || tier == 0)
@@ -389,10 +449,11 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         var gameMode = _currentGameMode;
 
         // Line 1: Map name, tier, mode
-        controller.PrintToChat(tr.Format(ChatTexts.MapInfo,
-                                         Utils.Highlight(_bridge.CurrentMapName),
-                                         Utils.Highlight(profile.Tier[0]),
-                                         Utils.Highlight(gameMode)));
+        var line1 = tr.Format(ChatTexts.MapInfo,
+                              Utils.Highlight(_bridge.CurrentMapName),
+                              Utils.Highlight(profile.Tier[0]),
+                              Utils.Highlight(gameMode));
+        controller.PrintToChat(profile.Ranked ? line1 : tr.Format(ChatTexts.MapUnranked, line1));
 
         // Line 2: Track layout — stages, checkpoints, bonuses, linear
         var totalStages      = _zoneModule.GetTotalStages(0);

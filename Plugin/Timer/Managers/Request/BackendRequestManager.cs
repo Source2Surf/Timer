@@ -121,6 +121,9 @@ internal sealed class BackendRequestManager : IRequestManager, IReplayCatalog, I
     public async Task<ScoreQueueResult> SetMapTierAsync(string mapName, byte tier)
         => BackendRpcMapper.ToResult(await Call.SetMapTierAsync(mapName, WorkshopId(mapName), tier));
 
+    public async Task<ScoreQueueResult> SetMapRankedAsync(string mapName, bool ranked)
+        => BackendRpcMapper.ToResult(await Call.SetMapRankedAsync(mapName, WorkshopId(mapName), ranked));
+
     public async Task IncrementMapStatsAsync(string mapName, float deltaSeconds)
         => await Call.IncrementMapStatsAsync(mapName, WorkshopId(mapName), deltaSeconds);
 

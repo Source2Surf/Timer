@@ -1715,6 +1715,22 @@
     "en-us": "unknown",
     "zh-cn": "未知"
   },
+  "chat.map.unranked": {
+    "en-us": "{0} | Unranked: it earns no points",
+    "zh-cn": "{0} | 不计分：本图不获得积分"
+  },
+  "chat.map.ranked_set": {
+    "en-us": "{0} is ranked again; its points are being recalculated.",
+    "zh-cn": "{0} 已恢复计分，正在重新计算积分。"
+  },
+  "chat.map.unranked_set": {
+    "en-us": "{0} is unranked; its points are being removed.",
+    "zh-cn": "{0} 已设为不计分，正在移除其积分。"
+  },
+  "chat.map.ranked_usage": {
+    "en-us": "Usage: !set_ranked <1 or 0>",
+    "zh-cn": "用法：!set_ranked <1 或 0>"
+  },
   "chat.usage.tele": {
     "en-us": "Usage: !tele <n>  (1-based loc index)",
     "zh-cn": "用法：!tele <n>（存点编号，从 1 开始）"

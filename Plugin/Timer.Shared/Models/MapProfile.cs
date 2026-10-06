@@ -43,4 +43,7 @@ public class MapProfile
     // Unix milliseconds; 0 = unknown.
     public long AddedAt      { get; set; }
     public long LastPlayedAt { get; set; }
+
+    // False when the map earns no points.
+    public bool Ranked { get; set; } = true;
 }

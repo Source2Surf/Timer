@@ -69,8 +69,9 @@ internal sealed partial class StorageServiceImpl
     {
         // Read current configuration here; queueing never captures a potentially stale tier
         // or score pool, and a tier change queues a repair that supersedes this run.
-        var (tier, basePot) = await GetTrackScoreConfigAsync(mapId, track);
-        var trackPool = ScoreCalculator.CalculateTrackPool(tier, ScoreCalculator.IsBonus(track), basePot, styleFactor);
+        var (tier, basePot, ranked) = await GetTrackScoreConfigAsync(mapId, track);
+        // An unranked map's boards have no pool, which removes their scores below.
+        var trackPool = ranked ? ScoreCalculator.CalculateTrackPool(tier, ScoreCalculator.IsBonus(track), basePot, styleFactor) : 0;
         var rankedPlayers = await GetRankedPlayersAsync(mapId, style, track);
         var existing = await GetBoardScoresAsync(mapId, style, track);
         if (rankedPlayers.Count == 0 && existing.Count == 0) return;
@@ -242,7 +243,7 @@ internal sealed partial class StorageServiceImpl
     /// <summary>
     /// Get the score configuration (Tier and BasePot) for a given track.
     /// </summary>
-    private async Task<(int Tier, int BasePot)> GetTrackScoreConfigAsync(ulong mapId, ushort track)
+    private async Task<(int Tier, int BasePot, bool Ranked)> GetTrackScoreConfigAsync(ulong mapId, ushort track)
     {
         var row = await _db.Queryable<MapEntity>()
                            .LeftJoin<MapTrackEntity>((map, trackTier) => map.MapId == trackTier.MapId
@@ -252,12 +253,14 @@ internal sealed partial class StorageServiceImpl
                            {
                                map.Tier,
                                map.BasePot,
+                               map.Unranked,
                                TrackTier = trackTier.Tier,
                            })
                            .FirstAsync(OperationCancellation);
 
         var config = ((int)(track == 0 ? row?.Tier ?? 1 : row?.TrackTier ?? 1),
-                      (int)(row?.BasePot ?? 0));
+                      (int)(row?.BasePot ?? 0),
+                      (row?.Unranked ?? 0) == 0);
 
         return config;
     }

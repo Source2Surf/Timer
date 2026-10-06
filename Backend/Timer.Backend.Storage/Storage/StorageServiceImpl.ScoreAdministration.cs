@@ -110,6 +110,82 @@ internal sealed partial class StorageServiceImpl
     }
 
     /// <summary>
+    /// Ranks or unranks a map and queues all of its boards in one map-locked transaction: an unranked map's boards
+    /// lose their scores, a ranked one's get them back.
+    /// </summary>
+    internal async Task<TimerBackendScoreAdministrationResult> SetMapRankedAndRequeueScoresAsync(
+        string mapName,
+        bool ranked,
+        IReadOnlyDictionary<int, double> styleFactors)
+    {
+        ValidateAdministrativeMapName(mapName);
+        ValidateScorePolicy(styleFactors);
+
+        var mapKey = ToMapKey(mapName);
+        var map = await FindMapByNameAsync(mapKey);
+        if (map is null)
+        {
+            return new TimerBackendScoreAdministrationResult { MapFound = false };
+        }
+
+        // As in set-tier: seed before the map lock, so the recalculations are cheap.
+        await EnsureBestRunsSeededForMapAsync(map.MapId, RunType.Main);
+
+        var unranked = ranked ? 0 : 1;
+        var boardsQueued = 0;
+        var deadLettersRequeued = 0;
+        var disabledStyleBoardsSkipped = 0;
+
+        await WithRecordTransactionAsync(async () =>
+        {
+            boardsQueued = 0;
+            deadLettersRequeued = 0;
+            disabledStyleBoardsSkipped = 0;
+
+            await LockMapAsync(map.MapId);
+            var lockedMap = await _db.Queryable<MapEntity>()
+                                     .Where(x => x.MapId == map.MapId)
+                                     .FirstAsync(OperationCancellation)
+                            ?? throw new InvalidOperationException($"Map {map.MapId} disappeared while acquiring its lock.");
+            if (!string.Equals(lockedMap.File, mapKey, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Map '{mapName}' changed while its administrative operation was starting.");
+            }
+
+            var boards = await GetKnownScoreBoardsInCurrentRecordTransactionAsync(map.MapId);
+
+            if (ranked)
+            {
+                await ValidateBoardScoresCanBeRepresentedAsync(map.MapId, mapKey, boards, styleFactors);
+            }
+
+            if (lockedMap.Unranked != unranked)
+            {
+                await _db.Updateable<MapEntity>()
+                         .SetColumns(x => x.Unranked == unranked)
+                         .Where(x => x.MapId == map.MapId)
+                         .ExecuteCommandAsync(OperationCancellation);
+            }
+
+            var queued = await RequeueKnownScoreBoardsInCurrentRecordTransactionAsync(
+                map.MapId, boards, styleFactors, DateTime.UtcNow);
+            boardsQueued = queued.BoardsQueued;
+            deadLettersRequeued = queued.DeadLettersRequeued;
+            disabledStyleBoardsSkipped = queued.DisabledStyleBoardsSkipped;
+        });
+
+        WakeScoreRecalcWorker();
+        return new TimerBackendScoreAdministrationResult
+        {
+            MapFound = true,
+            MapsAffected = 1,
+            BoardsQueued = boardsQueued,
+            DeadLettersRequeued = deadLettersRequeued,
+            DisabledStyleBoardsSkipped = disabledStyleBoardsSkipped,
+        };
+    }
+
+    /// <summary>
     /// Queues a policy refresh for one existing map. A dead-lettered row is reactivated by the
     /// usual generation merge, so retry metadata is reset only as part of a durable new request.
     /// </summary>
@@ -349,7 +425,7 @@ internal sealed partial class StorageServiceImpl
                 continue;
             }
 
-            var (tier, basePot) = await GetTrackScoreConfigAsync(mapId, board.Track);
+            var (tier, basePot, _) = await GetTrackScoreConfigAsync(mapId, board.Track);
             var trackPool = ScoreCalculator.CalculateTrackPool(tier,
                                                                 ScoreCalculator.IsBonus(board.Track),
                                                                 basePot,

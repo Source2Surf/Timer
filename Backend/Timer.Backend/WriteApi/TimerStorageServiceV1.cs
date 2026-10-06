@@ -82,6 +82,10 @@ public sealed class TimerStorageServiceV1 : ServiceBase<ITimerStorageServiceV1>,
                 await _storage.SetMapTierAsync(Map(mapName), workshopId, tier, ScorePolicy(), token));
         });
 
+    public async UnaryResult<ScoreJobsDto> SetMapRankedAsync(string mapName, ulong workshopId, bool ranked)
+        => await RunAsync(async token => TimerStorageRpcMapper.ToDto(
+                              await _storage.SetMapRankedAsync(Map(mapName), workshopId, ranked, ScorePolicy(), token)));
+
     public async UnaryResult<ScoreJobsDto> RecalculateScoresAsync(string? mapName, ulong workshopId)
         => await RunAsync(async token => TimerStorageRpcMapper.ToDto(
                               await _storage.RecalculateScoresAsync(mapName is null ? null : Map(mapName),

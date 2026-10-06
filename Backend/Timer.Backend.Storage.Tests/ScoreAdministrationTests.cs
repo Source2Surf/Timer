@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sharp.Shared.Units;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Common.Enums;
+using Source2Surf.Timer.Shared.Models;
 using SqlSugar;
 using Timer.Backend.Storage;
 using Xunit;
@@ -251,6 +253,48 @@ public sealed class ScoreAdministrationTests : IDisposable
 
         Assert.Equal<byte?>(26, result.CurrentTier);
         Assert.Equal(2, result.BoardsQueued);
+    }
+
+    [Fact]
+    public async Task AnUnrankedMapLosesItsPointsAndGetsThemBackWhenRankedAgain()
+    {
+        var mapName = $"surf_score_admin_ranked_{Guid.NewGuid():N}";
+        var player  = new SteamID(76561198000000000UL + (ulong)Random.Shared.NextInt64(1, 500_000_000));
+        var id      = unchecked((long)player.AsPrimitive());
+        var policy  = new Dictionary<int, double> { [0] = 1 };
+
+        await _storage.GetPlayerProfile(player, "Alpha");
+        await _storage.AddPlayerRecord(player, mapName, new RecordRequest { Time = 60 });
+        await DrainAsync();
+        var ranked = (await _storage.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == id).FirstAsync()).Points;
+        Assert.True(ranked > 0);
+
+        var result = await _storage.SetMapRankedAndRequeueScoresAsync(mapName, ranked: false, policy);
+        await DrainAsync();
+
+        Assert.True(result.MapFound);
+        Assert.Equal(1, result.BoardsQueued);
+        Assert.False((await _storage.GetMapInfo(mapName)).Ranked);
+        Assert.Equal(0u, (await _storage.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == id).FirstAsync()).Points);
+        Assert.Empty(await _storage.Db.Queryable<PlayerTrackScoreEntity>().Where(x => x.SteamId == id).ToListAsync());
+
+        await _storage.SetMapRankedAndRequeueScoresAsync(mapName, ranked: true, policy);
+        await DrainAsync();
+
+        Assert.True((await _storage.GetMapInfo(mapName)).Ranked);
+        Assert.Equal(ranked, (await _storage.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == id).FirstAsync()).Points);
+    }
+
+    [Fact]
+    public async Task RankingAMapThatIsntStoredFindsNothing()
+        => Assert.False((await _storage.SetMapRankedAndRequeueScoresAsync($"surf_missing_{Guid.NewGuid():N}", false,
+                                                                           new Dictionary<int, double> { [0] = 1 })).MapFound);
+
+    private async Task DrainAsync()
+    {
+        while (await _storage.ProcessScoreRecalcOutboxBatchAsync(DateTime.UtcNow.AddMinutes(10), $"admin-{Guid.NewGuid():N}") > 0)
+        {
+        }
     }
 
     [Fact]

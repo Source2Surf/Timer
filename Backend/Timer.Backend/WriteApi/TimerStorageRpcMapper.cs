@@ -23,6 +23,7 @@ internal static class TimerStorageRpcMapper
             PlayCount     = source.PlayCount,
             AddedAt       = source.AddedAt,
             LastPlayedAt  = source.LastPlayedAt,
+            Ranked        = source.Ranked,
         };
 
     public static MapInfoDto[] ToDto(IReadOnlyList<MapProfile> source)

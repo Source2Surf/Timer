@@ -202,6 +202,10 @@ internal static class ChatTexts
     public static readonly ChatText MapPlayed      = new ("chat.map.played", "Played: {0} times | Total: {1}");
     public static readonly ChatText MapDates       = new ("chat.map.dates", "Added: {0} | Last played: {1}");
     public static readonly ChatText MapDateUnknown = new ("chat.map.date_unknown", "unknown");
+    public static readonly ChatText MapUnranked    = new ("chat.map.unranked", "{0} | Unranked: it earns no points");
+    public static readonly ChatText MapRankedSet   = new ("chat.map.ranked_set", "{0} is ranked again; its points are being recalculated.");
+    public static readonly ChatText MapUnrankedSet = new ("chat.map.unranked_set", "{0} is unranked; its points are being removed.");
+    public static readonly ChatText MapRankedUsage = new ("chat.map.ranked_usage", "Usage: !set_ranked <1 or 0>");
 
     // ---- practice
     public static readonly ChatText UsageTele        = new ("chat.usage.tele", "Usage: !tele <n>  (1-based loc index)");

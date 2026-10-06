@@ -51,4 +51,8 @@ internal sealed class MapEntity
 
     [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
     public long LastPlayedAtUnixMilliseconds { get; set; }
+
+    // 1 = the map earns no points. An int, as PostgreSQL won't take a numeric default for a boolean.
+    [SugarColumn(DefaultValue = "0")]
+    public int Unranked { get; set; }
 }

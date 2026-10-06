@@ -226,7 +226,7 @@ Admin commands are checked by ModSharp's AdminManager. Grant these in
 `sharp/configs/admins.jsonc`, or `timer:*` for all of them:
 
 - `timer:zone`: `!zone`
-- `timer:tier`: `!set_tier`
+- `timer:tier`: `!set_tier`, `!set_ranked` (0 takes the map out of the points)
 
 Without AdminManager, Release builds refuse these commands.
 

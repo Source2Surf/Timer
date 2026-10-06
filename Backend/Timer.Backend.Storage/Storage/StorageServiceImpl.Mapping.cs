@@ -34,6 +34,7 @@ internal sealed partial class StorageServiceImpl
             TotalPlayTime = mapInfo.TotalPlayTime,
             AddedAt       = mapInfo.AddedAtUnixMilliseconds,
             LastPlayedAt  = mapInfo.LastPlayedAtUnixMilliseconds,
+            Ranked        = mapInfo.Unranked == 0,
         };
     }
 

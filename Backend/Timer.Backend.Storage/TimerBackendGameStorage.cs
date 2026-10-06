@@ -40,6 +40,14 @@ public sealed class TimerBackendGameStorage
         => OnMapAsync(mapName, workshopId,
                       () => Storage.SetMapTierAndRequeueScoresAsync(mapName, tier, styleFactors), cancellationToken);
 
+    public Task<TimerBackendScoreAdministrationResult> SetMapRankedAsync(string mapName,
+                                                                         ulong  workshopId,
+                                                                         bool   ranked,
+                                                                         IReadOnlyDictionary<int, double> styleFactors,
+                                                                         CancellationToken cancellationToken = default)
+        => OnMapAsync(mapName, workshopId,
+                      () => Storage.SetMapRankedAndRequeueScoresAsync(mapName, ranked, styleFactors), cancellationToken);
+
     /// <summary>Requeues one map's boards, or every map's when <paramref name="mapName"/> is null.</summary>
     public Task<TimerBackendScoreAdministrationResult> RecalculateScoresAsync(string? mapName,
                                                                               ulong   workshopId,

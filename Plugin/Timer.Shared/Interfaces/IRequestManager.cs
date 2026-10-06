@@ -60,6 +60,12 @@ public interface IRequestManager
     Task<ScoreQueueResult> SetMapTierAsync(string mapName, byte tier);
 
     /// <summary>
+    /// Ranks or unranks the map (an unranked map earns no points) and queues its score recalculation.
+    /// </summary>
+    Task<ScoreQueueResult> SetMapRankedAsync(string mapName, bool ranked)
+        => Task.FromResult(new ScoreQueueResult(false, 0, 0, []));
+
+    /// <summary>
     /// Atomically records one completed map session without writing an old map-profile snapshot
     /// over sessions completed by other game servers.
     /// </summary>

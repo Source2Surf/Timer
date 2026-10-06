@@ -62,6 +62,10 @@ public sealed class MapInfoDto
 
     [Key(9)]
     public long LastPlayedAt { get; set; }
+
+    /// <summary>False when the map earns no points; true from a backend from before it was added.</summary>
+    [Key(10)]
+    public bool Ranked { get; set; } = true;
 }
 
 /// <summary>
@@ -392,6 +396,8 @@ public interface ITimerStorageServiceV1 : IService<ITimerStorageServiceV1>
 
     /// <summary>Sets the main track's tier and queues its score boards, under the backend's score policy.</summary>
     UnaryResult<ScoreJobsDto> SetMapTierAsync(string mapName, ulong workshopId, byte tier);
+
+    UnaryResult<ScoreJobsDto> SetMapRankedAsync(string mapName, ulong workshopId, bool ranked);
 
     /// <summary>Queues a map's score boards under the backend's score policy; every map when mapName is null.</summary>
     UnaryResult<ScoreJobsDto> RecalculateScoresAsync(string? mapName, ulong workshopId);
