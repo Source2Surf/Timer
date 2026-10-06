@@ -183,6 +183,9 @@ public class Timer : IModSharpModule
             }
         }
 
+        // Compile the plugin off the game thread before the first finish needs it.
+        JitWarmup.Start([typeof(Timer).Assembly, typeof(IRequestManager).Assembly], _logger, _token.Token);
+
         return true;
     }
 
