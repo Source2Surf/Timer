@@ -2286,3 +2286,98 @@
 .Menu #LbDeleteLabel.disabled {
     color: mutedColor;
 }
+
+/* ---- Style picker (!style) ---- */
+
+/* Collapsed when closed, so its buttons can't take another menu's clicks. */
+.StyMenu.Closed {
+    visibility: collapse;
+}
+
+.StyList {
+    width: 100%;
+    height: fit-children;
+    padding: 0px 8px;
+}
+
+.StyRows {
+    width: 100%;
+    height: fit-children;
+    flow-children: down;
+}
+
+/* Two lines: the name and its command, then the description. Blank rows keep the list's height. */
+.StyRow {
+    width: 100%;
+    height: 54px;
+    margin-bottom: 2px;
+    padding: 0px 10px;
+    flow-children: down;
+    border-radius: 4px;
+    border-left: 2px solid #00000000;
+
+    transition-property: background-color;
+    transition-duration: .1s;
+}
+
+.StyRow:hover {
+    background-color: menuHover;
+}
+
+.StyRow.blank {
+    opacity: 0;
+}
+
+.StyRow.cur {
+    background-color: #5ab4ff1a;
+    border-left: 2px solid accentColor;
+}
+
+/* Picked, not yet switched to. */
+.StyRow.sel {
+    background-color: #ffffff14;
+    border-left: 2px solid #ffffff59;
+}
+
+.StyTop {
+    width: 100%;
+    height: fit-children;
+    margin-top: 8px;
+    flow-children: right;
+}
+
+.Menu .StyName {
+    width: fill-parent-flow( 1 );
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.Menu .StyCmd {
+    font-size: 14px;
+    color: mutedColor;
+}
+
+.Menu .StyCmd.cur {
+    letter-spacing: 1px;
+    color: #cfe7ff;
+}
+
+.Menu .StyDesc {
+    width: 100%;
+    margin-top: 3px;
+    font-size: 14px;
+    color: mutedColor;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.MenuButton.StySwitch.disabled,
+.MenuButton.StySwitch.disabled:hover {
+    background-color: #ffffff12;
+    brightness: 1;
+}
+
+.Menu .StySwitchLabel.disabled {
+    color: mutedColor;
+}

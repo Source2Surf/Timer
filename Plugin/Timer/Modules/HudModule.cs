@@ -158,6 +158,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         _zoneModule.RegisterListener(this);
         _zoneModule.EditorRequested += OnZoneEditorRequested;
         _recordModule.LeaderboardRequested += OnLeaderboardRequested;
+        _styleModule.StyleMenuRequested    += OnStyleMenuRequested;
         _playerManager.RegisterListener(this);
 
         _commandManager.AddClientChatCommand("hud", OnCommandHud);
@@ -176,6 +177,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         _zoneModule.UnregisterListener(this);
         _zoneModule.EditorRequested -= OnZoneEditorRequested;
         _recordModule.LeaderboardRequested -= OnLeaderboardRequested;
+        _styleModule.StyleMenuRequested    -= OnStyleMenuRequested;
         _playerManager.UnregisterListener(this);
 
         _panorama.RemoveClickListener(OnHudClicked);
@@ -701,6 +703,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
             CloseNominateMenu(p);
             CloseZonePanel(p);
             CloseRecords(p);
+            CloseStyles(p);
         }
         else
         {
@@ -732,6 +735,10 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         else if (buttonId.StartsWith("Lb", StringComparison.Ordinal))
         {
             ClickRecords(p, buttonId);
+        }
+        else if (buttonId.StartsWith("Sty", StringComparison.Ordinal))
+        {
+            ClickStyles(p, buttonId);
         }
         else if (buttonId.StartsWith("Pf", StringComparison.Ordinal))
         {

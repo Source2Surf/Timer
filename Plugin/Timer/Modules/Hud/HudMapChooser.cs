@@ -216,6 +216,7 @@ internal partial class HudModule
             p.Profile.Open = false;
             CloseZonePanel(p);
             CloseRecords(p);
+            CloseStyles(p);
             c.Page         = 0;
             c.Note         = null;
         }

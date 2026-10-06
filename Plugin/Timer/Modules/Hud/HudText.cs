@@ -341,6 +341,15 @@ internal static class HudTexts
     // ---- spectator list
     public static readonly HudText SpecHead = new ("hud.specs.head", "Spectators ({0}):");
 
+    // ---- style picker
+    public static readonly HudText StylesTitle   = new ("hud.styles.title", "Styles");
+    public static readonly HudText StylesCount   = new ("hud.styles.count", "{0} styles");
+    public static readonly HudText StylesOne     = new ("hud.styles.count_one", "1 style");
+    public static readonly HudText StyleCurrent  = new ("hud.styles.current", "CURRENT");
+    public static readonly HudText StyleSwitch   = new ("hud.styles.switch", "Switch");
+    public static readonly HudText StyleHint     = new ("hud.styles.hint", "Double-click a style to switch to it, or pick it and press Switch.");
+    public static readonly HudText StyleStopsRun = new ("hud.styles.stops_run", "Switching to {0} stops your run and sends you to the start.");
+
     // ---- records panel
     public static readonly HudText LbTitle      = new ("hud.records.title", "Records");
     public static readonly HudText LbStats      = new ("hud.records.stats", "{0} jumps · {1} strafes · {2} sync");
@@ -567,6 +576,13 @@ internal static class HudLabels
         ("LNomClose", HudTexts.Close),
     ];
 
+    public static readonly (string Id, HudText Text)[] Styles =
+    [
+        ("LStyTitle", HudTexts.StylesTitle),
+        ("LStySwitch", HudTexts.StyleSwitch),
+        ("LStyClose", HudTexts.Close),
+    ];
+
     public static readonly (string Id, HudText Text)[] Records =
     [
         ("LLbTitle", HudTexts.LbTitle),
@@ -611,7 +627,7 @@ internal static class HudLabels
     ];
 
     public static IEnumerable<(string Id, HudText Text)> All
-        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate).Concat(Zones).Concat(ZonePrompt).Concat(Records)
+        => Menu.Concat(DragToast).Concat(Replays).Concat(Profile).Concat(Keys).Concat(Vote).Concat(Nominate).Concat(Zones).Concat(ZonePrompt).Concat(Records).Concat(Styles)
                 .Append(("SplitsEmpty", HudTexts.SplitsEmpty))
                 .Append(("SsjEmpty", HudTexts.SsjEmpty));
 }

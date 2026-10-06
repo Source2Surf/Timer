@@ -1199,6 +1199,34 @@
     "en-us": "Nominations are closed.",
     "zh-cn": "提名已关闭。"
   },
+  "hud.styles.title": {
+    "en-us": "Styles",
+    "zh-cn": "风格"
+  },
+  "hud.styles.count": {
+    "en-us": "{0} styles",
+    "zh-cn": "{0} 种风格"
+  },
+  "hud.styles.count_one": {
+    "en-us": "1 style",
+    "zh-cn": "1 种风格"
+  },
+  "hud.styles.current": {
+    "en-us": "CURRENT",
+    "zh-cn": "当前"
+  },
+  "hud.styles.switch": {
+    "en-us": "Switch",
+    "zh-cn": "切换"
+  },
+  "hud.styles.hint": {
+    "en-us": "Double-click a style to switch to it, or pick it and press Switch.",
+    "zh-cn": "双击风格即可切换，或选中后点击切换。"
+  },
+  "hud.styles.stops_run": {
+    "en-us": "Switching to {0} stops your run and sends you to the start.",
+    "zh-cn": "切换到 {0} 会停止你的计时并回到起点。"
+  },
   "hud.specs.head": {
     "en-us": "Spectators ({0}):",
     "zh-cn": "观战者 ({0})："

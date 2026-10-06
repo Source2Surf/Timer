@@ -1226,5 +1226,74 @@
 				</Button>
 			</Panel>
 		</Panel>
+
+		<!-- Style picker (!style): every enabled style with its description, six a page. A click picks one, a double-click
+		     (or Switch) switches; switching closes it. Cursor mode, in the replay menu's spot. -->
+		<Panel id="StyMenu" class="Menu StyMenu Closed">
+			<Panel class="MenuHeader RMenuHeader">
+				<Label id="LStyTitle" class="MenuTitle" text="{s:text}" />
+				<Label id="StyCount" class="NomCount" text="{s:text}" />
+			</Panel>
+			<Panel class="StyList">
+				<Panel class="StyRows">
+					<Button id="StyRow0" class="StyRow blank">
+						<Panel class="StyTop">
+							<Label id="StyRow0Name" class="StyName" text="{s:text}" />
+							<Label id="StyRow0Cmd" class="StyCmd" text="{s:text}" />
+						</Panel>
+						<Label id="StyRow0Desc" class="StyDesc" text="{s:text}" />
+					</Button>
+					<Button id="StyRow1" class="StyRow blank">
+						<Panel class="StyTop">
+							<Label id="StyRow1Name" class="StyName" text="{s:text}" />
+							<Label id="StyRow1Cmd" class="StyCmd" text="{s:text}" />
+						</Panel>
+						<Label id="StyRow1Desc" class="StyDesc" text="{s:text}" />
+					</Button>
+					<Button id="StyRow2" class="StyRow blank">
+						<Panel class="StyTop">
+							<Label id="StyRow2Name" class="StyName" text="{s:text}" />
+							<Label id="StyRow2Cmd" class="StyCmd" text="{s:text}" />
+						</Panel>
+						<Label id="StyRow2Desc" class="StyDesc" text="{s:text}" />
+					</Button>
+					<Button id="StyRow3" class="StyRow blank">
+						<Panel class="StyTop">
+							<Label id="StyRow3Name" class="StyName" text="{s:text}" />
+							<Label id="StyRow3Cmd" class="StyCmd" text="{s:text}" />
+						</Panel>
+						<Label id="StyRow3Desc" class="StyDesc" text="{s:text}" />
+					</Button>
+					<Button id="StyRow4" class="StyRow blank">
+						<Panel class="StyTop">
+							<Label id="StyRow4Name" class="StyName" text="{s:text}" />
+							<Label id="StyRow4Cmd" class="StyCmd" text="{s:text}" />
+						</Panel>
+						<Label id="StyRow4Desc" class="StyDesc" text="{s:text}" />
+					</Button>
+					<Button id="StyRow5" class="StyRow blank">
+						<Panel class="StyTop">
+							<Label id="StyRow5Name" class="StyName" text="{s:text}" />
+							<Label id="StyRow5Cmd" class="StyCmd" text="{s:text}" />
+						</Panel>
+						<Label id="StyRow5Desc" class="StyDesc" text="{s:text}" />
+					</Button>
+				</Panel>
+			</Panel>
+			<Panel class="RmPager">
+				<Button id="StyPrev" class="Step"><Label text="‹" /></Button>
+				<Label id="StyPage" class="RmPage" text="{s:text}" />
+				<Button id="StyNext" class="Step"><Label text="›" /></Button>
+			</Panel>
+			<Label id="StyNote" class="NomNote" text="{s:text}" />
+			<Panel class="MenuFooter">
+				<Button id="StyClose" class="MenuButton">
+					<Label id="LStyClose" text="{s:text}" />
+				</Button>
+				<Button id="StySwitch" class="MenuButton MenuButton--primary StySwitch disabled">
+					<Label id="LStySwitch" class="StySwitchLabel disabled" text="{s:text}" />
+				</Button>
+			</Panel>
+		</Panel>
 	</Panel>
 </root>

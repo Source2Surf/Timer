@@ -134,6 +134,7 @@ internal partial class HudModule
         CloseNominateMenu(p);
         CloseZonePanel(p);
         CloseRecords(p);
+        CloseStyles(p);
 
         var f = p.Profile;
         f.Open            = true;

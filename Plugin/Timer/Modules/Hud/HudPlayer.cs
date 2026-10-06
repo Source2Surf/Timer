@@ -92,6 +92,19 @@ internal sealed class HudReplayMenu
 /// <summary>
 ///     The records panel (!wr / !sr). The record module keeps the boards.
 /// </summary>
+/// <summary>
+///     The style picker (!style).
+/// </summary>
+internal sealed class HudStyles
+{
+    public bool    Open;
+    public int     Page;
+    public int     Picked;                          // a style id: the current one until another is clicked
+    public (string Id, float At)? LastClick;        // for the double-click
+    public bool    Dirty;
+    public readonly int[] RowIds = new int[HudModule.StyleRows];
+}
+
 internal sealed class HudRecords
 {
     public bool    Open;
@@ -281,9 +294,10 @@ internal sealed class HudPlayer
 
     public readonly HudZones   Zones   = new ();
     public readonly HudRecords Records = new ();
+    public readonly HudStyles  Styles  = new ();
 
     // Any menu takes the mouse.
-    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null || Zones.Open || Records.Open;
+    public bool AnyMenuOpen => MenuOpen || Replays.Open || Profile.Open || Chooser.Menu is not null || Zones.Open || Records.Open || Styles.Open;
 
     // HUD settings, the nominate menu and the zone panel also keep the player from moving.
     public bool MovementLocked => MenuOpen || Chooser.Menu is not null || Zones.Open;

@@ -620,6 +620,30 @@ public sealed class HudLayoutContractTests
     }
 
     [Fact]
+    public void EveryStylePickerPanelExists()
+    {
+        var ids = HudModule.StyleRowIds.Concat(HudModule.StyleNameIds).Concat(HudModule.StyleCmdIds).Concat(HudModule.StyleDescIds)
+                           .Concat(["StyMenu", "StyCount", "StyPrev", "StyPage", "StyNext", "StyNote", "StyClose", "StySwitch", "LStySwitch"]);
+
+        foreach (var id in ids)
+        {
+            Assert.Contains(id, Ids);
+        }
+    }
+
+    [Theory]
+    [InlineData("sideways;sw", "!sw")]
+    [InlineData("normal;n", "!n")]
+    [InlineData(" hsw ; halfsideways ", "!hsw")]
+    [InlineData("", "")]
+    public void AStyleShowsItsShortestCommand(string commands, string shown)
+        => Assert.Equal(shown, HudModule.ShortestCommand(commands));
+
+    [Fact]
+    public void DescriptionsLoseTheirColourTags()
+        => Assert.Equal("Only W. Scroll to jump.", HudModule.PlainDescription("Only W. {yellow}Scroll{default} to jump."));
+
+    [Fact]
     public void EveryRecordsPanelExists()
     {
         var ids = HudModule.RecordRowIds.Concat(HudModule.RecordRankIds).Concat(HudModule.RecordNameIds).Concat(HudModule.RecordTimeIds)

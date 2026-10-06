@@ -80,6 +80,7 @@ internal partial class HudModule
         p.Profile.Open = false;
         CloseNominateMenu(p);
         CloseRecords(p);
+        CloseStyles(p);
 
         if (z.Number == 0 && ZoneEdit.IsNumbered(z.Type))
         {
