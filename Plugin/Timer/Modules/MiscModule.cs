@@ -64,6 +64,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     private readonly IConVar timer_remove_dropped_weapons;
     private readonly IConVar timer_remove_weapons_on_spawn;
     private readonly IConVar timer_desubtick_jump;
+    private readonly IConVar timer_block_radio;
 
     // ReSharper restore InconsistentNaming
 
@@ -98,6 +99,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
                                                                  "Enable this convar to prevent players from gaining extra speed by abusing subtick with spamming jump")
             !;
 
+        timer_block_radio = bridge.ConVarManager.CreateConVar("timer_block_radio", true, "Block radio and chat wheel commands")!;
+
         FindOrCreateQuantizedFloatEncoder
             = (delegate* unmanaged<QuantizedEncoderReg_t*, bool, byte*, int, int, float, float, void>)
             bridge.Modules.Tier0.GetExportFunction("FindOrCreateQuantizedFloatEncoder");
@@ -122,6 +125,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
 
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommand);
 
+        _bridge.ConVarManager.InstallChangeHook(timer_block_radio, OnBlockRadioChanged);
+
         return true;
     }
 
@@ -139,6 +144,7 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         _bridge.HookManager.PlayerDispatchTraceAttack.RemoveHookPre(OnPlayerDispatchAttackPre);
         _bridge.HookManager.PlayerDropWeapon.RemoveForward(OnPlayerDropWeapon);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommand);
+        _bridge.ConVarManager.RemoveChangeHook(timer_block_radio, OnBlockRadioChanged);
 
         // InlineHookManager shuts down first and removes the hook.
         FreeEmptyCommand();
@@ -165,6 +171,11 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         if (timer_remove_weapons_on_spawn.GetBool())
         {
             pawn.RemoveAllItems(true);
+        }
+
+        if (timer_block_radio.GetBool())
+        {
+            SetRadioBlocked(pawn, true);
         }
     }
 
