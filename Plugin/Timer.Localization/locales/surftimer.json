@@ -568,7 +568,7 @@
     "zh-cn": "按键"
   },
   "ui.target.locs": {
-    "en-us": "locations",
+    "en-us": "saved locations",
     "zh-cn": "存点"
   },
   "ui.target.ssj": {
@@ -580,11 +580,11 @@
     "zh-cn": "观战列表"
   },
   "ui.locs.title": {
-    "en-us": "Locations",
+    "en-us": "Saved locations",
     "zh-cn": "存点"
   },
   "ui.locs.title_count": {
-    "en-us": "Locations · {0}",
+    "en-us": "Saved locations · {0}",
     "zh-cn": "存点 · {0}"
   },
   "ui.locs.save": {

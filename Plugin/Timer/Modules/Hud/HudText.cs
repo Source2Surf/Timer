@@ -245,12 +245,12 @@ internal static class HudTexts
     public static readonly HudText TargetInfo   = new ("ui.target.records", "records");
     public static readonly HudText TargetSplits = new ("ui.target.splits", "splits");
     public static readonly HudText TargetKeys   = new ("ui.target.keys", "keys");
-    public static readonly HudText TargetLocs   = new ("ui.target.locs", "locations");
+    public static readonly HudText TargetLocs   = new ("ui.target.locs", "saved locations");
     public static readonly HudText TargetSsj    = new ("ui.target.ssj", "SSJ");
     public static readonly HudText TargetSpecs  = new ("ui.target.specs", "spectator list");
 
-    public static readonly HudText LocsTitle      = new ("ui.locs.title", "Locations");
-    public static readonly HudText LocsTitleCount = new ("ui.locs.title_count", "Locations · {0}");
+    public static readonly HudText LocsTitle      = new ("ui.locs.title", "Saved locations");
+    public static readonly HudText LocsTitleCount = new ("ui.locs.title_count", "Saved locations · {0}");
     public static readonly HudText LocsSave       = new ("ui.locs.save", "Save");
     public static readonly HudText LocsTeleport   = new ("ui.locs.teleport", "Teleport");
     public static readonly HudText LocsTeleportTo = new ("ui.locs.teleport_to", "Teleport #{0}");
