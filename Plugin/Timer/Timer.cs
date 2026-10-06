@@ -26,6 +26,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared;
 using Source2Surf.Timer.Configuration;
+using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Command;
 using Source2Surf.Timer.Managers.Localization;
@@ -36,6 +37,7 @@ using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
 using Source2Surf.Timer.Managers.Request;
 using Source2Surf.Timer.Modules;
+using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 
 [assembly: DisableRuntimeMarshalling]
@@ -91,6 +93,7 @@ public class Timer : IModSharpModule
         services.AddSingleton(gameData);
         // Every record, zone and map read or write goes to Timer.Backend, set in timer.jsonc's backend section.
         var configuration = TimerConfiguration.Load(Path.Combine(sharpPath, "configs", "timer.jsonc"));
+        ChatExtension.Prefix = ChatColorTags.LoadPrefix(Path.Combine(sharpPath, "configs", "timer.jsonc"));
         var backend       = BackendOptions.FromConfiguration(configuration);
         services.AddSingleton(configuration);
         services.AddSingleton(backend);

@@ -31,6 +31,7 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Managers;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
 using Timer.MapChooser.Logic;
@@ -55,6 +56,7 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     private readonly ILogger<MapChooserModule> _logger;
     private readonly string                    _configPath;
     private readonly string                    _recentPath;
+    private readonly string                    _prefix;
     private readonly Random                    _random = new ();
 
     private MapChooserConfig _config = new ();
@@ -100,6 +102,7 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
         _logger     = sharedSystem.GetLoggerFactory().CreateLogger<MapChooserModule>();
         _configPath = Path.Combine(sharpPath, "configs", "timer-mapchooser.jsonc");
         _recentPath = Path.Combine(sharpPath, "data", "surftimer", "mapchooser-recent.json");
+        _prefix     = ChatColorTags.LoadPrefix(Path.Combine(sharpPath, "configs", "timer.jsonc"));
     }
 
     public string DisplayName   => "SurfTimer Map Chooser";

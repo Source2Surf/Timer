@@ -216,7 +216,9 @@ A language needs only the keys you translate: the rest falls back to English.
 Keep the `{0}`, `{1}` placeholders. After editing, `ms_locales_reload` reloads the
 files without a restart.
 
-Chat messages are still English.
+Chat texts (the `chat.` keys) can be coloured with tags such as `{green}` and
+`{white}`, named as in ModSharp's `ChatColor`; HUD texts can't. The prefix before
+every timer chat message is `chat.prefix` in `timer.jsonc`, with the same tags.
 
 ### Permissions
 

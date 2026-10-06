@@ -21,6 +21,7 @@ using System.Linq;
 using System.Reflection;
 using Cysharp.Text;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 
 namespace Source2Surf.Timer.Managers.Localization;
@@ -37,8 +38,9 @@ internal sealed record ChatText(string Key, string English);
 /// </summary>
 internal readonly struct ChatTr(ILocalizationProvider? provider, PlayerSlot slot)
 {
+    // Translations can colour their text with {green}-style tags.
     public string this[ChatText text]
-        => provider?.GetText(slot, text.Key) ?? text.English;
+        => ChatColorTags.Apply(provider?.GetText(slot, text.Key) ?? text.English);
 
     public string Format<T1>(ChatText text, T1 a)
     {

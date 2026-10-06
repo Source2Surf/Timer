@@ -4,6 +4,10 @@
     // Its gRPC address. Empty means a backend on this machine with its default port: "http://127.0.0.1:5082".
     "endpoint": ""
   },
+  "chat": {
+    // Before every timer chat message. {lime}-style colour tags work, as they do in the locale's chat texts.
+    "prefix": "{lime}Timer{white} | "
+  },
   // Leave empty / omit the whole "replay" section to disable remote replay upload.
   // See README.md → "Replay Storage" for the HTTP contract your endpoint must implement.
   "replay": {

@@ -21,19 +21,19 @@ using System.Linq;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Objects;
+using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models;
 
 namespace Timer.MapChooser;
 
 public sealed partial class MapChooserModule
 {
-    private const string Tag = $" {ChatColor.Lime}Timer{ChatColor.White} | ";
 
     /// <summary>
     ///     The text in the player's language, from the timer's locale, or else in English.
     /// </summary>
     private string Text(IGameClient client, ChooserText text)
-        => _localization?.Instance?.GetText(client.Slot, text.Key) ?? text.English;
+        => ChatColorTags.Apply(_localization?.Instance?.GetText(client.Slot, text.Key) ?? text.English);
 
     /// <summary>
     ///     A message to one player, in their language when the timer's locale has the key.
@@ -51,7 +51,7 @@ public sealed partial class MapChooserModule
             message = string.Format(text.English, args);
         }
 
-        client.Print(HudPrintChannel.Chat, Tag + message);
+        client.Print(HudPrintChannel.Chat, _prefix + message);
     }
 
     private IEnumerable<IGameClient> Humans()

@@ -23,22 +23,24 @@ using Sharp.Shared.Managers;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Managers.Localization;
+using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 
 namespace Source2Surf.Timer.Extensions;
 
 internal static class ChatExtension
 {
-    private const string Tag = $" {ChatColor.Lime}Timer{ChatColor.White} | ";
+    // timer.jsonc's chat.prefix, read as the timer loads.
+    public static string Prefix { get; set; } = " " + ChatColorTags.Apply(ChatColorTags.DefaultPrefix);
 
     public static void PrintToChat(this IPlayerController controller, string msg)
-        => controller.Print(HudPrintChannel.Chat, $"{Tag}{msg}");
+        => controller.Print(HudPrintChannel.Chat, $"{Prefix}{msg}");
 
     public static void PrintToChat(this IPlayerPawn pawn, string msg)
-        => pawn.Print(HudPrintChannel.Chat, $"{Tag}{msg}");
+        => pawn.Print(HudPrintChannel.Chat, $"{Prefix}{msg}");
 
     public static void PrintToChat(this IGameClient client, string msg)
-        => client.Print(HudPrintChannel.Chat, $"{Tag}{msg}");
+        => client.Print(HudPrintChannel.Chat, $"{Prefix}{msg}");
 
     /// <summary>
     ///     The chat texts the player in <paramref name="slot" /> reads.
