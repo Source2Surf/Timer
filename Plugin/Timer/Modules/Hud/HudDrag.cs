@@ -67,6 +67,30 @@ internal partial class HudModule
         pos.Y = HudFormat.ClampAbs(pos.Y, def.Offscreen ? 50 : Math.Max(0, 50 - (def.Size.H / 2)));
     }
 
+    /// <summary>
+    ///     The locations panel and the menu share a default spot, so while the menu is open (and neither was dragged)
+    ///     the panel waits beside it: hud.css's .LocsPanel.beside, past the menu's right edge at its size.
+    /// </summary>
+    internal static bool LocsBesideMenu(HudPlayer p)
+        => p.MenuOpen && p.Positions[(int) HudTarget.Locs] is null && p.Positions[(int) HudTarget.Menu] is null;
+
+    // A drag only starts with the menu open, so the locations panel starts from beside it.
+    internal static (float X, float Y) DragStart(HudPlayer p, HudTarget target)
+    {
+        var start = HudTargets.Def(target).Start;
+
+        if (target != HudTarget.Locs || p.Positions[(int) HudTarget.Menu] is not null)
+        {
+            return start;
+        }
+
+        // Its left edge (420 × the menus' scale + 24, as in hud.css) plus half its width, as a percent from the centre
+        // of a 16:9 screen (1920 wide).
+        var scale = HudOptions.Sizes[p.Settings[HudOptions.SizeMenus.Index]] / 100f;
+
+        return (((420 * scale) + 24 + 125 - 960) / 19.2f, start.Y);
+    }
+
     private void StartDrag(HudPlayer p, IBasePlayerPawn pawn, HudTarget target)
     {
         var view = pawn.GetEyeAngles();
@@ -88,7 +112,7 @@ internal partial class HudModule
         }
 
         var before = p.Positions[t];
-        var start  = HudTargets.Def(target).Start;
+        var start  = DragStart(p, target);
         p.Positions[t] = before?.Copy() ?? new HudPosition { X = start.X, Y = start.Y };
 
         p.Drag = new HudDragState

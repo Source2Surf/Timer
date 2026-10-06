@@ -369,6 +369,31 @@ public sealed class HudPlayerTests
     }
 }
 
+public sealed class HudLocsBesideMenuTests
+{
+    [Fact]
+    public void TheLocationsPanelWaitsBesideTheOpenMenu()
+    {
+        var p = new HudPlayer(new PlayerSlot(1), 0) { MenuOpen = true };
+        Assert.True(HudModule.LocsBesideMenu(p));
+
+        // Beside the menu's right edge, not in its own spot under the menu (-42).
+        var (x, _) = HudModule.DragStart(p, HudTarget.Locs);
+        Assert.InRange(x, -22f, -19f);
+
+        p.Settings[HudOptions.SizeMenus.Index] = Array.IndexOf(HudOptions.Sizes, 150);
+        Assert.True(HudModule.DragStart(p, HudTarget.Locs).X > x);
+
+        // Either one dragged elsewhere: nothing to avoid.
+        p.Positions[(int) HudTarget.Menu] = new HudPosition { X = 30 };
+        Assert.False(HudModule.LocsBesideMenu(p));
+        Assert.Equal(HudTargets.Def(HudTarget.Locs).Start, HudModule.DragStart(p, HudTarget.Locs));
+
+        p.MenuOpen = false;
+        Assert.False(HudModule.LocsBesideMenu(p));
+    }
+}
+
 public sealed class PlayerSettingsCodecTests
 {
     [Fact]

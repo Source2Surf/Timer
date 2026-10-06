@@ -245,6 +245,10 @@ internal partial class HudModule
         var shown = (p.LocsShown || p.MenuOpen) && s.Replay is null && s.Slot == p.Slot;
         w.Class("LocsPanel", "Hidden", !shown);
 
+        // The menu's default spot is this panel's too: while it's open, the panel waits beside it (at its size).
+        w.Class("LocsPanel", "beside", LocsBesideMenu(p));
+        w.Numbered("LocsPanel", "ms", HudOptions.Sizes[p.Settings[HudOptions.SizeMenus.Index]].ToString(CultureInfo.InvariantCulture));
+
         // The client only looks a key up when a label's text changes, so each time the panel shows, its key caps get a
         // new (invisible) nonce: a key bound while it was hidden shows up.
         if (shown && !p.LocsWasShown)
