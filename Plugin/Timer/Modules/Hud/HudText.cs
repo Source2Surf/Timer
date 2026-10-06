@@ -210,6 +210,7 @@ internal static class HudTexts
     public static readonly HudText ProfilePoints  = new ("pf.points", "{0} points");
     public static readonly HudText Joined         = new ("pf.joined", "Joined {0}");
     public static readonly HudText Played         = new ("pf.played", " · Played {0}");
+    public static readonly HudText From           = new ("pf.from", " · {0}");
     public static readonly HudText Overall        = new ("pf.overall", "Overall · {0}");
     public static readonly HudText OfTotal        = new ("pf.of_total", "of {0} · {1}%");
     public static readonly HudText OfTotalNone    = new ("pf.of_total_none", "of {0}");

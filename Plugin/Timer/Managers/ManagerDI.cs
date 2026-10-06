@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
 using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Managers.Command;
+using Source2Surf.Timer.Managers.Country;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.MapChooser;
 using Source2Surf.Timer.Managers.Movement;
@@ -63,6 +64,7 @@ internal static class ManagerDi
         services.AddSingleton<IAdminPermissions>(serviceProvider => serviceProvider.GetRequiredService<CommandManager>());
         services.ImplSingleton<ICommandManager, IManager, CommandManagerProxy>();
         services.ImplSingleton<IPermissionProvider, IManager, PermissionProviderProxy>();
+        services.ImplSingleton<ICountryProvider, IManager, CountryProviderProxy>();
         services.ImplSingleton<ILocalizationProvider, IManager, LocalizationProviderProxy>();
         services.ImplSingleton<IMapChooser, IManager, MapChooserProxy>();
         services.ImplSingleton<IMovementExtension, IManager, MovementExtensionProxy>();

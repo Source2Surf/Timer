@@ -29,6 +29,7 @@ using Source2Surf.Timer.Configuration;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Command;
+using Source2Surf.Timer.Managers.Country;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.MapChooser;
 using Source2Surf.Timer.Managers.Movement;
@@ -197,6 +198,7 @@ public class Timer : IModSharpModule
         RefreshCommandManager();
         RefreshReplayProvider();
         RefreshPermissionProvider();
+        RefreshCountryProvider();
         RefreshLocalizationProvider();
         RefreshMapChooser();
         RefreshMovementExtension();
@@ -227,6 +229,10 @@ public class Timer : IModSharpModule
         {
             RefreshPermissionProvider();
         }
+        else if (moduleIdentity.Equals(ICountryProvider.Identity, StringComparison.Ordinal))
+        {
+            RefreshCountryProvider();
+        }
         else if (moduleIdentity.Equals(ILocalizationProvider.Identity, StringComparison.Ordinal))
         {
             RefreshLocalizationProvider();
@@ -256,6 +262,10 @@ public class Timer : IModSharpModule
         {
             _serviceProvider.GetService<PermissionProviderProxy>()?.UseFallback();
         }
+        else if (moduleIdentity.Equals(ICountryProvider.Identity, StringComparison.Ordinal))
+        {
+            _serviceProvider.GetService<CountryProviderProxy>()?.UseFallback();
+        }
         else if (moduleIdentity.Equals(ILocalizationProvider.Identity, StringComparison.Ordinal))
         {
             _serviceProvider.GetService<LocalizationProviderProxy>()?.UseFallback();
@@ -275,6 +285,7 @@ public class Timer : IModSharpModule
         }
         RefreshReplayProvider();
         RefreshPermissionProvider();
+        RefreshCountryProvider();
         RefreshLocalizationProvider();
         RefreshMapChooser();
         RefreshMovementExtension();
@@ -402,6 +413,11 @@ public class Timer : IModSharpModule
     private void RefreshPermissionProvider()
     {
         _serviceProvider.GetService<PermissionProviderProxy>()?.RefreshManager();
+    }
+
+    private void RefreshCountryProvider()
+    {
+        _serviceProvider.GetService<CountryProviderProxy>()?.RefreshManager();
     }
 
     private void RefreshLocalizationProvider()

@@ -302,7 +302,8 @@ internal partial class HudModule
                                  : tr.Format(HudTexts.ProfilePoints, HudFormat.Count(profile.Points)));
         w.Text("PfJoined", "text",
                ZString.Concat(profile is null ? "" : tr.Format(HudTexts.Joined, profile.JoinDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
-                              f.Summary is { } played ? tr.Format(HudTexts.Played, HudFormat.Duration(tr, played.PlayTime + session)) : ""));
+                              f.Summary is { } played ? tr.Format(HudTexts.Played, HudFormat.Duration(tr, played.PlayTime + session)) : "",
+                              _countries.GetShownCountry(f.Target) is { } country ? tr.Format(HudTexts.From, country.Name) : ""));
 
         w.Text("PfStyleValue", "value", styleName);
         w.Class("PfStylePrev", "disabled", _styleModule.StepStyle(f.Style, -1) == f.Style);

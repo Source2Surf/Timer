@@ -78,6 +78,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
     private readonly IRequestManager    _request;
     private readonly IEventHookManager  _eventHook;
     private readonly ILogger<HudModule> _logger;
+    private readonly ICountryModule     _countries;
 
     private readonly HudPlayer?[] _players = new HudPlayer?[PlayerSlot.MaxPlayerCount];
 
@@ -111,8 +112,10 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
                      ICommandManager    commandManager,
                      IRequestManager    request,
                      IEventHookManager  eventHook,
+                     ICountryModule     countries,
                      ILogger<HudModule> logger)
     {
+        _countries      = countries;
         _bridge         = bridge;
         _panorama       = shared.GetPanoramaManager();
         _transmit       = shared.GetTransmitManager();
@@ -272,7 +275,8 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
 
         Task.Run(async () =>
         {
-            byte[]? data = null;
+            byte[]? data  = null;
+            var     known = true;
 
             try
             {
@@ -285,31 +289,32 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
             }
             catch (Exception e)
             {
+                known = false;
                 _logger.LogWarning(e, "Failed to load settings for {SteamId}", id);
-            }
-
-            if (data is not { Length: > 0 })
-            {
-                return;
             }
 
             await _bridge.ModSharp.InvokeFrameActionAsync(() =>
             {
-                // Settings they changed meanwhile win over the saved ones.
-                if (_players[p.Slot] != p || p.SettingsChanged)
+                if (_players[p.Slot] != p)
                 {
                     return;
                 }
 
-                PlayerSettingsCodec.Decode(data, p);
-
-                foreach (var target in HudTargets.All)
+                // Settings they changed meanwhile win over the saved ones.
+                if (data is { Length: > 0 } && !p.SettingsChanged)
                 {
-                    ClampPosition(p, target);
+                    PlayerSettingsCodec.Decode(data, p);
+
+                    foreach (var target in HudTargets.All)
+                    {
+                        ClampPosition(p, target);
+                    }
+
+                    p.MenuDirty = true;
+                    Changed?.Invoke(p.Slot);
                 }
 
-                p.MenuDirty = true;
-                Changed?.Invoke(p.Slot);
+                Loaded?.Invoke(p.Slot, known);
             }).ConfigureAwait(false);
         });
     }

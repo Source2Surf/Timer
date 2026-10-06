@@ -51,5 +51,18 @@ internal interface IPlayerSettings
 
     void SetHearsWeaponSounds(PlayerSlot slot, bool value);
 
+    /// <summary>
+    ///     !country: the profile shows where the player connects from. On by default.
+    /// </summary>
+    bool ShowsCountry(PlayerSlot slot);
+
+    void SetShowsCountry(PlayerSlot slot, bool value);
+
     event Action<PlayerSlot>? Changed;
+
+    /// <summary>
+    ///     Fires on the game thread once the player's saved settings are known, after <see cref="Changed" />; false
+    ///     when the backend couldn't say.
+    /// </summary>
+    event Action<PlayerSlot, bool>? Loaded;
 }

@@ -24,7 +24,8 @@ namespace Source2Surf.Timer.Modules;
 // !hide and the finish sounds: options in the player's settings, for the modules that act on them.
 internal partial class HudModule
 {
-    public event Action<PlayerSlot>? Changed;
+    public event Action<PlayerSlot>?       Changed;
+    public event Action<PlayerSlot, bool>? Loaded;
 
     public bool HidesPlayers(PlayerSlot slot)
         => _players[slot] is { } p ? p.IsOn(HudOptions.Hide) : HudOptions.Hide.Initial == 0;
@@ -37,6 +38,12 @@ internal partial class HudModule
 
     public bool HearsWeaponSounds(PlayerSlot slot)
         => _players[slot] is { } p ? p.IsOn(HudOptions.WeaponSounds) : HudOptions.WeaponSounds.Initial == 0;
+
+    public bool ShowsCountry(PlayerSlot slot)
+        => _players[slot] is { } p ? p.IsOn(HudOptions.Country) : HudOptions.Country.Initial == 0;
+
+    public void SetShowsCountry(PlayerSlot slot, bool value)
+        => SetOnOff(slot, HudOptions.Country, value);
 
     public void SetHearsFootsteps(PlayerSlot slot, bool value)
         => SetOnOff(slot, HudOptions.Footsteps, value);

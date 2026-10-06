@@ -439,6 +439,10 @@
     "en-us": " · Played {0}",
     "zh-cn": " · 游戏时长 {0}"
   },
+  "pf.from": {
+    "en-us": " · {0}",
+    "zh-cn": " · {0}"
+  },
   "pf.overall": {
     "en-us": "Overall · {0}",
     "zh-cn": "总览 · {0}"
@@ -1990,6 +1994,14 @@
   "chat.weapon_sounds.off": {
     "en-us": "Other players' weapon sounds are muted.",
     "zh-cn": "已屏蔽其他玩家的武器声音。"
+  },
+  "chat.country.shown": {
+    "en-us": "Your profile shows your country again.",
+    "zh-cn": "你的个人资料将再次显示你的国家/地区。"
+  },
+  "chat.country.hidden": {
+    "en-us": "Your country is hidden from your profile.",
+    "zh-cn": "你的国家/地区已从个人资料中隐藏。"
   },
   "chat.vs_pb": {
     "en-us": " | PB {0}",
