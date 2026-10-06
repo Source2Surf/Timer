@@ -230,6 +230,15 @@ public sealed class PlayerSummaryDto
 
     [Key(3)]
     public StyleSummaryDto[] Styles { get; set; } = Array.Empty<StyleSummaryDto>();
+
+    [Key(4)]
+    public string? Name { get; set; }
+
+    [Key(5)]
+    public uint Points { get; set; }
+
+    [Key(6)]
+    public long JoinedAt { get; set; }
 }
 
 [MessagePackObject]

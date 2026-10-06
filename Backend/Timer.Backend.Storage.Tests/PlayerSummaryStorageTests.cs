@@ -34,6 +34,8 @@ public sealed class PlayerSummaryStorageTests : IDisposable
         var player = new SteamID(76561198000000001);
         var other  = new SteamID(76561198000000002);
 
+        await _storage.GetPlayerProfile(player, "Nuko");
+
         // surf_a: the other player holds the map record; this one holds its bonus and a stage.
         await _storage.AddPlayerRecord(player, "surf_a", new RecordRequest { Time = 30 });
         await _storage.AddPlayerRecord(other, "surf_a", new RecordRequest { Time = 28 });
@@ -51,6 +53,8 @@ public sealed class PlayerSummaryStorageTests : IDisposable
         var summary = await _storage.GetPlayerSummary(player);
 
         Assert.NotNull(summary);
+        Assert.Equal("Nuko", summary.Name);
+        Assert.True(summary.JoinedAt > DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeMilliseconds());
         Assert.Equal(2, summary.TotalMaps);
         Assert.Equal(2, summary.TotalBonuses);
         Assert.Equal(150f, summary.PlayTime);
@@ -58,6 +62,8 @@ public sealed class PlayerSummaryStorageTests : IDisposable
 
         var nobody = await _storage.GetPlayerSummary(new SteamID(76561198000000003));
         Assert.NotNull(nobody);
+        Assert.Null(nobody.Name);
+        Assert.Equal(0, nobody.JoinedAt);
         Assert.Empty(nobody.Styles);
         Assert.Equal(0f, nobody.PlayTime);
     }

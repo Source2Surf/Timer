@@ -218,6 +218,9 @@ internal static class TimerStorageRpcMapper
             TotalBonuses = source.TotalBonuses,
             PlayTime     = source.PlayTime,
             Styles       = styles,
+            Name         = source.Name,
+            Points       = source.Points,
+            JoinedAt     = source.JoinedAt,
         };
     }
 

@@ -185,6 +185,10 @@ internal sealed class HudProfile
     public int        Style;
     public int        Track;
 
+    // Opened by SteamID for someone not on the server: all from the backend, with their PBs here in Records.
+    public bool                      Offline;
+    public IReadOnlyList<RunRecord>? Records;
+
     public int RankOf; // 0 until fetched (or when the player isn't ranked)
     public int Rank;
 

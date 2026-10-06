@@ -222,7 +222,8 @@ internal static class HudTexts
     public static readonly HudText Minutes        = new ("pf.duration.minutes", "{0} min");
     public static readonly HudText HoursMinutes   = new ("pf.duration.hours_minutes", "{0} h {1} min");
     public static readonly HudText Hours          = new ("pf.duration.hours", "{0} h");
-    public static readonly HudText FindNone       = new ("pf.find.none", "No player named \"{0}\" is on the server.");
+    public static readonly HudText FindNone       = new ("pf.find.none", "No player named \"{0}\" is on the server. A SteamID finds anyone who has played here.");
+    public static readonly HudText FindUnknown    = new ("pf.find.unknown", "No one with SteamID {0} has played here.");
     public static readonly HudText FindMany       = new ("pf.find.many", "More than one player matches \"{0}\".");
 
     // ---- the layout's fixed labels (HudLabels)

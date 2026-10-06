@@ -26,6 +26,18 @@ namespace Source2Surf.Timer.Shared.Models;
 public sealed class PlayerSummary
 {
     /// <summary>
+    /// Their name when last seen; null for a SteamID that has never played here.
+    /// </summary>
+    public string? Name { get; init; }
+
+    public uint Points { get; init; }
+
+    /// <summary>
+    /// When they first joined, in Unix milliseconds; 0 when unknown.
+    /// </summary>
+    public long JoinedAt { get; init; }
+
+    /// <summary>
     /// The maps the server knows, and the bonuses on them.
     /// </summary>
     public int TotalMaps    { get; init; }

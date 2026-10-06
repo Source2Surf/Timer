@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,6 +18,10 @@ internal sealed partial class StorageServiceImpl
     public async Task<PlayerSummary?> GetPlayerSummary(SteamID steamId)
     {
         var steamIdValue = ToDbSteamId(steamId);
+
+        var player = await _db.Queryable<PlayerEntity>()
+                              .Where(x => x.SteamId == steamIdValue)
+                              .FirstAsync(OperationCancellation);
 
         var mine = await _db.Queryable<PlayerBestRunEntity>()
                             .Where(x => x.SteamId == steamIdValue)
@@ -95,6 +100,11 @@ internal sealed partial class StorageServiceImpl
 
         return new PlayerSummary
         {
+            Name         = player?.Name,
+            Points       = player?.Points ?? 0,
+            JoinedAt     = player?.JoinedAtUtc is { } joined
+                               ? new DateTimeOffset(DateTime.SpecifyKind(joined, DateTimeKind.Utc)).ToUnixTimeMilliseconds()
+                               : 0,
             TotalMaps    = bonusesPerMap.Count,
             TotalBonuses = bonusesPerMap.Sum(),
             PlayTime     = playTimes.Sum(),

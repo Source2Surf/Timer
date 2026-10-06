@@ -488,8 +488,12 @@
     "zh-cn": "{0} 小时"
   },
   "pf.find.none": {
-    "en-us": "No player named \"{0}\" is on the server.",
-    "zh-cn": "服务器上没有名为“{0}”的玩家。"
+    "en-us": "No player named \"{0}\" is on the server. A SteamID finds anyone who has played here.",
+    "zh-cn": "服务器上没有名为“{0}”的玩家。输入 SteamID 可查找任何来过这里的玩家。"
+  },
+  "pf.find.unknown": {
+    "en-us": "No one with SteamID {0} has played here.",
+    "zh-cn": "没有 SteamID 为 {0} 的玩家来过这里。"
   },
   "pf.find.many": {
     "en-us": "More than one player matches \"{0}\".",

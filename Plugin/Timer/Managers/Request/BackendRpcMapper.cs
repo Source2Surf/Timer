@@ -201,6 +201,9 @@ internal static class BackendRpcMapper
 
         return new PlayerSummary
         {
+            Name         = source.Name,
+            Points       = source.Points,
+            JoinedAt     = source.JoinedAt,
             TotalMaps    = source.TotalMaps,
             TotalBonuses = source.TotalBonuses,
             PlayTime     = source.PlayTime,

@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Cysharp.Text;
@@ -26,12 +27,15 @@ using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Command;
 using Source2Surf.Timer.Modules.Hud;
+using Source2Surf.Timer.Shared.Models;
 using Source2Surf.Timer.Shared.Models.Zone;
+using Source2Surf.Timer.Utilities;
 
 namespace Source2Surf.Timer.Modules;
 
-// The profile card (!profile, !profile name): a player's overall results for one style, then this map's for that
-// style and a track. It's rebuilt on every refresh while open (PBs can change); the writer only sends changes.
+// The profile card (!profile, !profile name, !profile SteamID): a player's overall results for one style, then this
+// map's for that style and a track; a SteamID also finds players who aren't on the server. It's rebuilt on every
+// refresh while open (PBs can change); the writer only sends changes.
 internal partial class HudModule
 {
     internal const int ProfileStageTiles = 12;
@@ -54,13 +58,24 @@ internal partial class HudModule
 
         if (string.IsNullOrEmpty(name))
         {
-            if (p.Profile.Open && p.Profile.Target == slot)
+            if (p.Profile is { Open: true, Offline: false } && p.Profile.Target == slot)
             {
                 SetProfileOpen(p, false);
             }
             else
             {
                 OpenProfile(p, slot);
+            }
+        }
+        else if (SteamIds.TryParse(name, out var steamId))
+        {
+            if (_bridge.ClientManager.GetGameClient(new SteamID(steamId)) is { IsFakeClient: false } online)
+            {
+                OpenProfile(p, online.Slot);
+            }
+            else
+            {
+                OpenOfflineProfile(p, steamId);
             }
         }
         else if (FindPlayer(p, name, out var target) is { } problem)
@@ -125,6 +140,17 @@ internal partial class HudModule
             return;
         }
 
+        // It starts on what they're playing.
+        var info = _timerModule.GetTimerInfo(target);
+        ShowProfile(p, (ulong) client.SteamId, target, false, info?.Style ?? 0, info?.Track ?? 0);
+    }
+
+    // Someone who isn't on the server: what the backend has. A SteamID that has never played here closes it again.
+    private void OpenOfflineProfile(HudPlayer p, ulong steamId)
+        => ShowProfile(p, steamId, default, true, _styleModule.DefaultStyle, 0);
+
+    private void ShowProfile(HudPlayer p, ulong steamId, PlayerSlot target, bool offline, int style, int track)
+    {
         if (p.MenuOpen)
         {
             SetMenuOpen(p, false);
@@ -141,7 +167,9 @@ internal partial class HudModule
         f.Open            = true;
         f.Version++;
         f.Target          = target;
-        f.SteamId         = (ulong) client.SteamId;
+        f.Offline         = offline;
+        f.SteamId         = steamId;
+        f.Records         = null;
         f.Rank            = 0;
         f.RankOf          = 0;
         f.Summary         = null;
@@ -150,27 +178,55 @@ internal partial class HudModule
         f.MapPlays        = 0;
         f.MapStatsFetched = false;
 
-        // It starts on what they're playing.
-        var info = _timerModule.GetTimerInfo(target);
-        f.Style = info?.Style ?? 0;
-        f.Track = info?.Track ?? 0;
+        f.Style = style;
+        f.Track = track;
 
         p.MenuDirty = true;
         GetLayout(p)?.SetInputCaptureEnabled(p.Slot, p.AnyMenuOpen);
 
         var version = f.Version;
-        var steamId = client.SteamId;
+        var id      = new SteamID(steamId);
         var mapName = _bridge.CurrentMapName;
 
-        FetchForProfile(p, version, "GetPlayerPointsRank", () => _request.GetPlayerPointsRank(steamId),
+        FetchForProfile(p, version, "GetPlayerPointsRank", () => _request.GetPlayerPointsRank(id),
                         (profile, rank) => (profile.Rank, profile.RankOf) = rank);
-        FetchForProfile(p, version, "GetPlayerSummary", () => _request.GetPlayerSummary(steamId),
-                        (profile, summary) => (profile.Summary, profile.SummaryFetched) = (summary, true),
+        FetchForProfile(p, version, "GetPlayerSummary", () => _request.GetPlayerSummary(id),
+                        (profile, summary) =>
+                        {
+                            (profile.Summary, profile.SummaryFetched) = (summary, true);
+
+                            if (profile.Offline && summary is { Name: null })
+                            {
+                                SetProfileOpen(p, false);
+
+                                if (_bridge.TryGetController(p.Slot, out var controller))
+                                {
+                                    controller.PrintToChat(p.Tr.Format(HudTexts.FindUnknown, steamId));
+                                }
+                            }
+                        },
                         profile => profile.SummaryFetched = true);
-        FetchForProfile(p, version, "GetPlayerMapStatsAsync", () => _request.GetPlayerMapStatsAsync(steamId, mapName),
+        FetchForProfile(p, version, "GetPlayerMapStatsAsync", () => _request.GetPlayerMapStatsAsync(id, mapName),
                         (profile, stats) => (profile.MapPlayTime, profile.MapPlays, profile.MapStatsFetched) = (stats.playTime, stats.playCount, true),
                         profile => profile.MapStatsFetched = true);
+
+        if (offline)
+        {
+            FetchForProfile(p, version, "GetPlayerRecords", async () =>
+                            {
+                                var main   = await _request.GetPlayerRecords(id, mapName).ConfigureAwait(false);
+                                var stages = await _request.GetPlayerStageRecords(id, mapName).ConfigureAwait(false);
+
+                                return (IReadOnlyList<RunRecord>) [..main, ..stages];
+                            },
+                            (profile, records) => profile.Records = records,
+                            profile => profile.Records = []);
+        }
     }
+
+    // An offline player's PB here, from the fetched records.
+    private static RunRecord? OfflineRecord(HudProfile f, int track, int stage)
+        => f.Records?.Where(r => r.Style == f.Style && r.Track == track && r.Stage == stage).MinBy(r => r.Time);
 
     // Runs a query for the open profile and applies its answer on the game thread, unless the card has moved on
     // to another profile (or closed and reopened) since.
@@ -219,7 +275,14 @@ internal partial class HudModule
     {
         if (open)
         {
-            OpenProfile(p, p.Profile.Target);
+            if (p.Profile.Offline)
+            {
+                OpenOfflineProfile(p, p.Profile.SteamId);
+            }
+            else
+            {
+                OpenProfile(p, p.Profile.Target);
+            }
 
             return;
         }
@@ -271,8 +334,10 @@ internal partial class HudModule
     {
         var f = p.Profile;
 
+        var client = f.Offline ? null : _bridge.ClientManager.GetGameClient(f.Target);
+
         // They left: nothing more to show.
-        if (_bridge.ClientManager.GetGameClient(f.Target) is not { } client || (ulong) client.SteamId != f.SteamId)
+        if (!f.Offline && (client is null || (ulong) client.SteamId != f.SteamId))
         {
             SetProfileOpen(p, false);
             w.Class("PfMenu", "Closed", true);
@@ -288,22 +353,27 @@ internal partial class HudModule
         f.Style = _styleModule.ValidStyle(f.Style);
 
         var styleName = _styleModule.GetStyleSetting(f.Style).Name;
-        var profile   = _playerManager.GetPlayerProfile(f.Target);
-        var session   = _recordModule.GetSessionTime(f.Target); // this visit, which the stored play time doesn't have yet
+        // Someone online is what the server has loaded; someone offline what the backend's summary says.
+        var profile = f.Offline ? null : _playerManager.GetPlayerProfile(f.Target);
+        var session = f.Offline ? 0 : _recordModule.GetSessionTime(f.Target); // this visit, which the stored play time doesn't have yet
+        var points  = f.Offline ? f.Summary?.Points : profile?.Points;
+        var joined  = f.Offline
+            ? f.Summary is { JoinedAt: > 0 } s ? DateTimeOffset.FromUnixTimeMilliseconds(s.JoinedAt).UtcDateTime : (DateTime?) null
+            : profile?.JoinDate;
 
         var tr = p.Tr;
         w.Labels(HudLabels.Profile);
 
         // Header
-        w.Text("PfName", "text", client.Name);
+        w.Text("PfName", "text", client?.Name ?? f.Summary?.Name ?? "…");
         w.Text("PfRank", "text",
-               profile is null ? ""
-               : f.RankOf > 0  ? tr.Format(HudTexts.ProfileRank, HudFormat.Count(f.Rank), HudFormat.Count(f.RankOf), HudFormat.Count(profile.Points))
-                                 : tr.Format(HudTexts.ProfilePoints, HudFormat.Count(profile.Points)));
+               points is not { } pts ? ""
+               : f.RankOf > 0        ? tr.Format(HudTexts.ProfileRank, HudFormat.Count(f.Rank), HudFormat.Count(f.RankOf), HudFormat.Count(pts))
+                                       : tr.Format(HudTexts.ProfilePoints, HudFormat.Count(pts)));
         w.Text("PfJoined", "text",
-               ZString.Concat(profile is null ? "" : tr.Format(HudTexts.Joined, profile.JoinDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
+               ZString.Concat(joined is not { } date ? "" : tr.Format(HudTexts.Joined, date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
                               f.Summary is { } played ? tr.Format(HudTexts.Played, HudFormat.Duration(tr, played.PlayTime + session)) : "",
-                              _countries.GetShownCountry(f.Target) is { } country ? tr.Format(HudTexts.From, country.Name) : ""));
+                              !f.Offline && _countries.GetShownCountry(f.Target) is { } country ? tr.Format(HudTexts.From, country.Name) : ""));
 
         w.Text("PfStyleValue", "value", styleName);
         w.Class("PfStylePrev", "disabled", _styleModule.StepStyle(f.Style, -1) == f.Style);
@@ -335,23 +405,26 @@ internal partial class HudModule
             }
         }
 
-        // This map: the time here is the whole map's; the PB and stages follow the style and track.
+        // This map: the time here is the whole map's (this visit counts as a play); the PB and stages follow the
+        // style and track.
+        var plays = f.MapPlays + (f.Offline ? 0 : 1);
         ProfileValue(w,
                      "PfHere",
                      "PfPlays",
                      f.MapStatsFetched ? HudFormat.Duration(tr, f.MapPlayTime + session) : "…",
-                     f.MapStatsFetched ? tr.Format(f.MapPlays == 0 ? HudTexts.PlaysOne : HudTexts.Plays, HudFormat.Count(f.MapPlays + 1)) : "");
+                     f.MapStatsFetched ? tr.Format(plays == 1 ? HudTexts.PlaysOne : HudTexts.Plays, HudFormat.Count(plays)) : "");
 
         w.Text("PfTrackValue", "value", f.Track == 0 ? tr[HudTexts.Main] : tr.Format(HudTexts.BonusN, f.Track));
         w.Class("PfTrackPrev", "disabled", StepTrack(f.Track, -1) < 0);
         w.Class("PfTrackNext", "disabled", StepTrack(f.Track, 1) < 0);
 
-        var pb   = _recordModule.GetPlayerRecord(f.Target, f.Style, f.Track);
-        var rank = pb is null ? 0 : _recordModule.GetRankForTime(f.Style, f.Track, pb.Time);
+        var loading = f.Offline && f.Records is null;
+        var pb      = f.Offline ? OfflineRecord(f, f.Track, 0) : _recordModule.GetPlayerRecord(f.Target, f.Style, f.Track);
+        var rank    = pb is null ? 0 : _recordModule.GetRankForTime(f.Style, f.Track, pb.Time);
         ProfileValue(w,
                      "PfPb",
                      "PfPbRank",
-                     pb is null ? tr[HudTexts.None] : HudFormat.FormatTime(pb.Time),
+                     loading ? "…" : pb is null ? tr[HudTexts.None] : HudFormat.FormatTime(pb.Time),
                      pb is null  ? ""
                      : rank == 1 ? tr[HudTexts.Sr]
                                    : tr.Format(HudTexts.RankOf, HudFormat.Count(rank), HudFormat.Count(_recordModule.GetTotalRecordCount(f.Style, f.Track))));
@@ -370,9 +443,9 @@ internal partial class HudModule
                 continue;
             }
 
-            var stagePb = _recordModule.GetPlayerRecord(f.Target, f.Style, 0, i + 1);
+            var stagePb = f.Offline ? OfflineRecord(f, 0, i + 1) : _recordModule.GetPlayerRecord(f.Target, f.Style, 0, i + 1);
             w.Text(ProfileStageNameIds[i], "text", tr.Format(HudTexts.StageTile, i + 1));
-            w.Text(ProfileStageTimeIds[i], "text", stagePb is null ? "—" : HudFormat.FormatTime(stagePb.Time));
+            w.Text(ProfileStageTimeIds[i], "text", loading ? "…" : stagePb is null ? "—" : HudFormat.FormatTime(stagePb.Time));
             w.Class(ProfileStageTimeIds[i], "none", stagePb is null);
         }
     }

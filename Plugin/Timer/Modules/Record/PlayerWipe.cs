@@ -29,6 +29,7 @@ using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Request;
 using Source2Surf.Timer.Modules.Record;
 using Source2Surf.Timer.Shared.Models;
+using Source2Surf.Timer.Utilities;
 
 // ReSharper disable once CheckNamespace
 namespace Source2Surf.Timer.Modules;
@@ -37,8 +38,7 @@ namespace Source2Surf.Timer.Modules;
 // half a minute deletes them.
 internal partial class RecordModule
 {
-    private const long  WipeConfirmMilliseconds = 30_000;
-    private const ulong FirstIndividualSteamId  = 76561197960265728UL;
+    private const long WipeConfirmMilliseconds = 30_000;
 
     private readonly Dictionary<SteamID, (ulong Target, long Until)> _pendingWipes  = [];
     private readonly HashSet<ulong>                                  _wipingPlayers = [];
@@ -173,10 +173,10 @@ internal partial class RecordModule
                                                           : tr.Format(ChatTexts.WipeDone, target, wiped.Runs, wiped.Maps));
     }
 
-    // A SteamID64, else a player on the server: an exact name (ignoring case), else the only name containing it.
+    // A SteamID, else a player on the server: an exact name (ignoring case), else the only name containing it.
     private ChatText? FindWipeTarget(string arg, out ulong steamId, out string name)
     {
-        if (ulong.TryParse(arg, NumberStyles.None, CultureInfo.InvariantCulture, out steamId) && steamId > FirstIndividualSteamId)
+        if (SteamIds.TryParse(arg, out steamId))
         {
             name = _bridge.ClientManager.GetGameClient(new SteamID(steamId))?.Name ?? arg;
 
