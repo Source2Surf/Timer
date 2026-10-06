@@ -1076,12 +1076,13 @@
 			</Panel>
 			<Panel id="ZnAdd" class="ZnSection">
 				<Panel class="MenuSection"><Label id="LZnAdd" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
-				<Panel class="NomChips">
+				<Panel class="NomChips ZnChips">
 					<Button id="ZnType0" class="NomChip"><Label id="ZnType0Label" class="NomChipLabel" text="{s:text}" /></Button>
 					<Button id="ZnType1" class="NomChip"><Label id="ZnType1Label" class="NomChipLabel" text="{s:text}" /></Button>
 					<Button id="ZnType2" class="NomChip"><Label id="ZnType2Label" class="NomChipLabel" text="{s:text}" /></Button>
 					<Button id="ZnType3" class="NomChip"><Label id="ZnType3Label" class="NomChipLabel" text="{s:text}" /></Button>
 					<Button id="ZnType4" class="NomChip"><Label id="ZnType4Label" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnType5" class="NomChip"><Label id="ZnType5Label" class="NomChipLabel" text="{s:text}" /></Button>
 				</Panel>
 				<Panel class="MenuRow static">
 					<Label id="LZnNumber" class="MenuName" text="{s:text}" />

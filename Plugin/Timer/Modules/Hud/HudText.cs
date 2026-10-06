@@ -590,6 +590,7 @@ internal static class HudLabels
         ("ZnType2Label", HudTexts.ZnStage),
         ("ZnType3Label", HudTexts.ZnCheckpoint),
         ("ZnType4Label", HudTexts.ZnStopTimer),
+        ("ZnType5Label", HudTexts.ZnReset),
         ("LZnNumber", HudTexts.ZnNumber),
         ("LZnPlacing", HudTexts.ZnPlacingSection),
         ("LZnClose", HudTexts.Close),

@@ -42,7 +42,7 @@ internal partial class HudModule
     internal static readonly string[] ZoneGoHint   = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnGo", i, "Hint")).ToArray();
 
     // The type chips, in EZoneType order.
-    internal static readonly EZoneType[] ZoneTypes     = [EZoneType.Start, EZoneType.End, EZoneType.Stage, EZoneType.Checkpoint, EZoneType.StopTimer];
+    internal static readonly EZoneType[] ZoneTypes     = [EZoneType.Start, EZoneType.End, EZoneType.Stage, EZoneType.Checkpoint, EZoneType.StopTimer, EZoneType.Reset];
     internal static readonly string[]    ZoneTypeIds   = Enumerable.Range(0, ZoneTypes.Length).Select(i => ZString.Concat("ZnType", i)).ToArray();
     internal static readonly string[]    ZoneTypeLabel = Enumerable.Range(0, ZoneTypes.Length).Select(i => ZString.Concat("ZnType", i, "Label")).ToArray();
 

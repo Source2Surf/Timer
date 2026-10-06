@@ -1956,6 +1956,15 @@
     visibility: collapse;
 }
 
+/* The zone types don't fit on one line. */
+.ZnChips {
+    flow-children: right-wrap;
+}
+
+.ZnChips .NomChip {
+    margin-bottom: 4px;
+}
+
 .ZnSection {
     width: 100%;
     height: fit-children;
