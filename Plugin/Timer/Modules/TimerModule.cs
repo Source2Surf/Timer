@@ -109,6 +109,9 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     private readonly PauseState?[]     _pauseState;
     private readonly int[]             _zoneStartSuppressedUntil;
 
+    // By slot: the moves the last movement used, after the style's blocked keys.
+    private readonly (float Forward, float Side)[] _moves = new (float, float)[PlayerSlot.MaxPlayerCount];
+
     private static readonly TraceShapeHull StandingHull = new()
     {
         Mins = new (-16, -16, -16),
@@ -196,6 +199,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
         _bridge.HookManager.PlayerRunCommand.InstallHookPost(OnPlayerRunCommandPost);
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnPlayerProcessMovePre);
+        _bridge.HookManager.PlayerProcessMovePost.InstallForward(OnPlayerProcessMovePost);
         _bridge.HookManager.PlayerSpawnPost.InstallForward(OnPlayerSpawnPost);
 
         _zoneModule.RegisterListener(this);
@@ -218,6 +222,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _bridge.HookManager.PlayerRunCommand.RemoveHookPost(OnPlayerRunCommandPost);
 
         _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnPlayerProcessMovePre);
+        _bridge.HookManager.PlayerProcessMovePost.RemoveForward(OnPlayerProcessMovePost);
         _bridge.HookManager.PlayerSpawnPost.RemoveForward(OnPlayerSpawnPost);
 
         _zoneModule.UnregisterListener(this);

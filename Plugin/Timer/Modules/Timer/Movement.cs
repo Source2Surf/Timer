@@ -65,9 +65,6 @@ internal partial class TimerModule
             return;
         }
 
-        var forwardmove = info->ForwardMove;
-        var sidemove    = info->SideMove;
-
         var inMainStartZone  = timerInfo.InZone  == EZoneType.Start;
         var inStageStartZone = stageTimer.InZone == EZoneType.Stage;
 
@@ -121,9 +118,15 @@ internal partial class TimerModule
                 timer.OnGroundTick = 0;
             }
 
-            timer.WasOnGround     = onGround;
-            timer.LastForwardMove = forwardmove;
-            timer.LastLeftMove    = sidemove;
+            timer.WasOnGround = onGround;
+        }
+    }
+
+    private unsafe void OnPlayerProcessMovePost(IPlayerProcessMoveForwardParams arg)
+    {
+        if (!arg.Client.IsFakeClient)
+        {
+            _moves[arg.Client.Slot] = (arg.Info->ForwardMove, arg.Info->SideMove);
         }
     }
 
@@ -180,7 +183,7 @@ internal partial class TimerModule
             isSurfing = result.DidHit() && Math.Abs(result.PlaneNormal.Z) < sv_standable_normal.GetFloat();
         }
 
-        var leftmove = service.GetNetVar<float>("m_flLeftMove");
+        var (forwardMove, sideMove) = _moves[slot];
 
         var timescale = _styleModule.GetStyleSetting(timerInfo.Style).TimerScale;
 
@@ -188,14 +191,7 @@ internal partial class TimerModule
         {
             var counted = timerInfo.Advance(timescale);
 
-            UpdatePlayerStats(pawn,
-                              service,
-                              timerInfo,
-                              angles,
-                              velocity,
-                              isSurfing,
-                              leftmove,
-                              timerInfo.LastYaw);
+            UpdatePlayerStats(pawn, timerInfo, angles, velocity, isSurfing, forwardMove, sideMove);
 
             if (timerInfo.CurrentCheckpointInfo is { } currentCp)
             {
@@ -218,18 +214,45 @@ internal partial class TimerModule
         {
             stageTimer.Advance(timescale);
 
-            UpdatePlayerStats(pawn,
-                              service,
-                              stageTimer,
-                              angles,
-                              velocity,
-                              isSurfing,
-                              leftmove,
-                              stageTimer.LastYaw);
+            UpdatePlayerStats(pawn, stageTimer, angles, velocity, isSurfing, forwardMove, sideMove);
 
             stageTimer.LastYaw = angles.Y;
         }
     }
+
+    // A key reversed on either axis, as the SSJ panel counts them: A/D, W/S, or both at once for surf HSW.
+    internal static bool IsStrafe(float forwardMove, float sideMove, float lastForwardMove, float lastSideMove)
+        => (sideMove * lastSideMove) < 0 || (forwardMove * lastForwardMove) < 0;
+
+    // Within ~10° of the velocity's line, the keys aren't strafing.
+    private const float MinPushSin2 = 0.03f;
+
+    /// <summary>
+    ///     Which side of the velocity the strafe key pushes: 1 left, -1 right, 0 along it or none. Good sync turns that
+    ///     way, whatever the style: a backwards player holding A turns right. A or D decides when held, so HSW's W+A
+    ///     scores as A does, else W or S (sideways).
+    /// </summary>
+    internal static int PushSide(float yaw, Vector velocity, float forwardMove, float sideMove)
+    {
+        if (sideMove != 0)
+        {
+            forwardMove = 0;
+        }
+
+        var (sin, cos) = MathF.SinCos(yaw * (MathF.PI / 180f));
+
+        // Forward is (cos, sin) and left (-sin, cos); a positive SideMove is left.
+        var wishX = (forwardMove * cos) - (sideMove * sin);
+        var wishY = (forwardMove * sin) + (sideMove * cos);
+        var cross = (velocity.X * wishY) - (velocity.Y * wishX);
+        var scale = ((velocity.X * velocity.X) + (velocity.Y * velocity.Y)) * ((wishX * wishX) + (wishY * wishY));
+
+        return cross * cross <= MinPushSin2 * scale ? 0 : MathF.Sign(cross);
+    }
+
+    // a - b in [-180, 180), so turning through ±180° keeps its sign.
+    internal static float YawDelta(float a, float b)
+        => ((a - b + 540f) % 360f) - 180f;
 
     private void OnPlayerJump(IGameEvent e)
     {
@@ -247,41 +270,43 @@ internal partial class TimerModule
         }
     }
 
-    private static void UpdatePlayerStats(IPlayerPawn      pawn,
-                                          IMovementService service,
-                                          TimerInfo        timerInfo,
-                                          Vector           angle,
-                                          Vector           velocity,
-                                          bool             isSurfing,
-                                          float            sidemove,
-                                          float            lastYaw)
+    // LastForwardMove and LastLeftMove keep the last key held on each axis.
+    private static void UpdatePlayerStats(IPlayerPawn pawn,
+                                          TimerInfo   timerInfo,
+                                          Vector      angle,
+                                          Vector      velocity,
+                                          bool        isSurfing,
+                                          float       forwardMove,
+                                          float       sideMove)
     {
-        var onGround = pawn.GroundEntityHandle.IsValid();
-
-        if (!onGround)
+        if (!pawn.GroundEntityHandle.IsValid())
         {
-            var yawDiff = angle.Y - lastYaw;
-
-            if (timerInfo.LastLeftMove != 0 && sidemove is > 0 or < 0)
+            if (IsStrafe(forwardMove, sideMove, timerInfo.LastForwardMove, timerInfo.LastLeftMove))
             {
                 timerInfo.Strafes++;
             }
 
-            var buttons = service.KeyButtons;
+            var yawDiff = YawDelta(angle.Y, timerInfo.LastYaw);
 
-            var isPressingLeft  = (buttons & UserCommandButtons.MoveLeft)  != 0;
-            var isPressingRight = (buttons & UserCommandButtons.MoveRight) != 0;
-
-            if (!isSurfing && (isPressingLeft || isPressingRight) && MathF.Abs(yawDiff) > 0.01)
+            if (!isSurfing && MathF.Abs(yawDiff) > 0.01f && PushSide(angle.Y, velocity, forwardMove, sideMove) is var side and not 0)
             {
                 timerInfo.TotalMeasures++;
 
-                if ((yawDiff    > 0.0f && isPressingLeft  && !isPressingRight)
-                    || (yawDiff < 0.0f && !isPressingLeft && isPressingRight))
+                if (side == MathF.Sign(yawDiff))
                 {
                     timerInfo.GoodSync++;
                 }
             }
+        }
+
+        if (forwardMove != 0)
+        {
+            timerInfo.LastForwardMove = forwardMove;
+        }
+
+        if (sideMove != 0)
+        {
+            timerInfo.LastLeftMove = sideMove;
         }
 
         if (velocity.LengthSqr() > timerInfo.MaxVelocity.LengthSqr())
