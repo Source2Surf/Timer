@@ -295,16 +295,18 @@ internal partial class HudModule
         w.Class("LocsClear", "warn", asking);
         w.Class("LocsKeyClear", "warn", asking);
 
-        // How to bind, a command a line, and how to see a new bind; before the first save, also what saving does here.
+        // How to bind, a command a line, and how to see a new bind; until the run is in practice, also what teleporting
+        // back does to it here (saving alone doesn't change it).
         w.Text("LocsNote", "text", tr[HudTexts.LocsNote]);
         w.Text("LocsNoteSave", "text", tr[HudTexts.LocsNoteSave]);
         w.Text("LocsNoteLoc", "text", tr[HudTexts.LocsNoteLoc]);
         w.Text("LocsNotePrevNext", "text", tr[HudTexts.LocsNotePrevNext]);
         w.Text("LocsNoteClear", "text", tr[HudTexts.LocsNoteClear]);
         w.Text("LocsNoteUpdate", "text", tr[HudTexts.LocsNoteUpdate]);
-        w.Class("LocsNoteFirst", "Hidden", count > 0);
+        var practice = _practiceModule.IsInPractice(p.Slot);
+        w.Class("LocsNoteFirst", "Hidden", practice);
 
-        if (count == 0)
+        if (!practice)
         {
             w.Text("LocsNoteFirst", "text", tr[_practiceModule.IsOnSegmentedStyle(p.Slot) ? HudTexts.LocsNoteFirstSegmented : HudTexts.LocsNoteFirst]);
         }
