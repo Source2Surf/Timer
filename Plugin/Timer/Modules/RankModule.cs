@@ -257,18 +257,29 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
         ApplyScore(@params.Controller.PlayerSlot);
     }
 
-    // The scoreboard lists players by score, so points put the best first. Dying changes the score, so it's set again
-    // on spawning.
+    // The scoreboard lists players by score, so points put the best first, and replay bots (the only bots let in)
+    // above everyone. Dying changes the score, so it's set again on spawning.
     private void ApplyScore(PlayerSlot slot)
     {
-        if (!_config.ScoreboardScore
-            || !_bridge.TryGetController(slot, out var controller)
-            || controller.IsFakeClient)
+        if (!_bridge.TryGetController(slot, out var controller))
         {
             return;
         }
 
-        var score = (int) Math.Min(_points[slot], int.MaxValue);
+        int score;
+
+        if (controller.IsFakeClient)
+        {
+            score = int.MaxValue;
+        }
+        else if (_config.ScoreboardScore)
+        {
+            score = (int) Math.Min(_points[slot], int.MaxValue);
+        }
+        else
+        {
+            return;
+        }
 
         if (controller.Score != score)
         {

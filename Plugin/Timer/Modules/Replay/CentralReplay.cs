@@ -337,7 +337,7 @@ internal partial class ReplayPlaybackModule : ICentralReplay
     private static bool WaitsInSpectator(ReplayBotData bot)
         => bot is { Type: EReplayBotType.Central, Status: EReplayBotStatus.Idle, Config.SpectateWhenIdle: true };
 
-    // Out of spectator onto a random team, and spawned, before it plays. The spawn moves it to the start zone;
+    // Out of spectator onto CT, with the other replay bots, and spawned, before it plays. The spawn moves it to the start zone;
     // playback places it on the replay's first frame from there.
     private void JoinGame(ReplayBotData bot)
     {
@@ -348,7 +348,7 @@ internal partial class ReplayPlaybackModule : ICentralReplay
             return;
         }
 
-        controller.ChangeTeam(Random.Shared.Next(2) == 0 ? CStrikeTeam.TE : CStrikeTeam.CT);
+        controller.ChangeTeam(CStrikeTeam.CT);
         controller.Respawn();
     }
 

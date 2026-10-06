@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared;
 using Sharp.Shared.Enums;
+using Sharp.Shared.GameEntities;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
@@ -547,13 +548,8 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
                 continue;
             }
 
-            if (WaitsInSpectator(bot))
+            if (ParkIfWaiting(bot, controller))
             {
-                if (controller.Team != CStrikeTeam.Spectator)
-                {
-                    controller.ChangeTeam(CStrikeTeam.Spectator);
-                }
-
                 continue;
             }
 
@@ -605,7 +601,8 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
                 try
                 {
-                    if (!CCSBotManager_BotAddCommand(0, Random.Shared.Next(2, 4), 0, 0, CStrikeWeaponType.Unknown, 0))
+                    // Replay bots keep to CT, which the scoreboard lists first.
+                    if (!CCSBotManager_BotAddCommand(0, (int) CStrikeTeam.CT, 0, 0, CStrikeWeaponType.Unknown, 0))
                     {
                         _logger.LogError("Failed to add bot");
                     }
@@ -620,6 +617,32 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
         {
             mp_randomspawn.Set(0);
         }
+
+        // A new bot is on CT straight away; one that waits moves to spectator in the same frame, before the
+        // scoreboard shows it there.
+        foreach (var bot in _replayBots)
+        {
+            if (_bridge.EntityManager.FindPlayerControllerBySlot(bot.Client.Slot) is { IsValidEntity: true } controller)
+            {
+                ParkIfWaiting(bot, controller);
+            }
+        }
+    }
+
+    // A central bot with nothing to play waits in spectator. True when it does.
+    private static bool ParkIfWaiting(ReplayBotData bot, IPlayerController controller)
+    {
+        if (!WaitsInSpectator(bot))
+        {
+            return false;
+        }
+
+        if (controller.Team != CStrikeTeam.Spectator)
+        {
+            controller.ChangeTeam(CStrikeTeam.Spectator);
+        }
+
+        return true;
     }
 
     private void StartReplay(ReplayBotData bot)
