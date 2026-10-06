@@ -79,8 +79,9 @@ public record StyleSetting
     [JsonPropertyName("friction")]
     public float Friction { get; init; } = 4.0f;
 
+    // sv_air_max_wishspeed; null is the game mode's (timer-gamemodes.jsonc).
     [JsonPropertyName("wishspeed")]
-    public float WishSpeed { get; init; } = 30.0f;
+    public float? WishSpeed { get; init; }
 
     [JsonPropertyName("runspeed")]
     public float RunSpeed { get; init; } = 260.0f;

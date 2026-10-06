@@ -251,7 +251,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
             sv_autobunnyhopping.Set(!inStartZone && style.AutoBhop);
             sv_accelerate.Set(style.Accelerate);
             sv_friction.Set(style.Friction);
-            sv_air_max_wishspeed.Set(style.WishSpeed);
+            sv_air_max_wishspeed.Set(style.WishSpeed ?? _mapInfoModule.GetGameModeWishSpeed());
             sv_enablebunnyhopping.Set(style.AllowBunnyhopping);
 
             _lastStyleIndex  = mainTimer.Style;
@@ -568,7 +568,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         sv_enablebunnyhopping.ReplicateToClient(client,
                                                 style.AllowBunnyhopping.ToString(CultureInfo.InvariantCulture));
 
-        sv_air_max_wishspeed.ReplicateToClient(client, style.WishSpeed.ToString(CultureInfo.InvariantCulture));
+        sv_air_max_wishspeed.ReplicateToClient(client, (style.WishSpeed ?? _mapInfoModule.GetGameModeWishSpeed()).ToString(CultureInfo.InvariantCulture));
 
         sv_airaccelerate.ReplicateToClient(client,
                                            (style.CustomAirAccelerate

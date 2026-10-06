@@ -41,7 +41,8 @@
         "runspeed": 260,
         "accelerate": 5,
         "friction": 4,
-        "wishspeed": 30,
+        // Omit wishspeed to use the game mode's (timer-gamemodes.jsonc).
+        // "wishspeed": 30,
 
         // Score multiplier for this style.
         // 1.0 = normal scoring, 0 = excluded from scoring.
@@ -66,7 +67,6 @@
         "runspeed": 260,
         "accelerate": 5,
         "friction": 4,
-        "wishspeed": 30,
         "score_factor": 1.0,
 
         // Sideways style: block A/D keys.

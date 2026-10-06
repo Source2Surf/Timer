@@ -1,0 +1,51 @@
+{
+    // A map is in the first mode whose prefix its name starts with; read again on each map.
+    "modes": [
+        {
+            "prefix": "surf",
+            // surf, bhop or none.
+            "mode": "surf",
+
+            // In data/surftimer/map_configs, run on each map of this mode. It's written the first time with the base
+            // cvars and these; after that, edit the file.
+            "cfg": "surf.cfg",
+            "cvars": [ "sv_airaccelerate 150" ],
+
+            // Start-zone speed caps, entering and leaving; maps and styles can override them.
+            "enter_speed_limit": 260,
+            "exit_speed_limit": 375,
+
+            // Jumps allowed in the start zone; -1 = no limit.
+            "max_prejumps": 1,
+
+            // For styles without custom_airaccelerate.
+            "airaccelerate": 150,
+
+            // sv_air_max_wishspeed, for styles without their own wishspeed.
+            "wishspeed": 30
+        },
+        {
+            "prefix": "bhop",
+            "mode": "bhop",
+            "cfg": "bhop.cfg",
+            "cvars": [ "sv_airaccelerate 1000" ],
+            "enter_speed_limit": 260,
+            "exit_speed_limit": 290,
+            "max_prejumps": 1,
+            "airaccelerate": 1000,
+            "wishspeed": 30
+        }
+    ],
+
+    // Maps no prefix matches. Without a cfg, the base cvars and these cvars go straight to the server.
+    "default": {
+        "mode": "none",
+        "cfg": "",
+        "cvars": [],
+        "enter_speed_limit": 260,
+        "exit_speed_limit": 375,
+        "max_prejumps": 1,
+        "airaccelerate": 150,
+        "wishspeed": 30
+    }
+}

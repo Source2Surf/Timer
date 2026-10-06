@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,6 +61,8 @@ internal interface IMapInfoModule
 
     float GetDefaultAirAccelerate();
 
+    float GetGameModeWishSpeed();
+
     MapProfile GetCurrentMapProfile();
 }
 
@@ -81,6 +84,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     private MapConfig? _currentMapConfig = null;
 
     private readonly string _configPath;
+    private readonly string _gameModesPath;
 
     private readonly string[] _baseCvars =
     [
@@ -116,24 +120,9 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         "mp_warmup_offline_enabled 0",
     ];
 
-    private static readonly GameModeConfig DefaultConfig = new(
-        prefix: "", fileName: "", specificCvars: [],
-        gameMode: EGameMode.None,
-        enterSpeedLimit: 260.0f, exitSpeedLimit: 375.0f,
-        maxPrejumps: 1, airAccelerate: 150.0f
-    );
-
-    private static readonly IReadOnlyList<GameModeConfig> GameModeConfigs =
-    [
-        new ("surf", "surf.cfg", ["sv_airaccelerate 150"], EGameMode.Surf,
-            enterSpeedLimit: 260.0f, exitSpeedLimit: 375.0f, maxPrejumps: 1, airAccelerate: 150.0f),
-        new ("bhop", "bhop.cfg", ["sv_airaccelerate 1000"], EGameMode.Bhop,
-            enterSpeedLimit: 260.0f, exitSpeedLimit: 290.0f, maxPrejumps: 1, airAccelerate: 1000.0f),
-    ];
-
     private EGameMode _currentGameMode = EGameMode.None;
 
-    private GameModeConfig _currentGameModeConfig = DefaultConfig;
+    private GameModeConfig _currentGameModeConfig = new ();
 
     private bool _mapStatsPersisted;
 
@@ -158,7 +147,8 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         _taskTracker    = new TaskTracker(logger);
         _maxVelocity    = bridge.ConVarManager.FindConVar("sv_maxvelocity");
 
-        _configPath = Path.Combine(bridge.TimerDataPath, "map_configs");
+        _configPath    = Path.Combine(bridge.TimerDataPath, "map_configs");
+        _gameModesPath = Path.Combine(bridge.SharpPath, "configs", "timer-gamemodes.jsonc");
 
         if (!Directory.Exists(_configPath))
         {
@@ -441,31 +431,18 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         return ECommandAction.Handled;
     }
 
+    // Read each map, so an edit applies from the next one.
     private void LoadGameModeConfig()
     {
-        var             configPath = "";
-        GameModeConfig? config     = null;
+        var config = GameModesConfig.Load(_gameModesPath, _logger).For(_bridge.CurrentMapName);
 
-        foreach (var cfg in GameModeConfigs)
+        _currentGameModeConfig = config;
+        _currentGameMode       = config.GameMode;
+
+        // Without a cfg of its own, the base cvars and the mode's go straight to the server.
+        if (config.Cfg.Length == 0)
         {
-            if (!_bridge.CurrentMapName.StartsWith(cfg.Prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            config           = cfg;
-            configPath       = Path.Combine(_configPath, cfg.FileName);
-            _currentGameMode = cfg.GameMode;
-
-            break;
-        }
-
-        if (config == null)
-        {
-            _currentGameModeConfig = DefaultConfig;
-            _currentGameMode       = EGameMode.None;
-
-            foreach (var cvar in _baseCvars)
+            foreach (var cvar in _baseCvars.Concat(config.Cvars))
             {
                 _bridge.ModSharp.ServerCommand(cvar);
             }
@@ -473,7 +450,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             return;
         }
 
-        _currentGameModeConfig = config;
+        var configPath = Path.Combine(_configPath, config.Cfg);
 
         EnsureConfigExists(configPath, config);
         ExecuteGameModeConfig(configPath);
@@ -489,7 +466,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         try
         {
             File.WriteAllLines(path, _baseCvars);
-            File.AppendAllLines(path, config.SpecificCvars);
+            File.AppendAllLines(path, config.Cvars);
         }
         catch (Exception e)
         {
@@ -568,31 +545,6 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         }
     }
 
-    private record GameModeConfig
-    {
-        public string    Prefix          { get; }
-        public string    FileName        { get; }
-        public string[]  SpecificCvars   { get; }
-        public EGameMode GameMode        { get; }
-        public float     EnterSpeedLimit { get; }
-        public float     ExitSpeedLimit  { get; }
-        public int       MaxPrejumps     { get; }
-        public float     AirAccelerate   { get; }
-
-        public GameModeConfig(string prefix, string fileName, string[] specificCvars, EGameMode gameMode,
-                              float enterSpeedLimit, float exitSpeedLimit, int maxPrejumps, float airAccelerate)
-        {
-            Prefix          = prefix;
-            FileName        = fileName;
-            SpecificCvars   = specificCvars;
-            GameMode        = gameMode;
-            EnterSpeedLimit = enterSpeedLimit;
-            ExitSpeedLimit  = exitSpeedLimit;
-            MaxPrejumps     = maxPrejumps;
-            AirAccelerate   = airAccelerate;
-        }
-    }
-
     public float GetEnterSpeedLimit(int track)
     {
         if (_currentMapConfig != null
@@ -650,6 +602,9 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         }
         return GetZoneExitSpeedOverride(track);
     }
+
+    public float GetGameModeWishSpeed()
+        => _currentGameModeConfig.WishSpeed;
 
     public float GetDefaultAirAccelerate()
         => _currentGameModeConfig.AirAccelerate;
