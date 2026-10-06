@@ -819,10 +819,6 @@ internal partial class HudModule
             _               => choice.Label,
         };
 
-    // Hide the live difference if the closest record frame is farther than this: beyond about one ramp's width the
-    // projection is meaningless (the player is on a different path).
-    private const float MaxPositionDiffDistSq = 256f * 256f;
-
     // Suppress nonsense large differences (wrong replay, teleport mid-run, ...): ten minutes, in ms.
     private const long MaxAbsPositionDelta = 600_000;
 
@@ -861,13 +857,14 @@ internal partial class HudModule
         var projectedFrame = replay.Header.PreFrame + ((double) timerInfo.Time / TimerConstants.TickInterval);
         var preferredFrame = (int) Math.Clamp(Math.Round(projectedFrame), 0d, replay.Frames.Count - 1d);
 
+        // No distance limit, like bhoptimer: only the replay's end bounds it, past which the player is beyond its route.
         var position = s.Pawn.GetAbsOrigin();
-        var distSq   = float.PositiveInfinity;
         var index = compare == HudOptions.ComparePersonalBest
-            ? frames?.FindClosest(position, preferredFrame, out distSq) ?? -1
-            : _replayModule.FindClosestFrameIndex(timerInfo.Style, timerInfo.Track, 0, position, preferredFrame, out distSq);
+            ? frames?.FindClosest(position, preferredFrame, out _) ?? -1
+            : _replayModule.FindClosestFrameIndex(timerInfo.Style, timerInfo.Track, 0, position, preferredFrame, out _);
+        var finish = replay.Header.PostFrame > 0 ? replay.Header.PostFrame : replay.Frames.Count - 1;
 
-        if (index < 0 || distSq > MaxPositionDiffDistSq)
+        if (index < 0 || index >= finish)
         {
             return null;
         }
