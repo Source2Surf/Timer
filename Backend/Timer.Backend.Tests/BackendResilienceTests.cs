@@ -134,17 +134,19 @@ public sealed class BackendResilienceTests
     }
 
     [Fact]
-    public async Task DedicatedWorkerFailsStartupBeforeScanningWhenOutboxIsMissing()
+    public async Task DedicatedWorkerStartupRecreatesAMissingOutbox()
     {
         using var fixture = new Fixture(worker: true);
         fixture.Store.Db.DbMaintenance.DropTable<ScoreRecalcOutboxEntity>();
         var service = new TimerBackendStorageHostedService(
-            fixture.Owner, new TimerBackendOptions("postgresql", "unused", false, false, true),
+            fixture.Owner, new TimerBackendOptions("postgresql", "unused", false, true),
             WriteOptions(false), NullLogger<TimerBackendStorageHostedService>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.StartAsync(default));
-        Assert.Contains("surf_score_recalc_outbox", exception.Message);
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => fixture.Owner.CheckReadyAsync());
+        await service.StartAsync(default);
+
+        Assert.True(fixture.Store.Db.DbMaintenance.IsAnyTable("surf_score_recalc_outbox", false));
+        await fixture.Owner.CheckReadyAsync();
+        await service.StopAsync(default);
     }
 
     [Fact]

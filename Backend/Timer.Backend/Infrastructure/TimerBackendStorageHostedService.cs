@@ -36,23 +36,26 @@ internal sealed class TimerBackendStorageHostedService : IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_options.InitializeSchema || _options.AllowReadRepair
-            || _options.EnableOutboxWorker || _writeApiOptions.Enabled)
+        if (_options.HasObsoleteInitializeSchema)
+        {
+            _logger.LogWarning("TimerBackend:InitializeSchema is no longer read: every start adds the tables and columns a new version needs. Remove it.");
+        }
+
+        if (_options.AllowReadRepair || _options.EnableOutboxWorker || _writeApiOptions.Enabled)
         {
             _logger.LogWarning(
-                "Timer backend is starting with database mutations enabled (initializeSchema={InitializeSchema}, allowReadRepair={AllowReadRepair}, enableOutboxWorker={EnableOutboxWorker}, writeApi={WriteApi}). Do not use a read-only replica role for this instance.",
-                _options.InitializeSchema,
+                "Timer backend is starting with database mutations enabled (allowReadRepair={AllowReadRepair}, enableOutboxWorker={EnableOutboxWorker}, writeApi={WriteApi}). Do not use a read-only replica role for this instance.",
                 _options.AllowReadRepair,
                 _options.EnableOutboxWorker,
                 _writeApiOptions.Enabled);
         }
 
-        _storage.Start(_options.InitializeSchema,
+        // Additive: SqlSugar only creates or alters what's missing, so an up-to-date database needs no DDL.
+        _storage.Start(initializeSchema: true,
                        _options.AllowReadRepair,
                        requireWriteSchema: _options.ShouldRunOutboxWorker(_writeApiOptions.Enabled));
         _logger.LogInformation(
-            "Timer SQL storage started (initializeSchema={InitializeSchema}, allowReadRepair={AllowReadRepair}, enableOutboxWorker={EnableOutboxWorker}, writeApi={WriteApi}).",
-            _options.InitializeSchema,
+            "Timer SQL storage started (allowReadRepair={AllowReadRepair}, enableOutboxWorker={EnableOutboxWorker}, writeApi={WriteApi}).",
             _options.AllowReadRepair,
             _options.EnableOutboxWorker,
             _writeApiOptions.Enabled);

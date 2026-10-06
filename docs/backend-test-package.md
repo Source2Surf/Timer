@@ -31,7 +31,7 @@ dotnet test Timer.Backend.slnx -c Release --no-build
 
 1. 创建专用测试数据库和测试用户；源码包不包含数据库密码或数据。
 2. 复制 `Backend/Timer.Backend/appsettings.example.json` 为 `Backend/Timer.Backend/appsettings.Production.json`，填写 `TimerBackend:Database:Type`（`postgresql` 或 `mysql`）及 `ConnectionString`。
-3. 对全新的空测试库，首次启动前在 `TimerBackend` 下设置 `InitializeSchema: true`。表创建成功后恢复为 `false`。已有 Timer 数据库应按 [后端迁移说明](../Backend/Timer.Backend/README.md#upgrade-an-existing-master-sql-database) 升级，不要用新库初始化步骤替代迁移。
+3. 后端每次启动都会补建缺少的表和列，全新的空测试库无需额外设置。已有 Timer 数据库应按 [后端迁移说明](../Backend/Timer.Backend/README.md#upgrade-an-existing-master-sql-database) 升级，不要用新库初始化步骤替代迁移。
 4. 测试写入时设置 `TimerBackend:WriteApi:Enabled: true`。这会同时启用积分 Outbox worker；默认只开放读取，写 API 关闭。
 5. 确保环境为 `Production` 后，从根目录运行：
 

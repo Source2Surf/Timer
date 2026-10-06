@@ -9,10 +9,14 @@ namespace Timer.Backend.Configuration;
 /// </summary>
 internal sealed record TimerBackendOptions(string DatabaseType,
                                            string ConnectionString,
-                                           bool   InitializeSchema,
                                            bool   AllowReadRepair,
                                            bool   EnableOutboxWorker)
 {
+    /// <summary>
+    /// The removed InitializeSchema switch is still in the configuration; the schema is always brought up to date now.
+    /// </summary>
+    public bool HasObsoleteInitializeSchema { get; init; }
+
     public const string SectionName = "TimerBackend";
 
     /// <summary>
@@ -35,7 +39,6 @@ internal sealed record TimerBackendOptions(string DatabaseType,
         {
             connectionString = configuration.GetConnectionString("TimerBackend");
         }
-        var initializeSchemaRaw = configuration[$"{SectionName}:InitializeSchema"];
         var allowReadRepairRaw = configuration[$"{SectionName}:AllowReadRepair"];
         var enableOutboxWorkerRaw = configuration[$"{SectionName}:EnableOutboxWorker"];
 
@@ -49,13 +52,6 @@ internal sealed record TimerBackendOptions(string DatabaseType,
         {
             throw new InvalidOperationException(
                 $"Missing {SectionName}:Database:ConnectionString or ConnectionStrings:TimerBackend.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(initializeSchemaRaw)
-            && !bool.TryParse(initializeSchemaRaw, out _))
-        {
-            throw new InvalidOperationException(
-                $"{SectionName}:InitializeSchema must be true or false.");
         }
 
         if (!string.IsNullOrWhiteSpace(allowReadRepairRaw)
@@ -74,12 +70,12 @@ internal sealed record TimerBackendOptions(string DatabaseType,
 
         return new TimerBackendOptions(databaseType,
                                        connectionString,
-                                       // Additive: creates what's missing. Off for read-only replicas.
-                                       string.IsNullOrWhiteSpace(initializeSchemaRaw)
-                                       || (bool.TryParse(initializeSchemaRaw, out var initializeSchema) && initializeSchema),
                                        bool.TryParse(allowReadRepairRaw, out var allowReadRepair)
                                            && allowReadRepair,
                                        bool.TryParse(enableOutboxWorkerRaw, out var enableOutboxWorker)
-                                           && enableOutboxWorker);
+                                           && enableOutboxWorker)
+        {
+            HasObsoleteInitializeSchema = configuration[$"{SectionName}:InitializeSchema"] is not null,
+        };
     }
 }

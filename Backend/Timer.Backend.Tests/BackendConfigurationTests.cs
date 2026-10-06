@@ -13,17 +13,26 @@ namespace Timer.Backend.Tests;
 public sealed class BackendConfigurationTests
 {
     [Fact]
-    public void SchemaIsCreatedByDefaultOtherMutatingOptionsAreOff()
+    public void MutatingOptionsAreOffByDefault()
     {
         var options = TimerBackendOptions.FromConfiguration(CreateConfiguration());
 
-        Assert.True(options.InitializeSchema);
+        Assert.False(options.HasObsoleteInitializeSchema);
         Assert.False(options.AllowReadRepair);
         Assert.False(options.EnableOutboxWorker);
     }
 
+    [Fact]
+    public void TheRemovedInitializeSchemaSwitchIsOnlyNoticed()
+    {
+        var values = ValidValues();
+        values["TimerBackend:InitializeSchema"] = "false";
+
+        Assert.True(TimerBackendOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(values).Build())
+                                       .HasObsoleteInitializeSchema);
+    }
+
     [Theory]
-    [InlineData("TimerBackend:InitializeSchema")]
     [InlineData("TimerBackend:AllowReadRepair")]
     [InlineData("TimerBackend:EnableOutboxWorker")]
     public void InvalidBooleanOptionFailsFast(string key)

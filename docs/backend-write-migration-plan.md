@@ -127,7 +127,7 @@ submission、run、best-run 和本次需要的积分 Outbox 要么全部提交�
 
 所有 schema/index 变更由一次性 migration 角色显式执行，普通 API/worker 副本不得并发运行 CodeFirst DDL。
 
-切换前先运行 `Timer.Backend migrate` 一次性迁移命令：它增量升级 master SQL schema，并逐地图补种历史 best-run 投影；普通后端副本继续保持 `InitializeSchema=false`、`AllowReadRepair=false`。目前尚未提供投影逐行一致性及旧积分 ruleset 的完整审计，正式切换前仍需在数据库副本上验收。当前写入适配器另有按榜单的冷路径补种保护，避免遗漏补种时历史 run 被误判为 WR；同一进程命中补种缓存后的稳态写入不再产生这部分 SQL。以后可用持久化迁移门闩替代这道兼容保护。
+切换前先运行 `Timer.Backend migrate` 一次性迁移命令：它增量升级 master SQL schema，并逐地图补种历史 best-run 投影；普通后端副本保持 `AllowReadRepair=false`；它们每次启动只补建缺少的表和列（`InitializeSchema` 开关已移除）。目前尚未提供投影逐行一致性及旧积分 ruleset 的完整审计，正式切换前仍需在数据库副本上验收。当前写入适配器另有按榜单的冷路径补种保护，避免遗漏补种时历史 run 被误判为 WR；同一进程命中补种缓存后的稳态写入不再产生这部分 SQL。以后可用持久化迁移门闩替代这道兼容保护。
 
 ## 5. Outbox、MQ 和实时通知
 

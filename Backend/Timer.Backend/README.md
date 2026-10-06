@@ -20,7 +20,8 @@ defaults:
 
 - it listens on `127.0.0.1:5081` (HTTP/1 read API) and `127.0.0.1:5082`
   (HTTP/2 gRPC for game servers), and serves writes only on 5082;
-- it creates missing tables on startup (`InitializeSchema`, additive);
+- every start creates the tables and columns a new version adds (additive;
+  an up-to-date database needs no DDL rights);
 - game servers register their styles' `score_factor`s, so `WriteApi:StyleFactors`
   is only needed to override them.
 
@@ -147,8 +148,7 @@ earlier backend test bundles use the additive update described below.
    it succeeds. Inspect any failure and the backup first; MySQL DDL is not one
    atomic transaction.
 5. Start the new backend with `AllowReadRepair=false`. It creates the tables
-   newer than this migration (later, set `InitializeSchema=false` if its account
-   may not create tables). Upgrade the
+   newer than this migration. Upgrade the
    game-server binaries, delete their `sharp/modules/Timer.RequestManager`, and
    replace the `database` and `score_write` sections of each
    `sharp/configs/timer.jsonc` with `backend`. Game servers no longer need any
@@ -218,10 +218,10 @@ The optional settings below default to what a single backend serving game server
   `postgresql`/`postgres`/`pgsql`.
 - `Database:ConnectionString` may instead be supplied as
   `ConnectionStrings:TimerBackend`.
-- `InitializeSchema` is `true` by default: on startup it runs the additive
-  SQLSugar CodeFirst schema initialization and index check, creating what a new
-  version adds. Set it `false` on read-only replicas and for accounts that may
-  not create tables.
+- Every start runs the additive SQLSugar CodeFirst schema initialization and
+  index check, creating what a new version adds. SQLSugar only alters what's
+  missing, so a read-only account works against an up-to-date database. The old
+  `InitializeSchema` switch is ignored, with a warning.
 - `AllowReadRepair` is `false` by default. When enabled, leaderboard and
   player-record reads may populate the historical `surf_player_best_runs`
   projection. This requires write credentials and is intended only as a
