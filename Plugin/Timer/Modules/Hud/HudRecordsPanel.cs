@@ -143,7 +143,6 @@ internal partial class HudModule
         var r          = p.Records;
         var tr         = p.Tr;
         var map        = RecordsMap(r);
-        var styleCount = _styleModule.GetStyleCount();
         var boards     = r.Map is null ? null : _recordModule.GetBoards(r.Map);
 
         // This map's tracks can change between maps; another map's come from its boards.
@@ -153,7 +152,7 @@ internal partial class HudModule
             r.Stage = 0;
         }
 
-        r.Style = Math.Clamp(r.Style, 0, Math.Max(0, styleCount - 1));
+        r.Style = _styleModule.ValidStyle(r.Style);
 
         var records   = _recordModule.GetRecords(map, r.Style, r.Track, r.Stage); // null while another map loads
         var list      = records ?? (IReadOnlyList<RunRecord>) [];
@@ -205,8 +204,8 @@ internal partial class HudModule
         w.Class("LbStagePrev", "disabled", StepRecordsStage(r, boards, -1) < 0);
         w.Class("LbStageNext", "disabled", StepRecordsStage(r, boards, 1) < 0);
         w.Text("LbStyleValue", "value", styleName);
-        w.Class("LbStylePrev", "disabled", r.Style == 0);
-        w.Class("LbStyleNext", "disabled", r.Style >= styleCount - 1);
+        w.Class("LbStylePrev", "disabled", _styleModule.StepStyle(r.Style, -1) == r.Style);
+        w.Class("LbStyleNext", "disabled", _styleModule.StepStyle(r.Style, 1) == r.Style);
         w.Text("LbCount", "text", loading ? tr[HudTexts.Loading] : list.Count == 1 ? tr[HudTexts.TimesOne] : tr.Format(HudTexts.Times, list.Count));
         w.Class("LbJumpSr", "disabled", list.Count == 0);
         w.Class("LbJumpYou", "disabled", IndexOfPlayer(list, p.SteamId) < 0);
@@ -388,7 +387,7 @@ internal partial class HudModule
 
                 break;
             case "LbStylePrev" or "LbStyleNext":
-                r.Style = Math.Clamp(r.Style + (buttonId == "LbStyleNext" ? 1 : -1), 0, Math.Max(0, _styleModule.GetStyleCount() - 1));
+                r.Style = _styleModule.StepStyle(r.Style, buttonId == "LbStyleNext" ? 1 : -1);
                 board   = true;
 
                 break;

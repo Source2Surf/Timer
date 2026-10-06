@@ -235,7 +235,7 @@ internal partial class HudModule
         switch (buttonId)
         {
             case "PfStylePrev" or "PfStyleNext":
-                f.Style = Math.Clamp(f.Style + (buttonId == "PfStyleNext" ? 1 : -1), 0, Math.Max(0, _styleModule.GetStyleCount() - 1));
+                f.Style = _styleModule.StepStyle(f.Style, buttonId == "PfStyleNext" ? 1 : -1);
 
                 break;
             case "PfTrackPrev" or "PfTrackNext":
@@ -283,8 +283,7 @@ internal partial class HudModule
             f.Track = 0;
         }
 
-        var styleCount = _styleModule.GetStyleCount();
-        f.Style = Math.Clamp(f.Style, 0, Math.Max(0, styleCount - 1));
+        f.Style = _styleModule.ValidStyle(f.Style);
 
         var styleName = _styleModule.GetStyleSetting(f.Style).Name;
         var profile   = _playerManager.GetPlayerProfile(f.Target);
@@ -304,8 +303,8 @@ internal partial class HudModule
                               f.Summary is { } played ? tr.Format(HudTexts.Played, HudFormat.Duration(tr, played.PlayTime + session)) : ""));
 
         w.Text("PfStyleValue", "value", styleName);
-        w.Class("PfStylePrev", "disabled", f.Style == 0);
-        w.Class("PfStyleNext", "disabled", f.Style >= styleCount - 1);
+        w.Class("PfStylePrev", "disabled", _styleModule.StepStyle(f.Style, -1) == f.Style);
+        w.Class("PfStyleNext", "disabled", _styleModule.StepStyle(f.Style, 1) == f.Style);
 
         // Overall, for the picked style; left out when the request provider can't tell.
         var overall = !f.SummaryFetched || f.Summary is not null;

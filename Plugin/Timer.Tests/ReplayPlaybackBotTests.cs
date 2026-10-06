@@ -78,9 +78,13 @@ public sealed class ReplayPlaybackBotTests
     {
         public int StyleCount { get; set; }
 
+        // Styles 0 to StyleCount - 1, all enabled.
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-            => targetMethod?.Name == nameof(IStyleModule.GetStyleCount)
-                ? StyleCount
-                : throw new NotSupportedException(targetMethod?.Name);
+            => targetMethod?.Name switch
+            {
+                nameof(IStyleModule.IsStyleEnabled) => (int) args![0]! < StyleCount,
+                nameof(IStyleModule.GetStyleIds)    => Enumerable.Range(0, StyleCount).ToArray(),
+                _                                   => throw new NotSupportedException(targetMethod?.Name),
+            };
     }
 }

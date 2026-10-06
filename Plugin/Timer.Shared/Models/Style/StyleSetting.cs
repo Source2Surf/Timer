@@ -29,6 +29,19 @@ public record StyleSetting
     [JsonPropertyName("command")]
     public string Command { get; init; } = "normal;n";
 
+    /// <summary>
+    /// Runs and replays are stored under this, so it stays with the style however the list changes: 0-15. Without one
+    /// (-1), a style's id is its place in the list.
+    /// </summary>
+    [JsonPropertyName("id")]
+    public int Id { get; init; } = -1;
+
+    /// <summary>
+    /// A disabled style can't be picked and is left out of the menus; its runs are kept.
+    /// </summary>
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; init; } = true;
+
     [JsonPropertyName("autobhop")]
     public bool AutoBhop { get; init; } = true;
 

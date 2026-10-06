@@ -656,7 +656,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
     private void FindNextReplay(ReplayBotData bot)
     {
-        var       maxStyle = _styleModule.GetStyleCount();
+        const int maxStyle = TimerConstants.MAX_STYLE;
         const int maxTrack = TimerConstants.MAX_TRACK;
         var       total    = maxStyle * maxTrack;
 
@@ -680,7 +680,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
             var style = idx % maxStyle;
 
-            if (!config.Styles.Contains(style))
+            if (!config.Styles.Contains(style) || !_styleModule.IsStyleEnabled(style))
             {
                 continue;
             }
@@ -703,7 +703,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
     private void FindNextStageReplay(ReplayBotData bot)
     {
-        var       maxStyle = _styleModule.GetStyleCount();
+        const int maxStyle = TimerConstants.MAX_STYLE;
         const int maxTrack = TimerConstants.MAX_TRACK;
         const int maxStage = TimerConstants.MAX_STAGE;
 
@@ -751,7 +751,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
             var style = rem % maxStyle;
 
-            if (!config.Styles.Contains(style))
+            if (!config.Styles.Contains(style) || !_styleModule.IsStyleEnabled(style))
             {
                 continue;
             }
@@ -1011,9 +1011,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
     {
         var keys = new List<(int style, int track, int stage, RunRecord wr)>();
 
-        var styleCount = _styleModule.GetStyleCount();
-
-        for (var style = 0; style < styleCount; style++)
+        foreach (var style in _styleModule.GetStyleIds())
         {
             for (var track = 0; track < TimerConstants.MAX_TRACK; track++)
             {

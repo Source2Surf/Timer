@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,7 +49,27 @@ internal interface IStyleModule
 
     StyleSetting GetStyleSetting(int style);
 
-    int GetStyleCount();
+    /// <summary>
+    ///     The styles players can pick, in the config's order.
+    /// </summary>
+    IReadOnlyList<int> GetStyleIds();
+
+    /// <summary>
+    ///     The first of them, which players start on.
+    /// </summary>
+    int DefaultStyle { get; }
+
+    bool IsStyleEnabled(int style);
+
+    /// <summary>
+    ///     The style if players can pick it, else the default.
+    /// </summary>
+    int ValidStyle(int style);
+
+    /// <summary>
+    ///     The next or previous style players can pick, stopping at the ends.
+    /// </summary>
+    int StepStyle(int style, int step);
 }
 
 internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener, ITimerModuleListener, IZoneModuleListener
@@ -66,7 +87,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private readonly ILogger<StyleModule> _logger;
     private readonly ListenerHub<IStyleModuleListener> _listenerHub;
 
-    private List<StyleSetting> _styles = [];
+    private StyleSetting?[] _byId = new StyleSetting?[TimerConstants.MAX_STYLE];
+    private int[]           _ids  = [];
 
     // ReSharper disable InconsistentNaming
 
@@ -347,53 +369,110 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     {
         _commandManager.ClearStyleCommands();
 
-        _styles = [new ()];
+        List<StyleSetting> styles = [new ()];
 
         if (!File.Exists(_styleConfigPath))
         {
             _logger.LogWarning("Style config file not found at {path}. Creating a new list with a default style.",
                                _styleConfigPath);
 
-            File.WriteAllText(_styleConfigPath, JsonSerializer.Serialize(_styles, Utils.SerializerOptions));
-
-            goto end;
+            File.WriteAllText(_styleConfigPath, JsonSerializer.Serialize(styles, Utils.SerializerOptions));
         }
-
-        try
+        else
         {
-            var json = File.ReadAllText(_styleConfigPath);
-
-            _styles = JsonSerializer.Deserialize<List<StyleSetting>>(json, Utils.DeserializerOptions) ?? [];
-
-            if (_styles.Count == 0)
+            try
             {
-                _logger.LogWarning("Style config is missing or empty, adding default style.");
+                var json = File.ReadAllText(_styleConfigPath);
 
-                _styles = [new ()];
-                File.WriteAllText(_styleConfigPath, JsonSerializer.Serialize(_styles, Utils.SerializerOptions));
+                styles = JsonSerializer.Deserialize<List<StyleSetting>>(json, Utils.DeserializerOptions) ?? [];
+
+                if (styles.Count == 0)
+                {
+                    _logger.LogWarning("Style config is missing or empty, adding default style.");
+
+                    styles = [new ()];
+                    File.WriteAllText(_styleConfigPath, JsonSerializer.Serialize(styles, Utils.SerializerOptions));
+                }
             }
-            else if (_styles.Count > TimerConstants.MAX_STYLE)
+            catch (Exception ex)
             {
-                var count = _styles.Count;
-
-                _logger.LogWarning("Current style count {current} exceeds allowed count {max}, removing excess styles.",
-                                   count,
-                                   TimerConstants.MAX_STYLE);
-
-                var numToRemove = count - TimerConstants.MAX_STYLE;
-                _styles.RemoveRange(TimerConstants.MAX_STYLE, numToRemove);
+                _logger.LogError(ex, "Failed to deserialize style config, using the default style setting");
+                styles = [new ()];
             }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to deserialize style config, using the default style setting");
-        }
 
-    end:
+        (_byId, _ids) = ResolveStyles(styles, _logger);
+
         AddStyleCommands();
+        MovePlayersOffGoneStyles();
 
-        NotifyStyleConfigLoaded(_styles);
-        _ = RegisterStyleFactorsAsync(_styles);
+        var configured = _byId.OfType<StyleSetting>().ToList();
+        NotifyStyleConfigLoaded(configured);
+        _ = RegisterStyleFactorsAsync(configured);
+    }
+
+    /// <summary>
+    ///     Each style under its id: the config's, or its place in the list. One with an id out of range or already
+    ///     taken is left out. With none enabled, the first is picked anyway, or a default style if none is left.
+    /// </summary>
+    internal static (StyleSetting?[] ById, int[] Enabled) ResolveStyles(IReadOnlyList<StyleSetting> styles, ILogger logger)
+    {
+        var byId    = new StyleSetting?[TimerConstants.MAX_STYLE];
+        var enabled = new List<int>();
+
+        for (var i = 0; i < styles.Count; i++)
+        {
+            var id = styles[i].Id >= 0 ? styles[i].Id : i;
+
+            if (id >= TimerConstants.MAX_STYLE || byId[id] is not null)
+            {
+                logger.LogError("Style \"{Name}\" is left out: its id {Id} is {Why}",
+                                styles[i].Name,
+                                id,
+                                id >= TimerConstants.MAX_STYLE ? $"past {TimerConstants.MAX_STYLE - 1}" : "another style's");
+
+                continue;
+            }
+
+            byId[id] = styles[i] with { Id = id };
+
+            if (styles[i].Enabled)
+            {
+                enabled.Add(id);
+            }
+        }
+
+        if (enabled.Count == 0)
+        {
+            var first = Array.FindIndex(byId, s => s is not null);
+
+            if (first < 0)
+            {
+                first       = 0;
+                byId[first] = new () { Id = first };
+            }
+
+            logger.LogWarning("No style is enabled; enabling \"{Name}\" (id {Id})", byId[first]!.Name, first);
+            enabled.Add(first);
+        }
+
+        return (byId, enabled.ToArray());
+    }
+
+    // A reload can take a player's style away; they go to the default.
+    private void MovePlayersOffGoneStyles()
+    {
+        for (var i = 0; i < PlayerSlot.MaxPlayerCount; i++)
+        {
+            var slot = (PlayerSlot) i;
+
+            if (_timerModule.GetTimerInfo(slot) is { } timer && !IsStyleEnabled(timer.Style))
+            {
+                NotifyClientStyleChanged(slot, timer.Style, DefaultStyle);
+                timer.ChangeStyle(DefaultStyle);
+                _timerModule.GetStageTimerInfo(slot)?.ChangeStyle(DefaultStyle);
+            }
+        }
     }
 
     // The backend scores with these unless it configures its own StyleFactors.
@@ -401,9 +480,9 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     {
         var factors = new Dictionary<int, double>(styles.Count);
 
-        for (var i = 0; i < styles.Count; i++)
+        foreach (var style in styles)
         {
-            factors[i] = styles[i].ScoreFactor;
+            factors[style.Id] = style.ScoreFactor;
         }
 
         try
@@ -422,12 +501,12 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
     private void AddStyleCommands()
     {
-        for (var i = 0; i < _styles.Count; i++)
+        foreach (var id in _ids)
         {
-            var split = _styles[i].Command
+            var split = _byId[id]!.Command
                                   .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            var styleIndex = i;
+            var styleIndex = id;
 
             foreach (var command in split)
             {
@@ -517,18 +596,12 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
                                   static (l, s, o, n) => l.OnClientStyleChanged(s, o, n),
                                   slot, oldStyle, newStyle);
 
+    // A disabled style's setting is still there for its runs; an unknown one falls back to the default, as callers
+    // like MiscModule's per-tick hooks can hold one that a reload took away.
     public StyleSetting GetStyleSetting(int style)
-    {
-        // Clamp instead of throwing: external callers (e.g. MiscModule per tick) hold style
-        // indices that go stale when reload_styles shrinks the list — fall back to the
-        // default style rather than blowing up the calling hook.
-        if ((uint) style < (uint) _styles.Count)
-        {
-            return _styles[style];
-        }
-
-        return _styles.Count > 0 ? _styles[0] : new StyleSetting();
-    }
+        => ((uint) style < (uint) _byId.Length ? _byId[style] : null)
+           ?? (_ids.Length > 0 ? _byId[_ids[0]] : null)
+           ?? new StyleSetting();
 
     private StyleSetting GetStyleOrDefault(int style)
         => GetStyleSetting(style);
@@ -536,6 +609,22 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     public StyleSetting? GetPlayerStyle(PlayerSlot slot)
         => _timerModule.GetTimerInfo(slot) is { } timer ? GetStyleSetting(timer.Style) : null;
 
-    public int GetStyleCount()
-        => _styles.Count;
+    public IReadOnlyList<int> GetStyleIds()
+        => _ids;
+
+    public int DefaultStyle
+        => _ids.Length > 0 ? _ids[0] : 0;
+
+    public bool IsStyleEnabled(int style)
+        => Array.IndexOf(_ids, style) >= 0;
+
+    public int ValidStyle(int style)
+        => IsStyleEnabled(style) ? style : DefaultStyle;
+
+    public int StepStyle(int style, int step)
+    {
+        var at = Array.IndexOf(_ids, style);
+
+        return at < 0 ? DefaultStyle : _ids[Math.Clamp(at + step, 0, _ids.Length - 1)];
+    }
 }

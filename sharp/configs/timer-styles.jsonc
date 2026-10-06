@@ -8,6 +8,13 @@
         // Chat commands (aliases) separated by ';'.
         "command": "normal;n",
 
+        // Runs and replays are stored under the id (0-15), so keep it when reordering or removing styles.
+        // Without one, a style's id is its place in this list.
+        "id": 0,
+
+        // false = players can't pick it and it's left out of the menus; its runs are kept.
+        "enabled": true,
+
         // Movement behavior.
         "autobhop": true,// equivalent to sv_autobunnyhopping
         "allow_bunnyhopping": true, // equivalent to sv_enablebunnyhopping
@@ -43,6 +50,7 @@
     {
         "name": "Sideways",
         "command": "sideways;sw",
+        "id": 1,
         "autobhop": true,
         "allow_bunnyhopping": true,
         "custom_airaccelerate": false,

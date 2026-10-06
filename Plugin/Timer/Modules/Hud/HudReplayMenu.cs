@@ -131,7 +131,7 @@ internal partial class HudModule
 
                 break;
             case "RmStylePrev" or "RmStyleNext":
-                var style = Math.Clamp(m.Style + (buttonId == "RmStyleNext" ? 1 : -1), 0, _styleModule.GetStyleCount() - 1);
+                var style = _styleModule.StepStyle(m.Style, buttonId == "RmStyleNext" ? 1 : -1);
 
                 if (style != m.Style)
                 {
@@ -278,9 +278,8 @@ internal partial class HudModule
         }
 
         var stages     = StageCount(m.Track);
-        var styleCount = _styleModule.GetStyleCount();
         m.Stage = Math.Min(m.Stage, stages);
-        m.Style = Math.Clamp(m.Style, 0, Math.Max(0, styleCount - 1));
+        m.Style = _styleModule.ValidStyle(m.Style);
 
         var pick = (m.Style, m.Track, m.Stage);
 
@@ -310,8 +309,8 @@ internal partial class HudModule
         w.Class("RmStagePrev", "disabled", m.Stage == 0);
         w.Class("RmStageNext", "disabled", m.Stage >= stages);
         w.Text("RmStyleValue", "value", styleName);
-        w.Class("RmStylePrev", "disabled", m.Style == 0);
-        w.Class("RmStyleNext", "disabled", m.Style >= styleCount - 1);
+        w.Class("RmStylePrev", "disabled", _styleModule.StepStyle(m.Style, -1) == m.Style);
+        w.Class("RmStyleNext", "disabled", _styleModule.StepStyle(m.Style, 1) == m.Style);
         w.Text("RmCount", "text",
                !board && m.RunsLoading ? tr[HudTexts.Loading]
                : records.Count == 1    ? tr[board ? HudTexts.TimesOne : HudTexts.RunsOne]

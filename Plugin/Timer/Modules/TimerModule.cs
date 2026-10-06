@@ -862,6 +862,8 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
         _timerInfo[slot]      = new ();
         _stageTimerInfo[slot] = new ();
+        _timerInfo[slot]!.ChangeStyle(_styleModule.DefaultStyle);
+        _stageTimerInfo[slot]!.ChangeStyle(_styleModule.DefaultStyle);
 
         _zoneStartSuppressedUntil[slot] = 0;
 
