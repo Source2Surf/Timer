@@ -1307,6 +1307,10 @@
     "en-us": "Stop timer",
     "zh-cn": "停止计时"
   },
+  "zn.type.reset": {
+    "en-us": "Reset",
+    "zh-cn": "重置"
+  },
   "zn.name.stage": {
     "en-us": "Stage {0}",
     "zh-cn": "关卡 {0}"

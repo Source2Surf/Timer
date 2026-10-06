@@ -417,6 +417,15 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
                 break;
             }
+            case EZoneType.Reset:
+            {
+                // Back to the track's start, after the touch rather than inside it.
+                var slot  = controller.PlayerSlot;
+                var track = info.Track;
+                _bridge.ModSharp.InvokeFrameAction(() => Restart(slot, track));
+
+                break;
+            }
         }
     }
 

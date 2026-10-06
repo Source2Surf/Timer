@@ -25,5 +25,6 @@ public enum EZoneType : sbyte
     Stage,
     Checkpoint,
     StopTimer,
+    Reset, // sends the player back to the start
     Max,
 }

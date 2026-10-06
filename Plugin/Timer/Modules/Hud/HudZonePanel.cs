@@ -379,6 +379,7 @@ internal partial class HudModule
             EZoneType.End        => p.Tr[HudTexts.ZnEnd],
             EZoneType.Stage      => p.Tr.Format(HudTexts.ZnStageN, number),
             EZoneType.Checkpoint => p.Tr.Format(HudTexts.ZnCheckpointN, number),
+            EZoneType.Reset      => p.Tr[HudTexts.ZnReset],
             _                    => p.Tr[HudTexts.ZnStopTimer],
         };
 

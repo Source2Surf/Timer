@@ -16,6 +16,7 @@ public sealed class ZoneEditTests
     [InlineData("b1 end", 1, EZoneType.End, null)]
     [InlineData("b2 checkpoint 4", 2, EZoneType.Checkpoint, 4)]
     [InlineData("stoptimer", 0, EZoneType.StopTimer, null)]
+    [InlineData("b1 reset", 1, EZoneType.Reset, null)]
     internal void ParsesZoneArguments(string input, int track, EZoneType type, int? number)
     {
         Assert.True(ZoneEdit.TryParse(input.Split(' '), out var t, out var z, out var n));

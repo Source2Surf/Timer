@@ -186,7 +186,8 @@ added in game can be deleted (the map's own can't), and new ones are added by
 type and number (the next free one by default). Placing a zone hides the panel
 and shows a prompt: aim and press the use key at two corners. The panel comes
 back once the zone is placed. The typed forms (`!zone stage 3`,
-`!zone cancel` and so on) still work and show the same prompt.
+`!zone cancel` and so on) still work and show the same prompt. A `reset` zone
+sends whoever touches it back to their track's start.
 
 ### Localization
 

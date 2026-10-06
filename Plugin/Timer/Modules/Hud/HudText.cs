@@ -370,6 +370,7 @@ internal static class HudTexts
     public static readonly HudText ZnStage          = new ("zn.type.stage", "Stage");
     public static readonly HudText ZnCheckpoint     = new ("zn.type.checkpoint", "Checkpoint");
     public static readonly HudText ZnStopTimer      = new ("zn.type.stop", "Stop timer");
+    public static readonly HudText ZnReset          = new ("zn.type.reset", "Reset");
     public static readonly HudText ZnStageN         = new ("zn.name.stage", "Stage {0}");
     public static readonly HudText ZnCheckpointN    = new ("zn.name.checkpoint", "Checkpoint {0}");
     public static readonly HudText ZnPlace          = new ("zn.place", "Place {0}");
