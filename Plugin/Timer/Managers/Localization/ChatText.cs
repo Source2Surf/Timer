@@ -237,6 +237,11 @@ internal static class ChatTexts
     public static readonly ChatText HideOn  = new ("chat.hide.on", "Other players are now hidden.");
     public static readonly ChatText HideOff = new ("chat.hide.off", "Other players are now visible.");
 
+    public static readonly ChatText FootstepsOn     = new ("chat.footsteps.on", "You hear other players' footsteps again.");
+    public static readonly ChatText FootstepsOff    = new ("chat.footsteps.off", "Other players' footsteps are muted.");
+    public static readonly ChatText WeaponSoundsOn  = new ("chat.weapon_sounds.on", "You hear other players' weapons again.");
+    public static readonly ChatText WeaponSoundsOff = new ("chat.weapon_sounds.off", "Other players' weapon sounds are muted.");
+
     // ---- spectating
     public static readonly ChatText FindNone        = new ("chat.find.none", "No player named \"{0}\" is on the server.");
     public static readonly ChatText FindMany        = new ("chat.find.many", "More than one player matches \"{0}\".");

@@ -66,8 +66,11 @@ Commands:
 - `!replay` opens the replay menu. A player picks a track, stage, style and a
   time on its leaderboard, and watches it on the central replay bot. Pressing E
   while spectating that bot opens the menu too.
+- `!footsteps` mutes other players' and replay bots' footsteps; `!stopsound` mutes
+  their gunshots and weapon sounds. Your own still play. A server can turn
+  footsteps off for everyone with the game's own `sv_footsteps 0`.
 
-Settings (the HUD's, `!hide` and the finish sounds) are saved per player through the backend, as a few bytes
+Settings (the HUD's, `!hide`, the finish sounds, `!footsteps` and `!stopsound`) are saved per player through the backend, as a few bytes
 (only what differs from the defaults).
 The old `sharp/data/surftimer/hud/<steamid64>.json` files are no longer read.
 

@@ -52,6 +52,7 @@ internal static class ModuleDI
 
         services.ImplSingleton<IMiscModule, IModule, MiscModule>();
         services.ImplSingleton<IHideModule, IModule, HideModule>();
+        services.ImplSingleton<ISoundFilterModule, IModule, SoundFilterModule>();
         services.ImplSingleton<IMovementFixModule, IModule, MovementFixModule>();
     }
 }

@@ -423,6 +423,11 @@ internal partial class HudModule
 
         foreach (var option in HudOptions.All)
         {
+            if (!option.InMenu)
+            {
+                continue;
+            }
+
             var shown = HudOptions.Display(option, p.Settings);
             var chosen = option.Choices[p.Settings[option.Index]];
 

@@ -77,6 +77,11 @@ internal sealed class HudOption
     /// </summary>
     public Func<int[], bool>? Needs { get; init; }
 
+    /// <summary>
+    ///     False for a setting saved with the HUD's but changed by a chat command, with no button or label.
+    /// </summary>
+    public bool InMenu { get; init; } = true;
+
     public bool IsSize => ReferenceEquals(Choices, HudOptions.SizeChoices);
 
     public bool IsStepper => Stepped || IsSize;
@@ -188,13 +193,17 @@ internal static class HudOptions
     public static readonly HudOption SizeMenus =
         new (41, "SizeMenus", SizeChoices, ["Menu", "RMenu", "PfMenu", "NMenu", "ZnMenu", "LbMenu", "VotePanel", "ZnPrompt"], SizeDefault);
 
+    // !footsteps and !stopsound
+    public static readonly HudOption Footsteps    = new (43, "OptFootsteps", OnOff) { InMenu = false };
+    public static readonly HudOption WeaponSounds = new (44, "OptWeaponSounds", OnOff) { InMenu = false };
+
     public static readonly HudOption[] All =
     [
         Run, SizeRun, CSpeed, SizeCSpeed, Info, SizeInfo, Splits, SizeSplits, Keys, SizeKeys,
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
-        Hide, Sounds, Specs, SizeSpecs, SizeMenus,
+        Hide, Sounds, Specs, SizeSpecs, SizeMenus, Footsteps, WeaponSounds,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;

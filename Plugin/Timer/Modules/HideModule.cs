@@ -37,7 +37,7 @@ internal interface IHideModule
 
 /// <summary>
 ///     !hide: other players and replay bots stop being sent to the player, with their weapons and gunshots, except the
-///     one they spectate. On or off is a player setting.
+///     one they spectate. On or off is a player setting. !stopsound (SoundFilterModule's) blocks the gunshots alone.
 /// </summary>
 internal class HideModule : IModule, IHideModule, IPlayerManagerListener
 {
@@ -52,6 +52,7 @@ internal class HideModule : IModule, IHideModule, IPlayerManagerListener
     private          ulong   _joined;
     private          ulong   _hooked;
     private          ulong   _hiding;
+    private          ulong   _noShots;
     private          ulong   _shotsBlocked;
     private readonly ulong[] _blocked = new ulong[PlayerSlot.MaxPlayerCount];
 
@@ -92,7 +93,8 @@ internal class HideModule : IModule, IHideModule, IPlayerManagerListener
         _bridge.HookManager.PlayerDropWeapon.RemoveForward(OnPlayerDropWeapon);
 
         // Nobody could undo a hide once this is unloaded.
-        _hiding = 0;
+        _hiding  = 0;
+        _noShots = 0;
         ApplyAll();
     }
 
@@ -119,6 +121,15 @@ internal class HideModule : IModule, IHideModule, IPlayerManagerListener
         {
             _hiding &= ~Bit(slot);
         }
+
+        if (_settings.HearsWeaponSounds(slot))
+        {
+            _noShots &= ~Bit(slot);
+        }
+        else
+        {
+            _noShots |= Bit(slot);
+        }
     }
 
     private void Forget(PlayerSlot slot)
@@ -128,6 +139,7 @@ internal class HideModule : IModule, IHideModule, IPlayerManagerListener
         _joined       &= ~bit;
         _hooked       &= ~bit;
         _hiding       &= ~bit;
+        _noShots      &= ~bit;
         _shotsBlocked &= ~bit;
 
         for (var i = 0; i < _blocked.Length; i++)
@@ -161,7 +173,7 @@ internal class HideModule : IModule, IHideModule, IPlayerManagerListener
 
     private void ApplyAll()
     {
-        var receivers = _hiding | _shotsBlocked;
+        var receivers = _hiding | _noShots | _shotsBlocked;
 
         for (var i = 0; i < _blocked.Length; i++)
         {
@@ -204,11 +216,12 @@ internal class HideModule : IModule, IHideModule, IPlayerManagerListener
 
     private void Apply(PlayerSlot receiver)
     {
-        var hiding = (_hiding & Bit(receiver)) != 0;
+        var hiding     = (_hiding & Bit(receiver)) != 0;
+        var blockShots = hiding || (_noShots & Bit(receiver)) != 0;
 
-        if (hiding != ((_shotsBlocked & Bit(receiver)) != 0))
+        if (blockShots != ((_shotsBlocked & Bit(receiver)) != 0))
         {
-            _transmit.SetTempEntState(BlockTempEntType.FireBullets, receiver, hiding);
+            _transmit.SetTempEntState(BlockTempEntType.FireBullets, receiver, blockShots);
             _shotsBlocked ^= Bit(receiver);
         }
 

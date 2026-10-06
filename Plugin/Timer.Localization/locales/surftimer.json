@@ -1835,6 +1835,22 @@
     "en-us": "Other players are now visible.",
     "zh-cn": "已显示其他玩家。"
   },
+  "chat.footsteps.on": {
+    "en-us": "You hear other players' footsteps again.",
+    "zh-cn": "已恢复其他玩家的脚步声。"
+  },
+  "chat.footsteps.off": {
+    "en-us": "Other players' footsteps are muted.",
+    "zh-cn": "已屏蔽其他玩家的脚步声。"
+  },
+  "chat.weapon_sounds.on": {
+    "en-us": "You hear other players' weapons again.",
+    "zh-cn": "已恢复其他玩家的武器声音。"
+  },
+  "chat.weapon_sounds.off": {
+    "en-us": "Other players' weapon sounds are muted.",
+    "zh-cn": "已屏蔽其他玩家的武器声音。"
+  },
   "chat.vs_pb": {
     "en-us": " | PB {0}",
     "zh-cn": " | PB {0}"

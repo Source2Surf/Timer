@@ -40,5 +40,16 @@ internal interface IPlayerSettings
 
     void SetPlaysSounds(PlayerSlot slot, bool value);
 
+    /// <summary>
+    ///     Other players' and replay bots' footsteps (!footsteps) and weapon sounds (!stopsound). On by default.
+    /// </summary>
+    bool HearsFootsteps(PlayerSlot slot);
+
+    void SetHearsFootsteps(PlayerSlot slot, bool value);
+
+    bool HearsWeaponSounds(PlayerSlot slot);
+
+    void SetHearsWeaponSounds(PlayerSlot slot, bool value);
+
     event Action<PlayerSlot>? Changed;
 }

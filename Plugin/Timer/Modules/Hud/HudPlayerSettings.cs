@@ -32,6 +32,18 @@ internal partial class HudModule
     public bool PlaysSounds(PlayerSlot slot)
         => _players[slot] is { } p ? p.IsOn(HudOptions.Sounds) : HudOptions.Sounds.Initial == 0;
 
+    public bool HearsFootsteps(PlayerSlot slot)
+        => _players[slot] is { } p ? p.IsOn(HudOptions.Footsteps) : HudOptions.Footsteps.Initial == 0;
+
+    public bool HearsWeaponSounds(PlayerSlot slot)
+        => _players[slot] is { } p ? p.IsOn(HudOptions.WeaponSounds) : HudOptions.WeaponSounds.Initial == 0;
+
+    public void SetHearsFootsteps(PlayerSlot slot, bool value)
+        => SetOnOff(slot, HudOptions.Footsteps, value);
+
+    public void SetHearsWeaponSounds(PlayerSlot slot, bool value)
+        => SetOnOff(slot, HudOptions.WeaponSounds, value);
+
     public void SetHidesPlayers(PlayerSlot slot, bool value)
         => SetOnOff(slot, HudOptions.Hide, value);
 

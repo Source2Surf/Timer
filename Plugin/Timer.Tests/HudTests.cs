@@ -567,9 +567,9 @@ public sealed class HudLayoutContractTests
     {
         foreach (var option in HudOptions.All)
         {
-            if (HudLines.RowOptions.Contains(option))
+            if (HudLines.RowOptions.Contains(option) || !option.InMenu)
             {
-                continue; // switched from the Timer tab's rows
+                continue; // switched from the Timer tab's rows, or by a chat command
             }
 
             Assert.Contains(option.ValueId, Ids);
