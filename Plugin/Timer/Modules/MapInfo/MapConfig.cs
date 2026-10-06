@@ -25,6 +25,10 @@ internal record MapConfig
     [JsonPropertyName("cmds")]
     public string[] Commands { get; init; } = [];
 
+    // sv_maxvelocity on this map only.
+    [JsonPropertyName("max_velocity")]
+    public float? MaxVelocity { get; init; }
+
     [JsonPropertyName("zones")]
     public Dictionary<int, ZoneConfig> ZoneConfigs { get; init; } = [];
 }

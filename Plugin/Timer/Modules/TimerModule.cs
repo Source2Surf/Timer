@@ -270,7 +270,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             {
                 if (MissedBeforeEnd(_zoneModule.IsCurrentTrackLinear(timerInfo.Track) ? 0 : _zoneModule.GetTotalStages(timerInfo.Track),
                                     stageTimer.IsTimerRunning() ? stageTimer.Stage : 0,
-                                    _zoneModule.GetLastCheckpoint(timerInfo.Track),
+                                    _mapInfoModule.RequiresCheckpoints(timerInfo.Track) ? _zoneModule.GetLastCheckpoint(timerInfo.Track) : 0,
                                     timerInfo.IsTimerRunning() ? timerInfo.Checkpoint : -1) is { } missed)
                 {
                     timerInfo.StopTimer();
@@ -380,7 +380,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                     return;
                 }
 
-                if (newCheckpointIndex != timerInfo.Checkpoint + 1)
+                if (newCheckpointIndex != timerInfo.Checkpoint + 1 && _mapInfoModule.RequiresCheckpoints(timerInfo.Track))
                 {
                     timerInfo.StopTimer();
                     pawn.PrintToChat(_localization.For(controller.PlayerSlot)[ChatTexts.MissingCheckpoints]);
@@ -392,7 +392,11 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                 checkpointInfo.EndVelocity = velocity;
                 checkpointInfo.Sync        = timerInfo.Sync;
 
-                timerInfo.AddCheckpoint(checkpointInfo);
+                // Optional checkpoints that were skipped end here too, so the splits still line up with the numbers.
+                for (var skipped = timerInfo.Checkpoint + 1; skipped <= newCheckpointIndex; skipped++)
+                {
+                    timerInfo.AddCheckpoint(checkpointInfo);
+                }
 
                 timerInfo.CurrentCheckpointInfo = new ()
                 {

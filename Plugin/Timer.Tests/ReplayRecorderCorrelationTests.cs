@@ -513,6 +513,8 @@ public sealed class ReplayRecorderCorrelationTests
 
         public int GetGameModeMaxPrejumps() => 0;
 
+        public bool RequiresCheckpoints(int track) => true;
+
         public EGameMode GetCurrentGameMode() => EGameMode.None;
 
         public float? GetZoneExitSpeedOverride(int track) => null;

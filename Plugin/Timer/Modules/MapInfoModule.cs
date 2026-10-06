@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -25,6 +26,7 @@ using Microsoft.Extensions.Logging;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Listeners;
+using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
@@ -43,6 +45,8 @@ internal interface IMapInfoModule
     int? GetZoneMaxJumpsOverride(int track);
 
     int GetGameModeMaxPrejumps();
+
+    bool RequiresCheckpoints(int track);
 
     EGameMode GetCurrentGameMode();
 
@@ -133,6 +137,9 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     private bool _mapStatsPersisted;
 
+    private readonly IConVar? _maxVelocity;
+    private          string?  _maxVelocityBefore;
+
     // Late-resolved to avoid circular DI (RecordModule depends on IMapInfoModule)
     private IRecordModule _recordModule = null!;
     private IZoneModule   _zoneModule   = null!;
@@ -149,6 +156,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         _localization   = localization;
         _logger         = logger;
         _taskTracker    = new TaskTracker(logger);
+        _maxVelocity    = bridge.ConVarManager.FindConVar("sv_maxvelocity");
 
         _configPath = Path.Combine(bridge.TimerDataPath, "map_configs");
 
@@ -246,10 +254,31 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
     {
         LoadGameModeConfig();
         LoadMapConfig();
+        ApplyMaxVelocity();
 
         foreach (var cvar in ForcedCvars)
         {
             _bridge.ModSharp.ServerCommand(cvar);
+        }
+    }
+
+    // A map's max_velocity only lasts the map: the next map without one gets back what was there before.
+    private void ApplyMaxVelocity()
+    {
+        if (_maxVelocity is null)
+        {
+            return;
+        }
+
+        if (_currentMapConfig?.MaxVelocity is { } value)
+        {
+            _maxVelocityBefore ??= _maxVelocity.GetString();
+            _bridge.ModSharp.ServerCommand($"sv_maxvelocity {value.ToString(CultureInfo.InvariantCulture)}");
+        }
+        else if (_maxVelocityBefore is { } before)
+        {
+            _bridge.ModSharp.ServerCommand($"sv_maxvelocity {before}");
+            _maxVelocityBefore = null;
         }
     }
 
@@ -580,6 +609,9 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     public int GetGameModeMaxPrejumps()
         => _currentGameModeConfig.MaxPrejumps;
+
+    public bool RequiresCheckpoints(int track)
+        => _currentMapConfig?.ZoneConfigs.GetValueOrDefault(track)?.RequireCheckpoints ?? true;
 
     public EGameMode GetCurrentGameMode()
         => _currentGameMode;

@@ -40,6 +40,12 @@ internal record ZoneConfig
     public int? MaxJumps { get; set; } = null;
 
     /// <summary>
+    /// false makes the checkpoints optional: skipping one doesn't stop the run. null = required.
+    /// </summary>
+    [JsonPropertyName("require_checkpoints")]
+    public bool? RequireCheckpoints { get; set; } = null;
+
+    /// <summary>
     /// Optional overrides for stage zones on this track.
     /// When set, stage zone enter/exit speed limits use these values instead of the track defaults.
     /// </summary>

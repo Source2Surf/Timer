@@ -10,6 +10,9 @@
         // "sv_airaccelerate 150"
     ],
 
+    // sv_maxvelocity on this map only; the next map gets back what was there before.
+    "max_velocity": null,
+
     // Per-track zone configs. Key is the track index (0 = main track).
     "zones": {
         "0": {
@@ -24,6 +27,10 @@
             // Maximum number of pre-jumps allowed in the start zone. -1 = no limit.
             // Default: the style's, or else the game mode's (1).
             "max_jumps": null,
+
+            // false makes the checkpoints optional: skipping one doesn't stop the run.
+            // Default: true.
+            "require_checkpoints": null,
 
             // Stage zone overrides — only applies to stage zones on this track.
             // When set, stage zone enter/exit use these values instead of the track defaults.
