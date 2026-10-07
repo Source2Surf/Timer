@@ -324,6 +324,7 @@ internal static class HudTexts
     public static readonly HudText PanelSpecsDesc = new ("ui.panel.specs_desc", "Who's watching you, or the player you spectate");
     public static readonly HudText PanelMenus     = new ("ui.panel.menus", "Menus");
     public static readonly HudText PanelMenusDesc = new ("ui.panel.menus_desc", "Settings, replays, records, votes and prompts");
+    public static readonly HudText PanelLocsDesc  = new ("ui.panel.locs_desc", "Your saved locations and their binds");
     public static readonly HudText Lines          = new ("ui.timer.lines", "Lines, top to bottom");
     public static readonly HudText Comparison     = new ("ui.timer.comparison", "Comparison");
     public static readonly HudText CompareAgainst = new ("ui.timer.compare", "Compare against");
@@ -537,6 +538,8 @@ internal static class HudLabels
         ("LPanelKeysDesc", HudTexts.PanelKeysDesc),
         ("LPanelSpecs", HudTexts.PanelSpecs),
         ("LPanelSpecsDesc", HudTexts.PanelSpecsDesc),
+        ("LPanelLocs", HudTexts.LocsTitle),
+        ("LPanelLocsDesc", HudTexts.PanelLocsDesc),
         ("LPanelMenus", HudTexts.PanelMenus),
         ("LPanelMenusDesc", HudTexts.PanelMenusDesc),
         ("LLines", HudTexts.Lines),

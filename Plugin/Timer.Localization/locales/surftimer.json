@@ -763,6 +763,10 @@
     "en-us": "Settings, replays, records, votes and prompts",
     "zh-cn": "设置、回放、记录、投票和提示"
   },
+  "ui.panel.locs_desc": {
+    "en-us": "Your saved locations and their binds",
+    "zh-cn": "你的存点和对应按键"
+  },
   "ui.timer.lines": {
     "en-us": "Lines, top to bottom",
     "zh-cn": "显示行（从上到下）"

@@ -516,7 +516,7 @@ public sealed class PlayerSettingsCodecTests
             [32] = ("OptSsjHeight", "On,Off"), [33] = ("OptSsjGain", "On,Off"), [34] = ("OptSsjSync", "On,Off"),
             [35] = ("OptSsjStrafes", "On,Off"), [36] = ("OptSsjEfficiency", "On,Off"), [37] = ("OptHide", "On,Off"),
             [38] = ("OptSounds", "On,Off"), [39] = ("OptSpecs", "On,Off"), [40] = ("SizeSpecs", Sizes),
-            [41] = ("SizeMenus", Sizes),
+            [41] = ("SizeMenus", Sizes), [83] = ("SizeLocs", Sizes),
         };
 
         foreach (var (key, (id, choices)) in saved)

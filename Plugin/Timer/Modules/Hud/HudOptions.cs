@@ -193,6 +193,9 @@ internal static class HudOptions
     public static readonly HudOption SizeMenus =
         new (41, "SizeMenus", SizeChoices, ["Menu", "RMenu", "PfMenu", "NMenu", "ZnMenu", "LbMenu", "StyMenu", "MiMenu", "VotePanel", "ZnPrompt"], SizeDefault);
 
+    // The saved locations panel. 42 and 47–82 are held by options on other branches.
+    public static readonly HudOption SizeLocs = new (83, "SizeLocs", SizeChoices, ["LocsBody"], SizeDefault);
+
     // !footsteps and !stopsound
     public static readonly HudOption Footsteps    = new (43, "OptFootsteps", OnOff) { InMenu = false };
     public static readonly HudOption WeaponSounds = new (44, "OptWeaponSounds", OnOff) { InMenu = false };
@@ -209,7 +212,7 @@ internal static class HudOptions
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
-        Hide, Sounds, Specs, SizeSpecs, SizeMenus, Footsteps, WeaponSounds, Zones, Country,
+        Hide, Sounds, Specs, SizeSpecs, SizeMenus, SizeLocs, Footsteps, WeaponSounds, Zones, Country,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;

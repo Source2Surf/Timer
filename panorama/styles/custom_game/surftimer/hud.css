@@ -2462,3 +2462,9 @@
 .cjk .LbAdminNote {
     font-weight: normal;
 }
+
+/* Noto's taller ascent sets text about 3px lower than Stratum2's, so the padding that centred Stratum2 goes. */
+.cjk .MenuValue,
+.cjk .MenuTabLabel {
+    padding-top: 0px;
+}

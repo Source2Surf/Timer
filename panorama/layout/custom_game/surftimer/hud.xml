@@ -456,12 +456,24 @@
 							<Button id="OptSpecs" class="PillButton"><Label id="OptSpecsValue" class="MenuValue on" text="{s:value}" /></Button>
 						</Panel>
 						<Panel class="MenuRow static tall">
+							<Panel class="MenuText"><Label id="LPanelLocs" class="MenuName" text="{s:text}" /><Label id="LPanelLocsDesc" class="MenuDesc" text="{s:text}" /></Panel>
+							<Panel class="Stepper">
+								<Button id="SizeLocsDown" class="Step"><Label text="−" /></Button>
+								<Label id="SizeLocsValue" class="MenuValue" text="{s:value}" />
+								<Button id="SizeLocsUp" class="Step"><Label text="+" /></Button>
+							</Panel>
+							<!-- No pill: a blank one keeps the stepper in line with the rows above. -->
+							<Panel class="PillButton blank"><Label class="MenuValue" text="" /></Panel>
+						</Panel>
+						<Panel class="MenuRow static tall">
 							<Panel class="MenuText"><Label id="LPanelMenus" class="MenuName" text="{s:text}" /><Label id="LPanelMenusDesc" class="MenuDesc" text="{s:text}" /></Panel>
 							<Panel class="Stepper">
 								<Button id="SizeMenusDown" class="Step"><Label text="−" /></Button>
 								<Label id="SizeMenusValue" class="MenuValue" text="{s:value}" />
 								<Button id="SizeMenusUp" class="Step"><Label text="+" /></Button>
 							</Panel>
+							<!-- No pill: a blank one keeps the stepper in line with the rows above. -->
+							<Panel class="PillButton blank"><Label class="MenuValue" text="" /></Panel>
 						</Panel>
 
 						<Panel class="MenuSection"><Label id="LPlayer" class="MenuSectionLabel" text="{s:text}" /><Panel class="MenuRule" /></Panel>
