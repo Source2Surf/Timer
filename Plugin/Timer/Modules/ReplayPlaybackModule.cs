@@ -661,8 +661,9 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
     private void StartReplay(ReplayBotData bot)
     {
-        bot.CurrentFrame = 0;
-        bot.FrameStep    = 0;
+        bot.CurrentFrame     = 0;
+        bot.FrameStep        = 0;
+        bot.AwaitsNextRecord = false;
 
         var header = bot.Header;
 

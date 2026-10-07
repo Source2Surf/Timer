@@ -306,19 +306,20 @@ internal partial class ReplayPlaybackModule : ICentralReplay
     {
         StopBotTimer(bot);
 
-        bot.Owner        = null;
-        bot.Status       = EReplayBotStatus.Idle;
-        bot.Header       = null;
-        bot.Frames       = [];
-        bot.CurrentFrame = 0;
-        bot.FrameStep    = 0;
-        bot.Paused       = false;
-        bot.Speed        = 1f;
-        bot.Rank         = 1;
-        bot.RunId        = 0;
-        bot.Style        = 0;
-        bot.Track        = 0;
-        bot.Stage        = 0;
+        bot.Owner            = null;
+        bot.Status           = EReplayBotStatus.Idle;
+        bot.Header           = null;
+        bot.Frames           = [];
+        bot.CurrentFrame     = 0;
+        bot.FrameStep        = 0;
+        bot.Paused           = false;
+        bot.Speed            = 1f;
+        bot.Rank             = 1;
+        bot.RunId            = 0;
+        bot.Style            = 0;
+        bot.Track            = 0;
+        bot.Stage            = 0;
+        bot.AwaitsNextRecord = false;
 
         SetupReplayBotName(bot);
 
@@ -332,10 +333,11 @@ internal partial class ReplayPlaybackModule : ICentralReplay
     }
 
     /// <summary>
-    ///     A central bot set to wait in spectator, while it has nothing to play.
+    ///     A central bot set to wait in spectator, while it has nothing to play. One waiting for the next record stays
+    ///     where its watchers are.
     /// </summary>
     private static bool WaitsInSpectator(ReplayBotData bot)
-        => bot is { Type: EReplayBotType.Central, Status: EReplayBotStatus.Idle, Config.SpectateWhenIdle: true };
+        => bot is { Type: EReplayBotType.Central, Status: EReplayBotStatus.Idle, Config.SpectateWhenIdle: true, AwaitsNextRecord: false };
 
     // Out of spectator onto CT, with the other replay bots, and spawned, before it plays. The spawn moves it to the start zone;
     // playback places it on the replay's first frame from there.

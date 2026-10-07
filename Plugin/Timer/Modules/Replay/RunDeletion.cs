@@ -33,7 +33,8 @@ internal interface IRunDeletionListener
 {
     /// <summary>
     ///     On the game thread, after an admin deleted a run and its board was reloaded: removes the run's replay
-    ///     files, and on the current map swaps its board's replay for the new record's.
+    ///     files, and on the current map swaps its board's replay for the new record's. A bot that was showing the
+    ///     deleted server record shows the new one.
     /// </summary>
     void OnRunDeleted(string mapName, bool currentMap, RunRecord record, DeletedRun deleted);
 }
@@ -55,47 +56,36 @@ internal partial class ReplayPlaybackModule : IRunDeletionListener
         var key = (record.Style, record.Track, record.Stage);
         _deletedReplays.Add((record.Style, record.Track, record.Stage, record.SteamId, record.Time));
 
-        if (Central is { RunId: var playing } central && playing == record.Id)
+        // The central bot goes on with the board's next record when it was showing the server record; any other run
+        // it was showing is just gone.
+        if (Central is { } central && central.RunId == record.Id)
         {
-            GoIdle(central);
-        }
-
-        if (!_replayCache.TryGetValue(key, out var cached) || !IsDeletedReplay(key, cached.Header))
-        {
-            return;
-        }
-
-        _replayCache.Remove(key);
-        _closestFrameIndices.Remove(key);
-
-        foreach (var bot in _replayBots)
-        {
-            if (bot.Type != EReplayBotType.Looping || !ReferenceEquals(bot.Header, cached.Header))
+            if (central.Rank == 1)
             {
-                continue;
-            }
-
-            // On to the next replay in its rotation, or a wildcard when none is left.
-            StopBotTimer(bot);
-            bot.Header = null;
-            bot.Frames = [];
-
-            if (bot.Config.StageBot)
-            {
-                FindNextStageReplay(bot);
+                HoldForNextRecord(central);
             }
             else
             {
-                FindNextReplay(bot);
+                GoIdle(central);
             }
+        }
 
-            if (bot.Header is null)
+        if (_replayCache.TryGetValue(key, out var cached) && IsDeletedReplay(key, cached.Header))
+        {
+            _replayCache.Remove(key);
+            _closestFrameIndices.Remove(key);
+
+            foreach (var bot in _replayBots)
             {
-                bot.Style = -1;
-                bot.Track = -1;
+                if (bot.Type == EReplayBotType.Looping && ReferenceEquals(bot.Header, cached.Header))
+                {
+                    HoldForNextRecord(bot);
+                }
             }
-
-            StartReplay(bot);
+        }
+        else if (!_replayBots.Exists(bot => IsHeldOn(bot, key)))
+        {
+            return;
         }
 
         LoadBoardReplay(mapName, key);
@@ -104,11 +94,87 @@ internal partial class ReplayPlaybackModule : IRunDeletionListener
     private bool IsDeletedReplay((int style, int track, int stage) key, ReplayFileHeader header)
         => _deletedReplays.Contains((key.style, key.track, key.stage, header.SteamId, header.Time));
 
-    // The board's new record's replay, the way the map start loads them.
+    private static bool IsHeldOn(ReplayBotData bot, (int style, int track, int stage) key)
+        => bot.AwaitsNextRecord && (bot.Style, bot.Track, bot.Stage) == key;
+
+    // Stops a bot showing a deleted run. It stays on its board, idle, for the board's next record.
+    private void HoldForNextRecord(ReplayBotData bot)
+    {
+        StopBotTimer(bot);
+
+        bot.Header           = null;
+        bot.Frames           = [];
+        bot.CurrentFrame     = 0;
+        bot.FrameStep        = 0;
+        bot.Status           = EReplayBotStatus.Idle;
+        bot.AwaitsNextRecord = true;
+
+        SetupReplayBotName(bot);
+    }
+
+    // The bots held on a board show its record once that replay is in, or move on when the board has none.
+    private void ResumeHeldBots((int style, int track, int stage) key)
+    {
+        var content = _replayCache.GetValueOrDefault(key);
+
+        foreach (var bot in _replayBots)
+        {
+            if (!IsHeldOn(bot, key))
+            {
+                continue;
+            }
+
+            if (bot.Type == EReplayBotType.Central)
+            {
+                if (content is null || _recordModule.GetWR(key.style, key.track, key.stage) is not { } wr)
+                {
+                    GoIdle(bot);
+
+                    continue;
+                }
+
+                bot.Header = content.Header;
+                bot.Frames = content.Frames;
+                bot.RunId  = wr.Id;
+                bot.Rank   = 1;
+
+                JoinGame(bot);
+            }
+            else if (content is not null)
+            {
+                bot.Header = content.Header;
+                bot.Frames = content.Frames;
+            }
+            else
+            {
+                // On to the next replay in its rotation, or a wildcard when none is left.
+                if (bot.Config.StageBot)
+                {
+                    FindNextStageReplay(bot);
+                }
+                else
+                {
+                    FindNextReplay(bot);
+                }
+
+                if (bot.Header is null)
+                {
+                    bot.Style = -1;
+                    bot.Track = -1;
+                }
+            }
+
+            StartReplay(bot);
+        }
+    }
+
+    // The board's new record's replay, the way the map start loads them; then the bots held on the board go on.
     private void LoadBoardReplay(string mapName, (int style, int track, int stage) key)
     {
         if (_recordModule.GetWR(key.style, key.track, key.stage) is not { } wr)
         {
+            ResumeHeldBots(key);
+
             return;
         }
 
@@ -119,43 +185,52 @@ internal partial class ReplayPlaybackModule : IRunDeletionListener
         {
             try
             {
-                var results = new Dictionary<(int style, int track, int stage), ReplayContent>();
-                LoadReplaysFromDisk(mapName, keys, results, linkedToken.Token);
-                await LoadMissingReplaysFromRemote(mapName, keys, results, linkedToken.Token);
+                ReplayContent?     content = null;
+                ClosestFrameIndex? index   = null;
 
-                if (!results.TryGetValue(key, out var content))
+                try
                 {
-                    return;
-                }
+                    var results = new Dictionary<(int style, int track, int stage), ReplayContent>();
+                    LoadReplaysFromDisk(mapName, keys, results, linkedToken.Token);
+                    await LoadMissingReplaysFromRemote(mapName, keys, results, linkedToken.Token);
 
-                var index = key.stage == 0 ? new ClosestFrameIndex(content.Frames) : null;
+                    if (results.TryGetValue(key, out content) && key.stage == 0)
+                    {
+                        index = new ClosestFrameIndex(content.Frames);
+                    }
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    _logger.LogError(e, "Failed to load the replay for style {Style} track {Track} stage {Stage} after a run was deleted",
+                                     key.style, key.track, key.stage);
+                }
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    if (linkedToken.IsCancellationRequested
-                        || IsDeletedReplay(key, content.Header)
-                        || (_replayCache.TryGetValue(key, out var existing) && existing.Header.Time <= content.Header.Time))
+                    // Deleted meanwhile too: that deletion loads the board again.
+                    if (linkedToken.IsCancellationRequested || (content is not null && IsDeletedReplay(key, content.Header)))
                     {
                         return;
                     }
 
-                    _replayCache[key] = content;
-
-                    if (index is not null)
+                    if (content is not null
+                        && !(_replayCache.TryGetValue(key, out var existing) && existing.Header.Time <= content.Header.Time))
                     {
-                        _closestFrameIndices[key] = index;
+                        _replayCache[key] = content;
+
+                        if (index is not null)
+                        {
+                            _closestFrameIndices[key] = index;
+                        }
+
+                        UpdateReplayBots(key.style, key.track, key.stage);
                     }
 
-                    UpdateReplayBots(key.style, key.track, key.stage);
+                    ResumeHeldBots(key);
                 }, linkedToken.Token);
             }
             catch (OperationCanceledException)
             {
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to load the replay for style {Style} track {Track} stage {Stage} after a run was deleted",
-                                 key.style, key.track, key.stage);
             }
             finally
             {

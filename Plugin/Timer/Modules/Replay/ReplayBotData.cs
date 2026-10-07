@@ -53,6 +53,9 @@ internal class ReplayBotData : IReplayBotData
     public int  Rank  { get; set; } = 1;
     public long RunId { get; set; }
 
+    // Its run was deleted: it stays on the board, idle, until the replay of the board's next record is in.
+    public bool AwaitsNextRecord { get; set; }
+
     // A central bot's playback. FrameStep carries the part of a frame owed at speeds other than 1.
     public bool  Paused    { get; set; }
     public float Speed     { get; set; } = 1f;
