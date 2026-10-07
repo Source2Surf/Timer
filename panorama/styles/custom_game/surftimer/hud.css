@@ -76,10 +76,12 @@
 
 /* ---- Timer ---- */
 
+/* Below the crosshair, top down: SSJ (5%), center speed (10%), then this, which grows upward from its bottom edge
+   with every line shown. */
 .RunPanel {
     horizontal-align: center;
     vertical-align: bottom;
-    margin-bottom: 180px;
+    margin-bottom: 110px;
     min-width: 266px;
     padding: 16px 20px;
 }
@@ -163,7 +165,7 @@
 .CSpeedPanel {
     horizontal-align: center;
     vertical-align: center;
-    y: 8%;
+    y: 10%;
     min-width: 96px;
     padding: 2px 12px;
 }
@@ -478,7 +480,7 @@
 .SsjPanel {
     horizontal-align: center;
     vertical-align: center;
-    y: 12%;
+    y: 5%;
     padding: 0px 8px;
 }
 

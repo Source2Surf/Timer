@@ -388,13 +388,13 @@ internal static class HudTargets
     private static readonly HudTargetDef[] Defs =
     [
         new ("Menu", "MenuPos", (-39, 0), (20, 58), false, HudTexts.TargetMenu, 1),
-        new ("RunPanel", "RunPos", (0, 24), (15, 18), true, HudTexts.TargetRun, 2),
-        new ("CSpeedPanel", "CSpeedPos", (0, 8), (6, 5), true, HudTexts.TargetCSpeed, 3),
+        new ("RunPanel", "RunPos", (0, 28), (15, 18), true, HudTexts.TargetRun, 2),
+        new ("CSpeedPanel", "CSpeedPos", (0, 10), (6, 5), true, HudTexts.TargetCSpeed, 3),
         new ("InfoPanel", "InfoPos", (-46, -47), (10, 6), true, HudTexts.TargetInfo, 4),
         new ("SplitsPanel", "SplitsPos", (-40, -34), (20, 19), true, HudTexts.TargetSplits, 5),
         new ("KeysPanel", "KeysPos", (0, -20), (11, 13), true, HudTexts.TargetKeys, 6),
         new ("LocsPanel", "LocsPos", (-42, 0), (13, 21), true, HudTexts.TargetLocs, 7),
-        new ("SsjPanel", "SsjPos", (0, 12), (22, 4), true, HudTexts.TargetSsj, 8),
+        new ("SsjPanel", "SsjPos", (0, 5), (22, 4), true, HudTexts.TargetSsj, 8),
         new ("SpecPanel", "SpecPos", (44, 0), (11, 18), true, HudTexts.TargetSpecs, 9),
     ];
 
