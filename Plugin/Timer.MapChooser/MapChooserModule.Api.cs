@@ -39,6 +39,9 @@ public sealed partial class MapChooserModule
 
     public int Version => _version;
 
+    public int VersionFor(PlayerSlot slot)
+        => _version + _playerVersions[(int) slot];
+
     public IMapVote? Vote => _vote;
 
     public int GetVoteChoice(PlayerSlot slot)
@@ -110,13 +113,13 @@ public sealed partial class MapChooserModule
 
         menu.Tier           = Math.Clamp(tier, 0, 8);
         menu.UnfinishedOnly = unfinishedOnly;
-        Changed();
+        Changed((int) slot);
     }
 
     public void CloseNominateMenu(PlayerSlot slot)
     {
         _menus[(int) slot] = null;
-        Changed();
+        Changed((int) slot);
     }
 
     public NominateResult Nominate(PlayerSlot slot, string map)
@@ -195,7 +198,7 @@ public sealed partial class MapChooserModule
         var menu = new MenuState { Search = search, Tier = tier };
 
         _menus[slot] = menu;
-        Changed();
+        Changed(slot);
 
         if (_requests?.Instance is not { } requests)
         {
@@ -215,7 +218,7 @@ public sealed partial class MapChooserModule
                     if (_menus[slot] == menu)
                     {
                         menu.Completed = completed;
-                        Changed();
+                        Changed(slot);
                     }
                 });
             }

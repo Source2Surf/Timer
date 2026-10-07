@@ -60,7 +60,7 @@ internal partial class HudModule
     private void UpdateMapChooser(HudWriter w, HudPlayer p, float now)
     {
         var c       = p.Chooser;
-        var version = _mapChooser.Version;
+        var version = _mapChooser.VersionFor(p.Slot);
         var changed = version != c.Version;
 
         if (changed)

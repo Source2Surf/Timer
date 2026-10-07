@@ -47,7 +47,7 @@ public sealed partial class MapChooserModule
         var count = vote.Options.Count;
 
         _cursor[slot] = (((_cursor[slot] + step) % count) + count) % count;
-        Changed();
+        Changed(slot);
 
         return ECommandAction.Handled;
     }

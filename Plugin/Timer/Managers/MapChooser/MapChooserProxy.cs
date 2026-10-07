@@ -44,6 +44,9 @@ internal sealed class MapChooserProxy : ExternalModuleProxy<IMapChooser>, IMapCh
     }
 
     public int         Version   => Current.Version;
+
+    public int VersionFor(PlayerSlot slot)
+        => Current.VersionFor(slot);
     public IMapVote?   Vote      => Current.Vote;
     public MapVoteKeys VoteKeys  => Current.VoteKeys;
     public string?     NextMap   => Current.NextMap;

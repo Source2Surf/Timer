@@ -33,6 +33,13 @@ public interface IMapChooser
     int Version { get; }
 
     /// <summary>
+    ///     Changes with <see cref="Version" /> and with the player's own cursor and nominate menu: what their HUD
+    ///     redraws on, so one player's keys don't redraw everyone's.
+    /// </summary>
+    int VersionFor(PlayerSlot slot)
+        => Version;
+
+    /// <summary>
     ///     The running vote, or null.
     /// </summary>
     IMapVote? Vote { get; }

@@ -88,6 +88,7 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     private string?                     _nextMap;
     private float                       _changeAt = float.NaN;
     private int                         _version;
+    private readonly int[]              _playerVersions = new int[PlayerSlot.MaxPlayerCount]; // their own cursor and menu
 
     public MapChooserModule(ISharedSystem  sharedSystem,
                             string         dllPath,
@@ -357,4 +358,8 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
 
     private void Changed()
         => _version++;
+
+    // Only this player's HUD shows it.
+    private void Changed(int slot)
+        => _playerVersions[slot]++;
 }
