@@ -55,7 +55,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private readonly IConVar timer_teleport_keep_angles;
 
     private readonly IConVar sv_standable_normal;
-    private readonly IConVar sv_stepsize;
+    private readonly IConVar? sv_stepsize;
 
     // ReSharper restore InconsistentNaming
 
@@ -125,7 +125,8 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
             !;
 
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
-        sv_stepsize         = bridge.ConVarManager.FindConVar("sv_stepsize")!;
+        // Development-only, so only a full search finds it.
+        sv_stepsize         = bridge.ConVarManager.FindConVar("sv_stepsize", true);
     }
 
     public bool Init()
@@ -141,7 +142,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.InstallChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_teleport_keep_angles, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(sv_standable_normal, OnConVarChanged);
-        _bridge.ConVarManager.InstallChangeHook(sv_stepsize, OnConVarChanged);
+
+        if (sv_stepsize is not null)
+        {
+            _bridge.ConVarManager.InstallChangeHook(sv_stepsize, OnConVarChanged);
+        }
 
         InstallHooks();
 
@@ -166,7 +171,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.RemoveChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_teleport_keep_angles, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(sv_standable_normal, OnConVarChanged);
-        _bridge.ConVarManager.RemoveChangeHook(sv_stepsize, OnConVarChanged);
+
+        if (sv_stepsize is not null)
+        {
+            _bridge.ConVarManager.RemoveChangeHook(sv_stepsize, OnConVarChanged);
+        }
 
         // InlineHookManager shuts down first and removes the detours.
         if (_triggerFilterVtable != null)
@@ -199,7 +208,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _triggerJumpEnabled        = timer_triggerjump.GetBool();
         _keepTeleportAnglesEnabled = timer_teleport_keep_angles.GetBool();
         _standableNormal           = sv_standable_normal.GetFloat();
-        _stepSize                  = sv_stepsize.GetFloat();
+        _stepSize                  = sv_stepsize?.GetFloat() ?? 18.0f;
     }
 
     private static void ResetPlayerState()
