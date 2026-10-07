@@ -529,6 +529,20 @@ internal static class ReplayShared
     }
 
     /// <summary>
+    /// What <see cref="CreateMainReplaySnapshot" /> does to the recording, for a finish that keeps no replay: reset,
+    /// without copying its frames.
+    /// </summary>
+    public static void DiscardMainRecording(PlayerFrameData frame)
+    {
+        frame.Frames.Clear();
+        frame.NewStageTicks.Clear();
+        frame.StageTimerStartTicks.Clear();
+        frame.TimerStartFrame  = 0;
+        frame.TimerFinishFrame = 0;
+        frame.FinishTime       = 0;
+    }
+
+    /// <summary>
     /// Create a stage replay snapshot from PlayerFrameData.
     /// Materializes the [startTick, startTick+length) range into a private array so the
     /// snapshot never aliases the player's live, still-mutating Frames list.

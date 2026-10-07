@@ -650,6 +650,14 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                                                                    {
                                                                        frame.StagePostFrameTimer = null;
 
+                                                                       if (frame.PendingStageRecordResults.TryGetValue(finishedStage, out var known)
+                                                                           && NeedsNoReplay(known, attemptId, style, track, finishedStage, time))
+                                                                       {
+                                                                           frame.PendingStageRecordResults.Remove(finishedStage);
+
+                                                                           return TimerAction.Stop;
+                                                                       }
+
                                                                        var startTick = Math.Max(0,
                                                                            timerStartTick - preRunFrameLength);
 
@@ -696,20 +704,30 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
 
         // Capture the finish-time AttemptId/style/track for the snapshot's match key
         // (see OnPlayerStageTimerFinish) — the post-frame timer fires later.
-        var attemptId = frame.AttemptId;
-        var style     = timerInfo.Style;
-        var track     = timerInfo.Track;
+        var attemptId  = frame.AttemptId;
+        var style      = timerInfo.Style;
+        var track      = timerInfo.Track;
+        var finishTime = timerInfo.Time;
 
         frame.PostFrameTimer = _bridge.ModSharp.PushTimer(() =>
                                                           {
                                                               frame.PostFrameTimer = null;
 
+                                                              // The last stage's capture goes first, while the frames are still there.
                                                               if (frame.StagePostFrameTimer is { } stagePostFrameTimer)
                                                               {
                                                                   _bridge.ModSharp.StopTimer(stagePostFrameTimer);
                                                               }
 
                                                               frame.StagePostFrameTimer = null;
+
+                                                              if (NeedsNoReplay(frame.PendingMainRecordResult, attemptId, style, track, 0, finishTime))
+                                                              {
+                                                                  frame.PendingMainRecordResult = null;
+                                                                  ReplayShared.DiscardMainRecording(frame);
+
+                                                                  return TimerAction.Stop;
+                                                              }
 
                                                               var snapshot = ReplayShared.CreateMainReplaySnapshot(frame);
 
@@ -795,6 +813,20 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
             frameData.PendingMainRecordResult = result;
         }
     }
+
+    // A finish that's no record, with slower runs not kept and a replay at least as fast already playing, keeps no
+    // replay, so when its result is already here its frames aren't copied. Without the result yet (a restart right
+    // after the finish, a last stage finishing with the run) it's captured as ever and sorted out when the result comes.
+    private bool NeedsNoReplay(PendingRecordResult? result, int attemptId, int style, int track, int stage, float time)
+        => result is not null
+           && NeedsNoReplay(result, attemptId, timer_replay_slower_runs.GetInt32() >= 1, _playbackModule.GetCachedReplay(style, track, stage), time);
+
+    internal static bool NeedsNoReplay(PendingRecordResult? result, int attemptId, bool keepsSlowerRuns, ReplayContent? playing, float time)
+        => result is { RecordEvent: { RecordType: EAttemptResult.NoNewRecord } recordEvent }
+           && recordEvent.AttemptId == attemptId
+           && !keepsSlowerRuns
+           && playing is not null
+           && playing.Header.Time <= time;
 
     /// <summary>
     ///     Validates and stores a replay snapshot. If the matching record save already
