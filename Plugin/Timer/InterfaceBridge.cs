@@ -70,6 +70,7 @@ internal class InterfaceBridge
         HookManager         = sharedSystem.GetHookManager();
         SchemaManager       = sharedSystem.GetSchemaManager();
         PhysicsQueryManager = sharedSystem.GetPhysicsQueryManager();
+        SoundManager        = sharedSystem.GetSoundManager();
         Modules             = sharedSystem.GetLibraryModuleManager();
     }
 
@@ -89,6 +90,7 @@ internal class InterfaceBridge
     public IHookManager         HookManager         { get; }
     public ISchemaManager       SchemaManager       { get; }
     public IPhysicsQueryManager PhysicsQueryManager { get; }
+    public ISoundManager        SoundManager        { get; }
 
     public IGameRules  GameRules  => ModSharp.GetGameRules();
     public IGlobalVars GlobalVars => ModSharp.GetGlobals();

@@ -113,6 +113,7 @@ internal class SoundModule : IModule, ISoundModule, IRecordModuleListener
         }
     }
 
+    // One sound for everyone who has them on.
     private void PlayToAll(string sound)
     {
         if (sound.Length == 0)
@@ -120,9 +121,19 @@ internal class SoundModule : IModule, ISoundModule, IRecordModuleListener
             return;
         }
 
+        ulong players = 0;
+
         foreach (var client in _bridge.ClientManager.GetGameClients(true))
         {
-            Play(client, sound);
+            if (!client.IsFakeClient && !client.IsHltv && _settings.PlaysSounds(client.Slot))
+            {
+                players |= 1UL << client.Slot;
+            }
+        }
+
+        if (players != 0)
+        {
+            _bridge.SoundManager.StartSoundEvent(sound, filter: new RecipientFilter(players));
         }
     }
 

@@ -17,11 +17,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.Managers;
 using Sharp.Shared.Objects;
+using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Shared;
@@ -50,38 +52,53 @@ internal static class ChatExtension
         => new (localization, slot);
 
     /// <summary>
-    ///     A message to every player, each in their own language: made once per language.
+    ///     A message to every player, each in their own language: made and sent once per language.
     /// </summary>
-    public static void PrintToChatAll(this IClientManager clients, ILocalizationProvider localization, Func<ChatTr, string> message)
+    public static void PrintToChatAll(this InterfaceBridge bridge, ILocalizationProvider localization, Func<ChatTr, string> message)
     {
-        Dictionary<object, string>? byLocale = null;
-        string?                     unknown  = null; // without a provider everyone reads the same
+        Dictionary<object, (ulong Players, PlayerSlot First)>? byLocale = null;
 
-        foreach (var client in clients.GetGameClients(true))
+        ulong      unknown      = 0; // without a provider everyone reads the same
+        PlayerSlot unknownFirst = default;
+
+        foreach (var client in bridge.ClientManager.GetGameClients(true))
         {
             if (client.IsFakeClient || client.IsHltv)
             {
                 continue;
             }
 
-            var    slot = client.Slot;
-            string text;
+            var slot = client.Slot;
 
             if (localization.LocaleOf(slot) is not { } locale)
             {
-                text = unknown ??= Prefix + message(localization.For(slot));
-            }
-            else
-            {
-                byLocale ??= [];
+                unknownFirst =  unknown == 0 ? slot : unknownFirst;
+                unknown      |= 1UL << slot;
 
-                if (!byLocale.TryGetValue(locale, out text!))
-                {
-                    byLocale[locale] = text = Prefix + message(localization.For(slot));
-                }
+                continue;
             }
 
-            client.Print(HudPrintChannel.Chat, text);
+            byLocale ??= [];
+            ref var group = ref CollectionsMarshal.GetValueRefOrAddDefault(byLocale, locale, out var known);
+
+            group.First   =  known ? group.First : slot;
+            group.Players |= 1UL << slot;
         }
+
+        if (unknown != 0)
+        {
+            Send(unknown, unknownFirst);
+        }
+
+        if (byLocale is not null)
+        {
+            foreach (var (players, first) in byLocale.Values)
+            {
+                Send(players, first);
+            }
+        }
+
+        void Send(ulong players, PlayerSlot first)
+            => bridge.ModSharp.PrintChannelFilter(HudPrintChannel.Chat, Prefix + message(localization.For(first)), new RecipientFilter(players));
     }
 }

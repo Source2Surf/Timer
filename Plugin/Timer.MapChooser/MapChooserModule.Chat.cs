@@ -17,10 +17,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Linq;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Objects;
+using Sharp.Shared.Types;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models;
 
@@ -39,29 +41,37 @@ public sealed partial class MapChooserModule
     ///     A message to one player, in their language when the timer's locale has the key.
     /// </summary>
     private void Reply(IGameClient client, ChooserText text, params object?[] args)
-    {
-        string message;
+        => client.Print(HudPrintChannel.Chat, _prefix + Format(Text(client, text), text, args));
 
+    private static string Format(string template, ChooserText text, object?[] args)
+    {
         try
         {
-            message = string.Format(Text(client, text), args);
+            return string.Format(template, args);
         }
         catch (FormatException)
         {
-            message = string.Format(text.English, args);
+            return string.Format(text.English, args);
         }
-
-        client.Print(HudPrintChannel.Chat, _prefix + message);
     }
 
     private IEnumerable<IGameClient> Humans()
         => _clients.GetGameClients(true).Where(x => !x.IsFakeClient && !x.IsHltv);
 
+    // To every player: made and sent once per language.
     private void Announce(ChooserText text, params object?[] args)
     {
+        var byText = new Dictionary<string, ulong>();
+
         foreach (var client in Humans())
         {
-            Reply(client, text, args);
+            ref var players = ref CollectionsMarshal.GetValueRefOrAddDefault(byText, Text(client, text), out _);
+            players |= 1UL << client.Slot;
+        }
+
+        foreach (var (template, players) in byText)
+        {
+            _modSharp.PrintChannelFilter(HudPrintChannel.Chat, _prefix + Format(template, text, args), new RecipientFilter(players));
         }
     }
 

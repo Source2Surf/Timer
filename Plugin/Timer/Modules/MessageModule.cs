@@ -188,7 +188,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
         var style  = _styleModule.GetStyleSetting(record.Style).Name;
         var delta  = recordEvent.WrRecord is { } sr ? Improvement(sr.Time, record.Time) : null;
 
-        _bridge.ClientManager.PrintToChatAll(_localization,
+        _bridge.PrintToChatAll(_localization,
                                              tr => ZString.Concat(ChatColor.Gold,
                                                                   tr[ChatTexts.FinishSr],
                                                                   ChatColor.White,
@@ -213,7 +213,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
 
         if (!recordEvent.IsStageRecord)
         {
-            _bridge.ClientManager.PrintToChatAll(_localization, Message);
+            _bridge.PrintToChatAll(_localization, Message);
         }
         else if (FindPlayerControllerBySteamId(recordEvent.SteamId) is { IsValidEntity: true } controller)
         {
