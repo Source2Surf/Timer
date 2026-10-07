@@ -137,7 +137,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             = bridge.ConVarManager.CreateConVar("timer_replay_file_compression_level", 3, 0, 19, "Replay file compression level, 0 to disable compression")!;
 
         timer_replay_file_compression_workers
-            = bridge.ConVarManager.CreateConVar("timer_replay_file_compression_workers", 4, 0, 256, "Number of threads for replay file compression, 0 to disable")!;
+            = bridge.ConVarManager.CreateConVar("timer_replay_file_compression_workers", 0, 0, 256, "Number of threads for replay file compression, 0 to disable")!;
 
         timer_replay_pending_timeout
             = bridge.ConVarManager.CreateConVar("timer_replay_pending_timeout",
@@ -970,17 +970,21 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         var keepRuns           = KeepRuns(stage);
         var slowerRuns         = timer_replay_slower_runs.GetInt32();
 
+        // A slower run is only written when the server keeps those; playback still gets it below.
+        var writeFile = context.AttemptResult != EAttemptResult.NoNewRecord || slowerRuns >= 1;
+
         Task.Run(async () =>
         {
             try
             {
-                if (!await ReplayShared.WriteReplayToFileAsync(header,
-                                                               filePath,
-                                                               frames,
-                                                               compressionLevel,
-                                                               compressionWorkers,
-                                                               _logger)
-                                       .ConfigureAwait(false))
+                if (writeFile
+                    && !await ReplayShared.WriteReplayToFileAsync(header,
+                                                                  filePath,
+                                                                  frames,
+                                                                  compressionLevel,
+                                                                  compressionWorkers,
+                                                                  _logger)
+                                          .ConfigureAwait(false))
                 {
                     throw new IOException($"Failed to write replay to {filePath}");
                 }
@@ -1070,7 +1074,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                     {
                         ReplayShared.KeepRecentRun(filePath, _replayDirectory, mapName, style, track, stage, header.SteamId, keptRunId, keepRuns, _logger);
                     }
-                    else
+                    else if (writeFile)
                     {
                         DeleteUnreferencedReplayFile(filePath, _logger);
                     }

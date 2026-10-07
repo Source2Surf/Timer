@@ -38,11 +38,12 @@ internal interface IPersonalBestReplays
 }
 
 // One PB replay per player, for the run they're on: from the server record's replay when theirs is the record,
-// else from disk or the replay store like any run. A failed load is retried now and then, since a new PB's replay
-// can still be on its way to disk when its record arrives.
+// else from disk or the replay store like any run. A failed load is retried, since a new PB's replay can still be on
+// its way to disk when its record arrives; less often each time, for a PB that has none at all.
 internal partial class ReplayPlaybackModule : IPersonalBestReplays
 {
-    private const float PersonalBestRetrySeconds = 10f;
+    private const float PersonalBestRetrySeconds    = 10f;
+    private const float PersonalBestMaxRetrySeconds = 300f;
 
     private sealed class PersonalBest
     {
@@ -51,6 +52,7 @@ internal partial class ReplayPlaybackModule : IPersonalBestReplays
         public ClosestFrameIndex? Index;
         public bool               Loading;
         public float              RetryAt;
+        public int                Failures;
     }
 
     private readonly PersonalBest?[] _personalBests = new PersonalBest?[PlayerSlot.MaxPlayerCount];
@@ -127,7 +129,8 @@ internal partial class ReplayPlaybackModule : IPersonalBestReplays
 
                                                                   if (index is null)
                                                                   {
-                                                                      entry.RetryAt = _bridge.GlobalVars.CurTime + PersonalBestRetrySeconds;
+                                                                      var wait = PersonalBestRetrySeconds * (1 << Math.Min(entry.Failures++, 5));
+                                                                      entry.RetryAt = _bridge.GlobalVars.CurTime + Math.Min(wait, PersonalBestMaxRetrySeconds);
 
                                                                       return;
                                                                   }
