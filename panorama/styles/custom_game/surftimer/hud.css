@@ -2438,3 +2438,27 @@
     font-size: 14px;
     color: #ffffffd9;
 }
+
+/* ---- CJK in the menus ----
+   Asked for as Stratum2, CJK comes from Noto at 0.9× (the game's fonts.conf), and bold CJK smears when it's small: on
+   an 800p screen, where the UI is drawn at 74%, a 13px note came out about 8px tall. A CJK reader's menus (the plugin
+   sets .cjk on them) ask for Noto by name, so at full size, with the small running text in regular weight. Last in
+   the file, so these win over .Menu Label and the like. */
+@define cjkFont: 'Noto Sans SC', 'Noto Sans';
+
+.cjk Label {
+    font-family: cjkFont;
+}
+
+.cjk .MenuDesc,
+.cjk .MenuTip,
+.cjk .NomNote,
+.cjk .PfSmall,
+.cjk .PfSub,
+.cjk .StyDesc,
+.cjk .ZnGoHint,
+.cjk .ZnStatusSub,
+.cjk .LbCardSub,
+.cjk .LbAdminNote {
+    font-weight: normal;
+}

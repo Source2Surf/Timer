@@ -269,6 +269,7 @@ internal sealed class HudPlayer
     public          float                       TrCacheUntil;
     public          float                       TrSettledAt;
     public          int                         TrEpoch;
+    public          int                         CjkEpoch = -1; // the TrEpoch the menus' cjk class follows
 
     public void ForgetSent()
     {
@@ -284,6 +285,7 @@ internal sealed class HudPlayer
         Records.Version     = -1;
         MapInfo.Version     = -1;
         Zones.PromptShown   = false;
+        CjkEpoch            = -1;
     }
 
     // ---- settings

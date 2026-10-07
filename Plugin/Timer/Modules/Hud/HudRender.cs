@@ -179,6 +179,18 @@ internal partial class HudModule
             UpdateMenu(w, p, now);
         }
 
+        // A CJK reader's menus ask for Noto by name (hud.css .cjk). The language arrives after joining (TrEpoch).
+        if (p.CjkEpoch != p.TrEpoch)
+        {
+            p.CjkEpoch = p.TrEpoch;
+            var cjk = HudFormat.HasCjk(p.Tr[HudTexts.Close]);
+
+            foreach (var panel in HudOptions.SizeMenus.Panels)
+            {
+                w.Class(panel, "cjk", cjk);
+            }
+        }
+
         if (p.Replays.Open)
         {
             UpdateReplayMenu(w, p, controller);
