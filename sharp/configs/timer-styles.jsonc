@@ -68,6 +68,7 @@
         // Each jump: horizontal speed times velocity, plus bonus_velocity, at least min_velocity, at most velocity_limit;
         // vertical speed times jump_multiplier, plus jump_bonus. 0 = off.
         // "velocity": 1.0, "bonus_velocity": 0, "min_velocity": 0, "velocity_limit": 0, "jump_multiplier": 0, "jump_bonus": 0
+        // "segmented": false,        // players may save and go back to their own locations and the run still counts
     },
     {
         "name": "Sideways",

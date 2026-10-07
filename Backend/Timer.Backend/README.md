@@ -23,7 +23,11 @@ defaults:
 - every start creates the tables and columns a new version adds (additive;
   an up-to-date database needs no DDL rights);
 - game servers register their styles' `score_factor`s, so `WriteApi:StyleFactors`
-  is only needed to override them.
+  is only needed to override them;
+- run times are kept in seconds (`Time`) and in 64 Hz ticks (`surf_runs.Ticks`,
+  `surf_player_best_runs.BestTicks`), which read back exactly where a MySQL FLOAT
+  doesn't. Every start fills ticks in for older runs and brings them in line with
+  a hand-edited `Time`, so edit `Time` and restart.
 
 For an existing master SQL database, run the migration below before starting
 the backend against it. A game server on the same host needs nothing in
