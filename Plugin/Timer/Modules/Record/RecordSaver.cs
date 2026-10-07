@@ -242,7 +242,7 @@ internal sealed class RecordSaver
         }
 
         var response = await acknowledgementTask.ConfigureAwait(false);
-        _logger.LogInformation("Remote main submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
+        _logger.LogDebug("Remote main submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
                                request.SubmissionId,
                                response.Disposition,
                                response.RunId);
@@ -338,7 +338,7 @@ internal sealed class RecordSaver
         }
 
         var response = await acknowledgementTask.ConfigureAwait(false);
-        _logger.LogInformation("Remote stage submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
+        _logger.LogDebug("Remote stage submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
                                request.SubmissionId,
                                response.Disposition,
                                response.RunId);
@@ -415,7 +415,7 @@ internal sealed class RecordSaver
     }
 
     private void LogRemoteSubmissionPending(Guid submissionId, string runKind)
-        => _logger.LogInformation("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
+        => _logger.LogDebug("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
                                   runKind,
                                   submissionId);
 
