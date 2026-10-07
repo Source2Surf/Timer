@@ -1126,7 +1126,7 @@ internal partial class HudModule
                p.Tr.Format(HudTexts.InfoPb,
                            pb is null
                                ? p.Tr[HudTexts.NotAvailable]
-                               : ZString.Concat(HudFormat.FormatTime(pb.Time), " (#", _recordModule.GetRankForTime(style, track, pb.Time), ')')));
+                               : ZString.Concat(HudFormat.FormatTime(pb.Time), " (#", _recordModule.GetRankOfRecord(style, track, pb), ')')));
     }
 
     private static readonly string[] SplitRows  = Ids("Split{0}");

@@ -420,7 +420,7 @@ internal partial class HudModule
 
         var loading = f.Offline && f.Records is null;
         var pb      = f.Offline ? OfflineRecord(f, f.Track, 0) : _recordModule.GetPlayerRecord(f.Target, f.Style, f.Track);
-        var rank    = pb is null ? 0 : _recordModule.GetRankForTime(f.Style, f.Track, pb.Time);
+        var rank    = pb is null ? 0 : _recordModule.GetRankOfRecord(f.Style, f.Track, pb);
         ProfileValue(w,
                      "PfPb",
                      "PfPbRank",

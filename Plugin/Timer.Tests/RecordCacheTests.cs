@@ -56,6 +56,43 @@ public sealed class RecordCacheTests
     }
 
     [Fact]
+    public void ARunRanksWhereItsOwnCopyOnTheBoardIs()
+    {
+        var cache = new MapRecordCache(NullLogger.Instance);
+        var load  = cache.BeginLoad();
+
+        // The board's copy read back slightly below the timer's 5733 ticks (89.578125 s).
+        cache.RefreshTrack(0, 0, [new RunRecord { Id = 1, SteamId = 1, Time = 89.5781f }], load);
+
+        Assert.Equal(1, cache.GetRankForTime(0, 0, 5733 / 64f));
+        Assert.Equal(1, cache.GetRankForTime(0, 0, 89.5781f));
+        Assert.Equal(2, cache.GetRankForTime(0, 0, 5734 / 64f)); // a tick slower
+        Assert.Equal(1, cache.GetRankForTime(0, 0, 5732 / 64f)); // a tick faster
+    }
+
+    [Fact]
+    public void APlayersBestRanksWhereTheLeaderboardShowsIt()
+    {
+        var cache = new MapRecordCache(NullLogger.Instance);
+        var load  = cache.BeginLoad();
+
+        cache.RefreshTrack(0, 0,
+                           [
+                               new RunRecord { Id = 1, SteamId = 10, Time = 80f },
+                               new RunRecord { Id = 2, SteamId = 20, Time = 89.5781f },
+                               new RunRecord { Id = 3, SteamId = 30, Time = 95f },
+                           ],
+                           load);
+
+        // The player's own copy, whatever its last bits: their place on the board.
+        Assert.Equal(2, cache.GetRankOfRecord(0, 0, new RunRecord { Id = 2, SteamId = 20, Time = 5733 / 64f }));
+        Assert.Equal(3, cache.GetRankOfRecord(0, 0, new RunRecord { Id = 3, SteamId = 30, Time = 95f }));
+
+        // Not on the board: by its time.
+        Assert.Equal(2, cache.GetRankOfRecord(0, 0, new RunRecord { Id = 4, SteamId = 40, Time = 85f }));
+    }
+
+    [Fact]
     public void OlderMapLoadCannotReplaceNewerTrackOrCheckpoints()
     {
         var cache = new MapRecordCache(NullLogger.Instance);

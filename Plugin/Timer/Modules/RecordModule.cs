@@ -51,6 +51,11 @@ internal interface IRecordModule
 
     int GetRankForTime(int style, int track, float time);
 
+    /// <summary>
+    ///     A player's best's rank: its place on the board, as the leaderboard shows it.
+    /// </summary>
+    int GetRankOfRecord(int style, int track, RunRecord record);
+
     RunRecord? GetPlayerRecord(PlayerSlot slot, int style, int track, int stage = 0);
 
     RunRecord? GetWR(int style, int track, int stage = 0);
@@ -480,6 +485,9 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     public int GetRankForTime(int style, int track, float time) =>
         _mapCache.GetRankForTime(style, track, time);
+
+    public int GetRankOfRecord(int style, int track, RunRecord record) =>
+        _mapCache.GetRankOfRecord(style, track, record);
 
     public RunRecord? GetPlayerRecord(PlayerSlot slot, int style, int track, int stage = 0) =>
         _playerCache.GetRecord(slot, style, track, stage);

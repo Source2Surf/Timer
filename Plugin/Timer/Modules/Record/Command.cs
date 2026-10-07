@@ -166,7 +166,7 @@ internal partial class RecordModule
         }
 
         var records = _mapCache.GetRecords(style, bonus);
-        var rank    = _mapCache.GetRankForTime(style, bonus, pb.Time);
+        var rank    = _mapCache.GetRankOfRecord(style, bonus, pb);
 
         controller.PrintToChat(tr.Format(ChatTexts.PbBonus, bonus, Utils.ColoredTime(pb.Time), rank, records.Count));
 
@@ -273,7 +273,7 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
-        var rank  = GetRankForTime(style, track, pb.Time);
+        var rank  = GetRankOfRecord(style, track, pb);
         var total = GetTotalRecordCount(style, track);
 
         controller.PrintToChat(tr.Format(ChatTexts.Pb, Utils.ColoredTime(pb.Time), rank, total));
@@ -299,7 +299,7 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
-        var rank  = GetRankForTime(style, track, pb.Time);
+        var rank  = GetRankOfRecord(style, track, pb);
         var total = GetTotalRecordCount(style, track);
 
         controller.PrintToChat(tr.Format(ChatTexts.Rank, Utils.Highlight(rank), total, Utils.ColoredTime(pb.Time)));

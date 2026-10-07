@@ -222,6 +222,7 @@ internal sealed class MapRecordCache
     public int GetRankForTime(int style, int track, float time)
     {
         var records = _mapRecords[style, track];
+        var ticks   = TicksOf(time);
 
         var low  = 0;
         var high = records.Count;
@@ -230,7 +231,7 @@ internal sealed class MapRecordCache
         {
             var mid = (int)(((uint) low + (uint) high) >> 1);
 
-            if (records[mid].Time < time)
+            if (TicksOf(records[mid].Time) < ticks)
             {
                 low = mid + 1;
             }
@@ -242,6 +243,30 @@ internal sealed class MapRecordCache
 
         return low + 1;
     }
+
+    /// <summary>
+    ///     A player's best's rank: its place on the board, which the leaderboard shows; by its time when the board
+    ///     doesn't have it.
+    /// </summary>
+    public int GetRankOfRecord(int style, int track, RunRecord record)
+    {
+        var records = _mapRecords[style, track];
+
+        for (var i = 0; record.SteamId != 0 && i < records.Count; i++)
+        {
+            if (records[i].SteamId == record.SteamId)
+            {
+                return i + 1;
+            }
+        }
+
+        return GetRankForTime(style, track, record.Time);
+    }
+
+    // Runs are compared in ticks: every time is whole ticks, and the tick count is exact even where a run's copy read
+    // back from the backend differs from the timer's own in its last bits, which ranked a player behind their own run.
+    private static long TicksOf(float time)
+        => (long) MathF.Round(time / TimerConstants.TickInterval);
 
     public RunRecord? GetWR(int style, int track, int stage = 0)
     {
