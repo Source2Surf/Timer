@@ -112,11 +112,11 @@ public sealed class StorageReadinessTests : IDisposable
     }
 
     [Fact]
-    public async Task WriteReadinessRejectsMissingJoinDateUntilMigrationCompletes()
+    public async Task WriteReadinessRejectsAMissingJoinDateUntilStartupAddsIt()
     {
-        _storage.Db.DbMaintenance.DropColumn("surf_players", "JoinedAtUtc");
+        _storage.Db.DbMaintenance.DropColumn("surf_players", "JoinedAtUnixMilliseconds");
         await Assert.ThrowsAnyAsync<Exception>(() => _storage.CheckReadyAsync(requireWriteSchema: true));
-        _storage.MigratePlayerJoinDates();
+        _storage.Init(startScoreRecalcWorker: false);
         await _storage.CheckReadyAsync(requireWriteSchema: true);
     }
 

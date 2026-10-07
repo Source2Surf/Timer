@@ -206,7 +206,8 @@ internal sealed partial class StorageServiceImpl
                                     .OrderBy(x => x.Id)
                                     .Select(x => x.Id)
                                     .FirstAsync(OperationCancellation);
-                var now = DateTime.UtcNow;
+                var now   = DateTime.UtcNow;
+                var nowMs = ToUnixTimeMilliseconds(now);
 
                 if (next == 0)
                 {
@@ -219,7 +220,7 @@ internal sealed partial class StorageServiceImpl
                              .SetColumns(x => x.RunId == next)
                              .SetColumns(x => x.BestTime == SqlFunc.Subqueryable<RunEntity>().Where(r => r.Id == next).Select(r => r.Time))
                              .SetColumns(x => x.BestTicks == SqlFunc.Subqueryable<RunEntity>().Where(r => r.Id == next).Select(r => r.Ticks))
-                             .SetColumns(x => x.UpdatedAt == now)
+                             .SetColumns(x => x.UpdatedAtUnixMilliseconds == nowMs)
                              .Where(x => x.Id == best!.Id)
                              .ExecuteCommandAsync(OperationCancellation);
                 }
@@ -516,7 +517,7 @@ internal sealed partial class StorageServiceImpl
                 VelocityAvgX   = checkpoint.VelocityAvgX,
                 VelocityAvgY   = checkpoint.VelocityAvgY,
                 VelocityAvgZ   = checkpoint.VelocityAvgZ,
-                Date           = now,
+                DateUnixMilliseconds = ToUnixTimeMilliseconds(now),
             });
         }
 

@@ -35,5 +35,6 @@ internal sealed class PlayerTrackScoreEntity
     // remaining within the public uint score contract.
     [SugarColumn(ColumnDataType = "bigint", SqlParameterDbType = typeof(UInt32BigIntConverter))]
     public uint Points { get; set; }
-    public DateTime UpdatedAt { get; set; }
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long UpdatedAtUnixMilliseconds { get; set; }
 }

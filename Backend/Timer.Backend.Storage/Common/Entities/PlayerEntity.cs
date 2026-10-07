@@ -19,8 +19,10 @@ internal sealed class PlayerEntity : BaseSteamIdSerialEntity
     public uint Runs   { get; set; }
     // Nullable only for additive upgrades and older writers. Migration freezes the
     // best existing timestamp once; new profiles always set this at creation.
-    [SugarColumn(IsNullable = true)]
-    public DateTime? JoinedAtUtc { get; set; }
+    // Unix milliseconds, UTC; 0 = unknown.
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long JoinedAtUnixMilliseconds { get; set; }
 
-    public DateTime UpdatedAt { get; set; }
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long UpdatedAtUnixMilliseconds { get; set; }
 }

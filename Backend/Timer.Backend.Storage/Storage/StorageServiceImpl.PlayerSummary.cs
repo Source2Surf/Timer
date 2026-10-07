@@ -104,9 +104,7 @@ internal sealed partial class StorageServiceImpl
         {
             Name         = player?.Name,
             Points       = player?.Points ?? 0,
-            JoinedAt     = player?.JoinedAtUtc is { } joined
-                               ? new DateTimeOffset(DateTime.SpecifyKind(joined, DateTimeKind.Utc)).ToUnixTimeMilliseconds()
-                               : 0,
+            JoinedAt     = player?.JoinedAtUnixMilliseconds ?? 0,
             TotalMaps    = bonusesPerMap.Count,
             TotalBonuses = bonusesPerMap.Sum(),
             PlayTime     = playTimes.Sum(),

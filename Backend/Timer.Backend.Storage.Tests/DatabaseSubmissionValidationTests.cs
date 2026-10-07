@@ -59,7 +59,7 @@ public sealed class DatabaseSubmissionValidationTests
                 Assert.Equal(TimerBackendSubmissionDisposition.AlreadyApplied, replayed.Disposition);
                 var segment = await store.Db.Queryable<RunSegmentEntity>()
                     .Where(x => x.RunId == accepted.RunId).SingleAsync();
-                Assert.Equal(finishedAt, segment.Date);
+                Assert.Equal(StorageServiceImpl.ToUnixTimeMilliseconds(finishedAt), segment.DateUnixMilliseconds);
             }
 
             TimerBackendRunSubmissionCommand CreateCommand(DateTime finishedAt) => new()

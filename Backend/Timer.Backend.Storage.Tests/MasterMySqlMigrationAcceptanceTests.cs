@@ -161,8 +161,11 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
 
         var migratedPlayer = await db.Queryable<PlayerEntity>()
                                      .Where(row => row.SteamId == seeded.SteamId).SingleAsync();
-        Assert.Equal(new DateTime(2024, 1, 1), migratedPlayer.JoinedAtUtc);
-        Assert.Equal(new DateTime(2024, 1, 1), migratedPlayer.UpdatedAt);
+        // Master kept SQL timestamps; the migration moves them to unix milliseconds.
+        Assert.Equal(StorageServiceImpl.ToUnixTimeMilliseconds(new DateTime(2024, 1, 1)), migratedPlayer.JoinedAtUnixMilliseconds);
+        Assert.Equal(StorageServiceImpl.ToUnixTimeMilliseconds(new DateTime(2024, 1, 1)), migratedPlayer.UpdatedAtUnixMilliseconds);
+        Assert.False(db.DbMaintenance.IsAnyColumn("surf_players", "UpdatedAt", false));
+        Assert.False(db.DbMaintenance.IsAnyColumn("surf_runs_segments", "Date", false));
 
         await AssertAtomicMapStatsAsync(databaseType, connectionString);
 
@@ -190,7 +193,7 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
 
         var repeatedPlayer = await db.Queryable<PlayerEntity>()
                                      .Where(row => row.SteamId == seeded.SteamId).SingleAsync();
-        Assert.Equal(migratedPlayer.JoinedAtUtc, repeatedPlayer.JoinedAtUtc);
+        Assert.Equal(migratedPlayer.JoinedAtUnixMilliseconds, repeatedPlayer.JoinedAtUnixMilliseconds);
 
         // Simulate a process interruption after the safe first rename: master Date
         // became the durable backup, while the fully populated temporary BIGINT is

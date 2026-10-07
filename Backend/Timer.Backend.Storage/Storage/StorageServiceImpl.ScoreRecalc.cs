@@ -100,7 +100,7 @@ internal sealed partial class StorageServiceImpl
             (exists ? updates : inserts).Add(new PlayerTrackScoreEntity
             {
                 Id = exists ? previous.Id : 0, SteamId = steamId, MapId = mapId, Style = style, Track = track,
-                Points = points, UpdatedAt = now,
+                Points = points, UpdatedAtUnixMilliseconds = ToUnixTimeMilliseconds(now),
             });
         }
 
@@ -122,7 +122,7 @@ internal sealed partial class StorageServiceImpl
             await _db.Insertable(batch).ExecuteCommandAsync(OperationCancellation);
         foreach (var batch in updates.Chunk(500))
             await _db.Updateable(batch)
-                .UpdateColumns(x => new { x.Points, x.UpdatedAt }).ExecuteCommandAsync(OperationCancellation);
+                .UpdateColumns(x => new { x.Points, x.UpdatedAtUnixMilliseconds }).ExecuteCommandAsync(OperationCancellation);
         foreach (var batch in removed.Chunk(500))
             await _db.Deleteable<PlayerTrackScoreEntity>()
                 .Where(x => x.MapId == mapId && x.Style == style && x.Track == track && batch.Contains(x.SteamId))
@@ -151,7 +151,7 @@ internal sealed partial class StorageServiceImpl
             foreach (var row in await query.Select(x => new LockedPlayerRow
                      {
                          Id = x.Id, SteamId = x.SteamId, Points = SqlFunc.ToInt64(x.Points),
-                         JoinedAtUtc = x.JoinedAtUtc, UpdatedAt = x.UpdatedAt,
+                         JoinedAtUnixMilliseconds = x.JoinedAtUnixMilliseconds,
                      }).ToListAsync(OperationCancellation))
             {
                 locked[row.SteamId] = row;
@@ -204,8 +204,8 @@ internal sealed partial class StorageServiceImpl
                 }
 
                 if (total == player.Points) continue;
-                if (player.JoinedAtUtc is null) legacy.Add(player.Id);
-                changed.Add(new PlayerEntity { Id = player.Id, SteamId = steamId, Points = (uint)total, UpdatedAt = now });
+                if (player.JoinedAtUnixMilliseconds == 0) legacy.Add(player.Id);
+                changed.Add(new PlayerEntity { Id = player.Id, SteamId = steamId, Points = (uint)total, UpdatedAtUnixMilliseconds = ToUnixTimeMilliseconds(now) });
             }
         }
 
@@ -216,17 +216,17 @@ internal sealed partial class StorageServiceImpl
                 capped.Count, uint.MaxValue, string.Join(", ", capped.Take(20)));
         }
 
-        // Rows from older writers: freeze the join date from UpdatedAt in SQL before the batch
-        // below changes UpdatedAt. Batches write values as literals, so join dates stay out of them.
+        // A row without a join date: freeze it from UpdatedAt in SQL before the batch below changes
+        // UpdatedAt. Batches write values as literals, so join dates stay out of them.
         foreach (var batch in legacy.Chunk(500))
             await _db.Updateable<PlayerEntity>()
-                     .SetColumns(p => p.JoinedAtUtc == SqlFunc.IsNull(p.JoinedAtUtc, p.UpdatedAt))
-                     .Where(p => batch.Contains(p.Id))
+                     .SetColumns(p => p.JoinedAtUnixMilliseconds == p.UpdatedAtUnixMilliseconds)
+                     .Where(p => batch.Contains(p.Id) && p.JoinedAtUnixMilliseconds == 0)
                      .ExecuteCommandAsync(OperationCancellation);
 
         foreach (var batch in changed.Chunk(500))
             await _db.Updateable(batch.ToList())
-                     .UpdateColumns(x => new { x.Points, x.UpdatedAt })
+                     .UpdateColumns(x => new { x.Points, x.UpdatedAtUnixMilliseconds })
                      .ExecuteCommandAsync(OperationCancellation);
     }
 
@@ -236,8 +236,7 @@ internal sealed partial class StorageServiceImpl
         [SugarColumn(ColumnDataType = "bigint")]
         public long      SteamId     { get; set; }
         public long      Points      { get; set; }
-        public DateTime? JoinedAtUtc { get; set; }
-        public DateTime  UpdatedAt   { get; set; }
+        public long      JoinedAtUnixMilliseconds { get; set; }
     }
 
     /// <summary>

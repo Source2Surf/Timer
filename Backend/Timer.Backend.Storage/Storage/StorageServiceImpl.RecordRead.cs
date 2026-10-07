@@ -117,8 +117,8 @@ internal sealed partial class StorageServiceImpl
                 Name      = name,
                 Points    = 0,
                 Runs      = 0,
-                JoinedAtUtc = now,
-                UpdatedAt = now,
+                JoinedAtUnixMilliseconds  = ToUnixTimeMilliseconds(now),
+                UpdatedAtUnixMilliseconds = ToUnixTimeMilliseconds(now),
             };
 
             try
@@ -137,13 +137,13 @@ internal sealed partial class StorageServiceImpl
             }
         }
 
-        if (player.JoinedAtUtc is null)
+        if (player.JoinedAtUnixMilliseconds == 0)
         {
             // Freeze the stored pre-update timestamp atomically. A competing login or
             // points writer may have initialized it since our first read.
             await _db.Updateable<PlayerEntity>()
-                     .SetColumns(x => x.JoinedAtUtc == x.UpdatedAt)
-                     .Where(x => x.Id == player.Id && x.JoinedAtUtc == null)
+                     .SetColumns(x => x.JoinedAtUnixMilliseconds == x.UpdatedAtUnixMilliseconds)
+                     .Where(x => x.Id == player.Id && x.JoinedAtUnixMilliseconds == 0)
                      .ExecuteCommandAsync(OperationCancellation);
             player = await _db.Queryable<PlayerEntity>()
                               .Where(x => x.Id == player.Id).FirstAsync(OperationCancellation);
@@ -152,11 +152,11 @@ internal sealed partial class StorageServiceImpl
         // Only write back if name changed
         if (player.Name != name)
         {
-            player.Name      = name;
-            player.UpdatedAt = now;
+            player.Name                      = name;
+            player.UpdatedAtUnixMilliseconds = ToUnixTimeMilliseconds(now);
 
             await _db.Updateable(player)
-                     .UpdateColumns(x => new { x.Name, x.UpdatedAt })
+                     .UpdateColumns(x => new { x.Name, x.UpdatedAtUnixMilliseconds })
                      .ExecuteCommandAsync(OperationCancellation);
         }
 
@@ -165,7 +165,9 @@ internal sealed partial class StorageServiceImpl
             Id           = (long) player.Id,
             SteamId      = steamId,
             Points       = player.Points,
-            JoinDate     = player.JoinedAtUtc ?? throw new InvalidOperationException("Player join date was not initialized."),
+            JoinDate     = player.JoinedAtUnixMilliseconds > 0
+                               ? FromUnixTimeMilliseconds(player.JoinedAtUnixMilliseconds)
+                               : throw new InvalidOperationException("Player join date was not initialized."),
             LastSeenDate = now,
         };
 

@@ -291,7 +291,7 @@ internal sealed partial class StorageServiceImpl
                 VelocityAvgX = checkpoint.Motion.VelocityAvgX,
                 VelocityAvgY = checkpoint.Motion.VelocityAvgY,
                 VelocityAvgZ = checkpoint.Motion.VelocityAvgZ,
-                Date = recordedAtUtc,
+                DateUnixMilliseconds = ToUnixTimeMilliseconds(recordedAtUtc),
             });
         }
 

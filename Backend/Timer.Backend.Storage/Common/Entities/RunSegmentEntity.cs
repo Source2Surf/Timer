@@ -30,5 +30,6 @@ internal sealed class RunSegmentEntity
     public float VelocityAvgY   { get; set; }
     public float VelocityAvgZ   { get; set; }
 
-    public DateTime Date { get; set; }
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long DateUnixMilliseconds { get; set; }
 }

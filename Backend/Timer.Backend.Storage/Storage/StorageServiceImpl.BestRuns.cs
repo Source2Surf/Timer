@@ -210,7 +210,7 @@ internal sealed partial class StorageServiceImpl
                 RunId     = row.RunId,
                 BestTime  = TimeOf(row.BestTicks, row.BestTime),
                 BestTicks = row.BestTicks,
-                UpdatedAt = now,
+                UpdatedAtUnixMilliseconds = ToUnixTimeMilliseconds(now),
             });
         }
 
@@ -219,7 +219,7 @@ internal sealed partial class StorageServiceImpl
         foreach (var batch in inserts.Chunk(500))
             await _db.Insertable(batch).ExecuteCommandAsync(OperationCancellation);
         foreach (var batch in updates.Chunk(500))
-            await _db.Updateable(batch).UpdateColumns(x => new { x.RunId, x.BestTime, x.BestTicks, x.UpdatedAt }).ExecuteCommandAsync(OperationCancellation);
+            await _db.Updateable(batch).UpdateColumns(x => new { x.RunId, x.BestTime, x.BestTicks, x.UpdatedAtUnixMilliseconds }).ExecuteCommandAsync(OperationCancellation);
     }
 
     private static int CompareTimes(int aTicks, float aTime, int bTicks, float bTime)

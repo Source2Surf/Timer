@@ -46,16 +46,18 @@ internal sealed partial class StorageServiceImpl
         var mapRowsBefore = _db.Queryable<MapEntity>().Count();
         var runRowsBefore = _db.Queryable<RunEntity>().Count();
 
-        // Map totals gained required columns since master; the join date is added separately.
+        // Map totals gained required columns since master; dates are moved to unix milliseconds separately.
         // Its three zero defaults let SQLSugar backfill populated tables before
         // tightening the columns; no historical run or date-time row is rewritten.
         BackfillNullableMapTotals();
         _db.CodeFirst.InitTables(typeof(MapEntity));
         EnsureMapTotalsColumns();
-        MigratePlayerJoinDates();
         RepairInvalidStoredPlayTimes();
 
         MigrateReplaySteamIdColumn();
+        _db.CodeFirst.InitTables(typeof(PlayerEntity), typeof(PlayerBestRunEntity), typeof(PlayerTrackScoreEntity),
+                                 typeof(ReplayEntity), typeof(RunSegmentEntity));
+        MigrateLegacyDates();
         _db.CodeFirst.InitTables(typeof(ScoreRecalcOutboxEntity), typeof(RunSubmissionEntity));
 
         EnsureScoreRecalcOutboxIndexes();

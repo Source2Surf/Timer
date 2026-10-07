@@ -19,30 +19,6 @@ internal sealed partial class StorageServiceImpl
                 "Session time must be finite, non-negative and representable as integer microseconds.");
     }
 
-    internal void MigratePlayerJoinDates()
-    {
-        const string tableName = "surf_players";
-        var columns = _db.DbMaintenance.GetColumnInfosByTableName(tableName, false);
-        if (FindColumn(columns, nameof(PlayerEntity.JoinedAtUtc)) is null)
-        {
-            var source = FindColumn(columns, nameof(PlayerEntity.UpdatedAt))
-                         ?? throw new InvalidOperationException("Player UpdatedAt column is missing.");
-            // Add only this column; do not reconcile or drop unrelated master columns.
-            if (!_db.DbMaintenance.AddColumn(tableName, new DbColumnInfo
-                {
-                    DbColumnName = nameof(PlayerEntity.JoinedAtUtc), DataType = source.DataType,
-                    Length = source.Length, DecimalDigits = source.DecimalDigits, IsNullable = true,
-                }))
-                throw new InvalidOperationException("Could not add surf_players.JoinedAtUtc.");
-        }
-
-        var rows = _db.Updateable<PlayerEntity>()
-                      .SetColumns(x => x.JoinedAtUtc == x.UpdatedAt)
-                      .Where(x => x.JoinedAtUtc == null).ExecuteCommand();
-        if (rows > 0)
-            _logger.LogInformation("Initialized {Count} player join dates from existing UpdatedAt values; original first-join times are not recoverable.", rows);
-    }
-
     internal void RepairInvalidStoredPlayTimes()
     {
         // PostgreSQL sorts NaN above finite values, so the upper bound also catches

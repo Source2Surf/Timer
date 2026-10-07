@@ -72,8 +72,8 @@ internal sealed partial class StorageServiceImpl
             SteamId   = unchecked((long)steamId),
             RunId     = runId,
             Replay    = url,
-            CreatedAt = now,
-            UpdatedAt = now,
+            CreatedAtUnixMilliseconds = ToUnixTimeMilliseconds(now),
+            UpdatedAtUnixMilliseconds = ToUnixTimeMilliseconds(now),
         });
     }
 }

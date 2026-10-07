@@ -27,7 +27,10 @@ defaults:
 - run times are kept in seconds (`Time`) and in 64 Hz ticks (`surf_runs.Ticks`,
   `surf_player_best_runs.BestTicks`), which read back exactly where a MySQL FLOAT
   doesn't. Every start fills ticks in for older runs and brings them in line with
-  a hand-edited `Time`, so edit `Time` and restart.
+  a hand-edited `Time`, so edit `Time` and restart;
+- dates are unix milliseconds, UTC (`surf_runs.Date` and the `…UnixMilliseconds`
+  columns); only the internal submission and score-recalc queues keep SQL
+  timestamps. Each start moves older timestamp columns over.
 
 For an existing master SQL database, run the migration below before starting
 the backend against it. A game server on the same host needs nothing in

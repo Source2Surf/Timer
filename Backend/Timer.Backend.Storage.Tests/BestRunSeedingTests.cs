@@ -107,7 +107,7 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
         await storage.Db.Insertable(new PlayerBestRunEntity
         {
             MapId = map.MapId, SteamId = unchecked((long)Player.AsPrimitive()), RunType = RunType.Main, RunId = slow.Id, BestTime = slow.Time,
-            UpdatedAt = DateTime.UtcNow,
+            UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         }).ExecuteCommandAsync();
 
         Assert.Equal((long)best.Id, (await storage.GetPlayerRecord(Player, "surf_partial", 0, 0))!.Id);
@@ -145,7 +145,7 @@ public sealed class BestRunSeedingTests(ITestOutputHelper output) : IDisposable
         await storage.Db.Insertable(new PlayerBestRunEntity
         {
             MapId = map.MapId, SteamId = unchecked((long)Player.AsPrimitive()), RunType = RunType.Main, RunId = slow.Id, BestTime = slow.Time,
-            UpdatedAt = DateTime.UtcNow,
+            UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         }).ExecuteCommandAsync();
 
         var faster = await AddRun(storage, map.MapId, 60);

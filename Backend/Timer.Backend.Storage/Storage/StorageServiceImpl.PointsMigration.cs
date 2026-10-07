@@ -305,6 +305,12 @@ internal sealed partial class StorageServiceImpl
         var names = new HashSet<string>(columns.Select(column => column.DbColumnName), StringComparer.OrdinalIgnoreCase);
         foreach (var required in expectedSchemaColumns)
         {
+            // MigrateLegacyDates replaces it with a unix-milliseconds column.
+            if (required == "UpdatedAt" && names.Contains(nameof(PlayerEntity.UpdatedAtUnixMilliseconds)))
+            {
+                continue;
+            }
+
             if (!names.Contains(required))
             {
                 throw new InvalidOperationException(
@@ -313,9 +319,15 @@ internal sealed partial class StorageServiceImpl
         }
 
         var expected = new HashSet<string>(expectedSchemaColumns, StringComparer.OrdinalIgnoreCase);
-        // This is our additive player migration, not an unrelated custom schema.
-        // Accept both the untouched master shape and a repeat migration after upgrade.
-        if (tableName == MasterPlayersTableName) expected.Add(nameof(PlayerEntity.JoinedAtUtc));
+        // These are our additive migrations, not an unrelated custom schema: accept the untouched master
+        // shape, a repeat migration after upgrade, and dates moved to unix milliseconds.
+        if (tableName == MasterPlayersTableName)
+        {
+            expected.Add("JoinedAtUtc");
+            expected.Add(nameof(PlayerEntity.JoinedAtUnixMilliseconds));
+        }
+
+        expected.Add(nameof(PlayerEntity.UpdatedAtUnixMilliseconds));
         var unexpected = names.Where(name => !expected.Contains(name))
                               .OrderBy(name => name, StringComparer.Ordinal)
                               .ToArray();

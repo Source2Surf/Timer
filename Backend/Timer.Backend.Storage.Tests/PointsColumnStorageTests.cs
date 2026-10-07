@@ -38,7 +38,7 @@ public sealed class PointsColumnStorageTests : IDisposable
             Name = "SQLite BIGINT points",
             Points = uint.MaxValue,
             Runs = 1,
-            UpdatedAt = DateTime.UtcNow,
+            UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         }).ExecuteCommandAsync();
         await _storage.Db.Insertable(new PlayerTrackScoreEntity
         {
@@ -47,7 +47,7 @@ public sealed class PointsColumnStorageTests : IDisposable
             Style = 0,
             Track = 0,
             Points = uint.MaxValue,
-            UpdatedAt = DateTime.UtcNow,
+            UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         }).ExecuteCommandAsync();
 
         Assert.Equal(uint.MaxValue, await _storage.Db.Queryable<PlayerEntity>()

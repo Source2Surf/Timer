@@ -16,7 +16,10 @@ internal sealed class ReplayEntity : BaseSteamIdEntity
 
     public string Replay { get; set; } = string.Empty;
 
-    public DateTime CreatedAt { get; set; }
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long CreatedAtUnixMilliseconds { get; set; }
 
-    public DateTime UpdatedAt { get; set; }
+
+    [SugarColumn(ColumnDataType = "bigint", DefaultValue = "0")]
+    public long UpdatedAtUnixMilliseconds { get; set; }
 }

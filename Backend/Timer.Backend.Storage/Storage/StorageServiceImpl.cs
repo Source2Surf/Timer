@@ -119,7 +119,7 @@ internal sealed partial class StorageServiceImpl
         EnsurePointsTableUniqueIndexes();
         EnsurePointsColumnsReadyForRuntime();
 
-        MigratePlayerJoinDates();
+        MigrateLegacyDates();
         RepairInvalidStoredPlayTimes();
         SyncTicks();
         EnsureTrackScoreCoveringIndex();
@@ -447,7 +447,7 @@ internal sealed partial class StorageServiceImpl
                 await _db.Insertable(new PlayerBestRunEntity
                          {
                              SteamId = -1, MapId = 0, RunType = RunType.Main, Style = -1, Track = 0, Stage = 0,
-                             RunId = 0, BestTime = 0, UpdatedAt = DateTime.UtcNow,
+                             RunId = 0, BestTime = 0, UpdatedAtUnixMilliseconds = ToUnixTimeMilliseconds(DateTime.UtcNow),
                          })
                          .ExecuteCommandAsync(OperationCancellation);
                 throw new ReadinessProbeRollbackException();
@@ -468,7 +468,7 @@ internal sealed partial class StorageServiceImpl
         await WithRecordTransactionAsync(async () =>
         {
             await _db.Updateable<PlayerBestRunEntity>()
-                     .SetColumns(x => x.UpdatedAt == x.UpdatedAt)
+                     .SetColumns(x => x.UpdatedAtUnixMilliseconds == x.UpdatedAtUnixMilliseconds)
                      .Where(x => x.Id == 0)
                      .ExecuteCommandAsync(OperationCancellation);
             if (_db.CurrentConnectionConfig.DbType != DbType.Sqlite)

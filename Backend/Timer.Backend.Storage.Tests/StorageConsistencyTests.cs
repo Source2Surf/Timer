@@ -194,7 +194,7 @@ public sealed class StorageConsistencyTests : IDisposable
             await _storage.Db.Insertable(new ReplayEntity
             {
                 MapId = map.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunId = id, Replay = $"replay-{id}",
-                CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+                CreatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             }).ExecuteCommandAsync();
         }
         var url = await _storage.GetReplayUrlAsync("surf_replay", stage == 0 ? RunType.Main : RunType.Stage, 0, 0, stage, null);

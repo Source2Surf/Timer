@@ -163,7 +163,7 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
             await second.GetPlayerStageRecords(player, mapA.MapName);
             var metadata = new ReplayEntity
             {
-                MapId = mapA.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunId = best.RunId, Replay = "test.replay", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+                MapId = mapA.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunId = best.RunId, Replay = "test.replay", CreatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             };
             Assert.True(await first.SaveReplayMetadataAsync(metadata));
             Assert.True(await first.SaveReplayMetadataAsync(metadata));
@@ -194,7 +194,7 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
                 .Where(x => deletedIds.Contains(x.RunId)).CountAsync());
             Assert.False(await first.SaveReplayMetadataAsync(new ReplayEntity
             {
-                MapId = mapA.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunId = best.RunId, Replay = "deleted-run.replay", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+                MapId = mapA.MapId, SteamId = unchecked((long)player.AsPrimitive()), RunId = best.RunId, Replay = "deleted-run.replay", CreatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             }));
             Assert.Equal(0, await first.Db.Queryable<ReplayEntity>().Where(x => x.MapId == mapA.MapId).CountAsync());
             Assert.Equal(2000u, (await first.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == playerValue).FirstAsync()).Points);
@@ -585,7 +585,7 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         var map = await store.GetMapInfo($"surf_batch_{tag}");
         foreach (var batch in Enumerable.Range(0, count).Chunk(500))
         {
-            await store.Db.Insertable(batch.Select(i => new PlayerEntity { SteamId = checked((long)(playerBase + (ulong)i)), Name = "Batch test", UpdatedAt = DateTime.UtcNow }).ToArray()).ExecuteCommandAsync();
+            await store.Db.Insertable(batch.Select(i => new PlayerEntity { SteamId = checked((long)(playerBase + (ulong)i)), Name = "Batch test", UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }).ToArray()).ExecuteCommandAsync();
             await store.Db.Insertable(batch.Select(i => new RunEntity
             {
                 MapId = map.MapId,
@@ -627,7 +627,7 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
 
     private static async Task CheckPrimitiveMapping(StorageServiceImpl store, ulong mapId, long player)
     {
-        var row = new PlayerTrackScoreEntity { SteamId = player, MapId = mapId, Style = 99, Track = 1, Points = 5, UpdatedAt = DateTime.UtcNow };
+        var row = new PlayerTrackScoreEntity { SteamId = player, MapId = mapId, Style = 99, Track = 1, Points = 5, UpdatedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
         await store.Db.Insertable(row).ExecuteCommandAsync();
         row.Points = 10;
         // This exact one-element batch lost the SteamId parameter with the custom
@@ -650,14 +650,14 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         store.Db.CodeFirst.As<LegacyReplayRow>(table).InitTables<LegacyReplayRow>();
         store.Db.Insertable(new LegacyReplayRow { SteamId = player.ToString(), MapId = 1, RunId = 2 }).AS(table).ExecuteCommand();
         store.MigrateReplaySteamIdColumn(table);
-        var row = store.Db.Queryable<ReplayEntity>().AS(table).Single();
+        var row = store.Db.Queryable<MigratedReplayRow>().AS(table).Single();
         Assert.Equal(player, row.SteamId);
         Assert.Equal(1UL, row.MapId);
         Assert.Equal(2UL, row.RunId);
         Assert.ThrowsAny<Exception>(() => store.Db.Insertable(row).AS(table).ExecuteCommand());
         // A second startup must be a no-op.
         store.MigrateReplaySteamIdColumn(table);
-        Assert.Equal(1, store.Db.Queryable<ReplayEntity>().AS(table).Count());
+        Assert.Equal(1, store.Db.Queryable<MigratedReplayRow>().AS(table).Count());
 
         if (store.Db.CurrentConnectionConfig.DbType == DbType.PostgreSQL)
         {
@@ -683,6 +683,17 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
         Assert.Equal(0, bestWrites);
         Assert.Equal(60, commands); // map lock, current bests, run insert; no existence probe
         output.WriteLine($"{store.Db.CurrentConnectionConfig.DbType}: 20 warm slower finishes: {watch.ElapsedMilliseconds} ms, {commands} SQL commands, no best-row writes.");
+    }
+
+    // The legacy table once its SteamId is migrated; its dates stay the old timestamps.
+    private sealed class MigratedReplayRow
+    {
+        [SugarColumn(IsPrimaryKey = true, ColumnDataType = "bigint")] public long SteamId { get; set; }
+        [SugarColumn(IsPrimaryKey = true)] public ulong MapId { get; set; }
+        [SugarColumn(IsPrimaryKey = true)] public ulong RunId { get; set; }
+        public string Replay { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 
     private sealed class LegacyReplayRow

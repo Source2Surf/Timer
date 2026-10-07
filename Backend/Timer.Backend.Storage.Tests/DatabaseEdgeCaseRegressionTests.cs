@@ -37,7 +37,7 @@ public sealed class DatabaseEdgeCaseRegressionTests
         foreach (var time in new[] { 1234.578125f, 10000.03125f })
             await TimesReadBackExactlyThroughTheirTicks(fixture, time);
         await TicksFollowAHandEditedTime(fixture);
-        await LegacyJoinDateMigrationIsAdditiveAndIdempotent(fixture);
+        await LegacyDatesMoveToUnixMilliseconds(fixture);
         await InvalidHistoricalTimesCanBeRepaired(fixture);
         if (type != DbType.Sqlite) await ConcurrentWritesPreserveJoinDatesAndCounters(fixture);
     }
@@ -121,7 +121,8 @@ public sealed class DatabaseEdgeCaseRegressionTests
         var legacy = Fixture.Player();
         var legacyId = checked((long)legacy.AsPrimitive());
         var old = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
-        await f.Store.Db.Insertable(new PlayerEntity { SteamId = legacyId, Name = "Legacy", UpdatedAt = old }).ExecuteCommandAsync();
+        await f.Store.Db.Insertable(new PlayerEntity { SteamId = legacyId, Name = "Legacy", UpdatedAtUnixMilliseconds = StorageServiceImpl.ToUnixTimeMilliseconds(old) })
+               .ExecuteCommandAsync();
         var legacyMap = await f.Store.GetMapInfo(Fixture.MapName());
         await f.Store.AddPlayerRecord(legacy, legacyMap.MapName, new RecordRequest { Time = 80 });
         await f.Store.RecalculateTrackScoresAsync(legacyMap.MapId, 0, 0, 1);
@@ -276,34 +277,105 @@ public sealed class DatabaseEdgeCaseRegressionTests
         Assert.Equal([85.5f, 95f], (await f.Store.GetMapRecords(map.MapName, 0, 0)).Select(x => x.Time));
     }
 
-    private static async Task LegacyJoinDateMigrationIsAdditiveAndIdempotent(Fixture f)
+    // Older databases kept these dates as SQL timestamps, without a time zone. Startup moves them into the unix-ms
+    // columns and drops them; a player without a join date joined when last updated.
+    private static async Task LegacyDatesMoveToUnixMilliseconds(Fixture f)
     {
-        var steamId = checked((long)Fixture.Player().AsPrimitive());
-        var old = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
-        await f.Store.Db.Insertable(new PlayerEntity { SteamId = steamId, Name = "Before migration", UpdatedAt = old }).ExecuteCommandAsync();
-        // Dedicated disposable test database only. Reproduce the populated pre-upgrade shape.
-        Assert.True(f.Store.Db.DbMaintenance.DropColumn("surf_players", nameof(PlayerEntity.JoinedAtUtc)));
-        try
+        var map = await f.Store.GetMapInfo(Fixture.MapName());
+        var player = Fixture.Player();
+        var steamId = checked((long)player.AsPrimitive());
+        var legacy = checked((long)Fixture.Player().AsPrimitive());
+        await Profile(f.Store, steamId, "Before migration");
+        await f.Store.Db.Insertable(new PlayerEntity { SteamId = legacy, Name = "No join date" }).ExecuteCommandAsync();
+        var (_, run, _) = await f.Store.AddPlayerRecord(player, map.MapName, new RecordRequest
         {
-            f.Store.MigratePlayerJoinDates();
-            var row = await f.Store.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == steamId).SingleAsync();
-            Assert.Equal(old, row.JoinedAtUtc);
-            Assert.Equal(old, row.UpdatedAt);
-            Assert.Equal("Before migration", row.Name);
-            var later = old.AddYears(5);
-            await f.Store.Db.Updateable<PlayerEntity>().SetColumns(x => x.UpdatedAt == later)
-                .Where(x => x.SteamId == steamId).ExecuteCommandAsync();
-            f.Store.MigratePlayerJoinDates();
-            f.Store.Init(startScoreRecalcWorker: false);
-            Assert.Equal(old, (await Profile(f.Store, steamId, "After migration")).JoinDateUtc);
-            if (f.Type != DbType.Sqlite) await f.Store.MigrateMasterPointsColumnsAsync();
-        }
-        finally
+            Time = 80, Checkpoints = [new () { CheckpointIndex = 1, Time = 40 }],
+        });
+        await f.Store.Db.Insertable(new ReplayEntity { MapId = map.MapId, SteamId = steamId, RunId = checked((ulong)run.Id), Replay = "legacy.replay" })
+               .ExecuteCommandAsync();
+
+        var updated = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        var joined  = new DateTime(2019, 6, 7, 8, 9, 10, DateTimeKind.Utc); // whole seconds: MySQL DATETIME drops milliseconds
+
+        // Dedicated disposable test database only. Reproduce the pre-upgrade shape: timestamps beside zeroed new columns.
+        var timestamp = f.Type switch { DbType.PostgreSQL => "timestamp", _ => "datetime" };
+        foreach (var (table, column) in LegacyDateColumns)
         {
-            // Restore schema even when an assertion or migration fails.
-            if (!f.Store.Db.DbMaintenance.IsAnyColumn("surf_players", nameof(PlayerEntity.JoinedAtUtc), false))
-                f.Store.MigratePlayerJoinDates();
+            Assert.True(f.Store.Db.DbMaintenance.AddColumn(table, new DbColumnInfo { DbColumnName = column, DataType = timestamp, IsNullable = true }));
         }
+
+        await f.Store.Db.Updateable<PlayerEntity>().SetColumns(x => x.JoinedAtUnixMilliseconds == 0).SetColumns(x => x.UpdatedAtUnixMilliseconds == 0)
+               .Where(x => x.SteamId == steamId || x.SteamId == legacy).ExecuteCommandAsync();
+        await f.Store.Db.Updateable(new LegacyPlayerDates { Id = (await PlayerRow(f, steamId)).Id, UpdatedAt = updated, JoinedAtUtc = joined })
+               .ExecuteCommandAsync();
+        await f.Store.Db.Updateable(new LegacyPlayerDates { Id = (await PlayerRow(f, legacy)).Id, UpdatedAt = updated }).ExecuteCommandAsync();
+        await f.Store.Db.Updateable<LegacyBestRunDates>().SetColumns(x => x.UpdatedAt == updated).Where(x => x.MapId == map.MapId).ExecuteCommandAsync();
+        await f.Store.Db.Updateable<LegacySegmentDates>().SetColumns(x => x.Date == updated).Where(x => x.RunId == checked((ulong)run.Id)).ExecuteCommandAsync();
+        await f.Store.Db.Updateable<LegacyReplayDates>().SetColumns(x => x.CreatedAt == joined).SetColumns(x => x.UpdatedAt == updated)
+               .Where(x => x.RunId == checked((ulong)run.Id)).ExecuteCommandAsync();
+
+        f.Store.MigrateLegacyDates();
+        f.Store.MigrateLegacyDates(); // a repeat does nothing
+
+        var updatedMs = StorageServiceImpl.ToUnixTimeMilliseconds(updated);
+        var joinedMs  = StorageServiceImpl.ToUnixTimeMilliseconds(joined);
+        var moved     = await PlayerRow(f, steamId);
+        Assert.Equal((joinedMs, updatedMs), (moved.JoinedAtUnixMilliseconds, moved.UpdatedAtUnixMilliseconds));
+        Assert.Equal(updatedMs, (await PlayerRow(f, legacy)).JoinedAtUnixMilliseconds);
+        Assert.Equal(updatedMs, (await f.Store.Db.Queryable<PlayerBestRunEntity>().Where(x => x.MapId == map.MapId).SingleAsync()).UpdatedAtUnixMilliseconds);
+        Assert.Equal(updatedMs, (await f.Store.Db.Queryable<RunSegmentEntity>().Where(x => x.RunId == checked((ulong)run.Id)).SingleAsync()).DateUnixMilliseconds);
+        var replay = await f.Store.Db.Queryable<ReplayEntity>().Where(x => x.RunId == checked((ulong)run.Id)).SingleAsync();
+        Assert.Equal((joinedMs, updatedMs), (replay.CreatedAtUnixMilliseconds, replay.UpdatedAtUnixMilliseconds));
+
+        foreach (var (table, column) in LegacyDateColumns)
+        {
+            Assert.False(f.Store.Db.DbMaintenance.IsAnyColumn(table, column, false), $"{table}.{column}");
+        }
+
+        Assert.Equal(joined, (await Profile(f.Store, steamId, "After migration")).JoinDateUtc);
+    }
+
+    private static readonly (string Table, string Column)[] LegacyDateColumns =
+    [
+        ("surf_players", "UpdatedAt"), ("surf_players", "JoinedAtUtc"), ("surf_player_best_runs", "UpdatedAt"),
+        ("surf_runs_segments", "Date"), ("surf_runs_replay", "CreatedAt"), ("surf_runs_replay", "UpdatedAt"),
+    ];
+
+    private static Task<PlayerEntity> PlayerRow(Fixture f, long steamId)
+        => f.Store.Db.Queryable<PlayerEntity>().Where(x => x.SteamId == steamId).SingleAsync();
+
+    [SugarTable("surf_players")]
+    private sealed class LegacyPlayerDates
+    {
+        [SugarColumn(IsPrimaryKey = true)] public ulong Id { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+        public DateTime? JoinedAtUtc { get; set; }
+    }
+
+    [SugarTable("surf_player_best_runs")]
+    private sealed class LegacyBestRunDates
+    {
+        [SugarColumn(IsPrimaryKey = true)] public ulong Id { get; set; }
+        public ulong MapId { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
+
+    [SugarTable("surf_runs_segments")]
+    private sealed class LegacySegmentDates
+    {
+        [SugarColumn(IsPrimaryKey = true)] public ulong Id { get; set; }
+        public ulong RunId { get; set; }
+        public DateTime? Date { get; set; }
+    }
+
+    [SugarTable("surf_runs_replay")]
+    private sealed class LegacyReplayDates
+    {
+        [SugarColumn(IsPrimaryKey = true, ColumnDataType = "bigint")] public long SteamId { get; set; }
+        [SugarColumn(IsPrimaryKey = true)] public ulong MapId { get; set; }
+        [SugarColumn(IsPrimaryKey = true)] public ulong RunId { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
     }
 
     private static async Task InvalidHistoricalTimesCanBeRepaired(Fixture f)
