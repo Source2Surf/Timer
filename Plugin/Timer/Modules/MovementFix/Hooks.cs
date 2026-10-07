@@ -67,9 +67,10 @@ internal unsafe partial class MovementFixModule
     private static nint g_pPhysicsQuery;
     private static nint CTraceFilterPlayerMovementCS_vtable;
     private static nint CCSPlayerPawn_vtable;
-    private static nint CTriggerTeleport_vtable;
-
     private static int CBaseTrigger_PassesTriggerFilters_index;
+    private static int CBaseEntity_StartTouch_index;
+    private static int CBaseEntity_Touch_index;
+    private static int CBaseEntity_EndTouch_index;
 
     private static int CPlayerPawnComponent_m_pChainEntity_offset;
     private static int CBaseEntity_m_lifeState_offset;
@@ -85,6 +86,7 @@ internal unsafe partial class MovementFixModule
     private static int CCSPlayer_MovementServices_m_bDucked_offset;
     private static int CBaseTrigger_m_hTouchingEntities_offset;
     private static int CBaseTrigger_m_bDisabled_offset;
+    private static int CEntityIdentity_m_designerName_offset;
     private static int CCSPlayerPawn_m_angEyeAngles_offset;
 
     private const int CGlobalVars_frametime_offset = 0x34;
@@ -120,6 +122,7 @@ internal unsafe partial class MovementFixModule
         CCSPlayer_MovementServices_m_bDucked_offset = schema.GetNetVarOffset("CCSPlayer_MovementServices", "m_bDucked");
         CBaseTrigger_m_hTouchingEntities_offset     = schema.GetNetVarOffset("CBaseTrigger", "m_hTouchingEntities");
         CBaseTrigger_m_bDisabled_offset             = schema.GetNetVarOffset("CBaseTrigger", "m_bDisabled");
+        CEntityIdentity_m_designerName_offset       = schema.GetNetVarOffset("CEntityIdentity", "m_designerName");
         CCSPlayerPawn_m_angEyeAngles_offset         = schema.GetNetVarOffset("CCSPlayerPawn", "m_angEyeAngles");
 
         // All of these come from ModSharp's own gamedata.
@@ -215,13 +218,17 @@ internal unsafe partial class MovementFixModule
         }
 
         gameData.GetVFuncIndex("CBaseTrigger::PassesTriggerFilters", out CBaseTrigger_PassesTriggerFilters_index);
-        server.TryGetVirtualTableByName("CTriggerTeleport", out CTriggerTeleport_vtable);
+        gameData.GetVFuncIndex("CBaseEntity::StartTouch", out CBaseEntity_StartTouch_index);
+        gameData.GetVFuncIndex("CBaseEntity::Touch", out CBaseEntity_Touch_index);
+        gameData.GetVFuncIndex("CBaseEntity::EndTouch", out CBaseEntity_EndTouch_index);
 
         _canTriggerJump = _canTrace
                           && _canSetVelocity
-                          && CTriggerTeleport_Teleport != null
-                          && CTriggerTeleport_vtable != nint.Zero
-                          && CBaseTrigger_PassesTriggerFilters_index > 0;
+                          && CEntityIdentity_m_designerName_offset > 0
+                          && CBaseTrigger_PassesTriggerFilters_index > 0
+                          && CBaseEntity_StartTouch_index > 0
+                          && CBaseEntity_Touch_index > 0
+                          && CBaseEntity_EndTouch_index > 0;
 
         if (_canTriggerJump)
         {
@@ -503,6 +510,14 @@ internal unsafe partial class MovementFixModule
         return slot < PlayerSlot.MaxPlayerCount ? slot : -1;
     }
 
+    // EF_IS_MARKED_FOR_DELETION in CEntityIdentity's flags.
+    private static bool IsMarkedForDeletion(nint entity)
+    {
+        var identity = *(nint*) (entity + 0x10);
+
+        return identity == nint.Zero || (*(uint*) (identity + 0x30) & 0x200) != 0;
+    }
+
     // CEntityIdentity::GetRefEHandle.
     private static uint GetRefHandle(nint entity)
     {
@@ -594,7 +609,7 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
-        RecordLanding(slot, mv->AbsOrigin, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
+        RecordLanding(slot, mv->AbsOrigin, mv->Velocity, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
 
         // TryPlayerMove already clipped it.
         if (step.Moved && !step.Collided)

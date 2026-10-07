@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Runtime.InteropServices;
 using Sharp.Shared.Enums;
 using Sharp.Shared.HookParams;
@@ -26,16 +27,17 @@ using Source2Surf.Timer.Native;
 namespace Source2Surf.Timer.Modules;
 // ReSharper restore CheckNamespace
 
-// rngfix's trigger jump fix, trigger_teleport only for now. CS2 lands a player while they still hover up to 2 units
-// above the ground, and triggers fire from where the player ends the tick, so landing and jumping straight away skips
-// triggers lying in that gap. After the tick, run the teleports there that the game won't touch itself.
+// rngfix's trigger jump fix. CS2 lands a player while they still hover up to 2 units above the ground, and triggers fire
+// from where the player ends the tick, so landing and jumping straight away skips triggers lying in that gap. After the
+// tick, touch the ones there the game won't touch itself, the way FinishMove touches what the move ran into.
 internal unsafe partial class MovementFixModule
 {
     private const int MaxTriggerHits = 16;
 
-    private static readonly int[]    _landTick   = new int[PlayerSlot.MaxPlayerCount];
-    private static readonly Vector[] _landOrigin = new Vector[PlayerSlot.MaxPlayerCount];
-    private static readonly bool[]   _landDucked = new bool[PlayerSlot.MaxPlayerCount];
+    private static readonly int[]    _landTick     = new int[PlayerSlot.MaxPlayerCount];
+    private static readonly Vector[] _landOrigin   = new Vector[PlayerSlot.MaxPlayerCount];
+    private static readonly Vector[] _landVelocity = new Vector[PlayerSlot.MaxPlayerCount];
+    private static readonly bool[]   _landDucked   = new bool[PlayerSlot.MaxPlayerCount];
 
     // Filled by TriggerFilterShouldHitEntity while a trigger query runs.
     private static readonly nint[] _triggerHits = new nint[MaxTriggerHits];
@@ -57,11 +59,31 @@ internal unsafe partial class MovementFixModule
         _triggerFilterVtable = null;
     }
 
-    private static void RecordLanding(int slot, Vector origin, bool ducked)
+    // Teleports, boosters, and zones and map logic.
+    private static bool IsTrigger(nint entity)
     {
-        _landTick[slot]   = _moveTick[slot];
-        _landOrigin[slot] = origin;
-        _landDucked[slot] = ducked;
+        var identity = *(nint*) (entity + 0x10);
+        var name     = identity != nint.Zero ? *(byte**) (identity + CEntityIdentity_m_designerName_offset) : null;
+
+        if (name == null)
+        {
+            return false;
+        }
+
+        var classname = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(name);
+
+        return classname.SequenceEqual("trigger_teleport"u8)
+               || classname.SequenceEqual("trigger_push"u8)
+               || classname.SequenceEqual("trigger_multiple"u8)
+               || classname.SequenceEqual("trigger_once"u8);
+    }
+
+    private static void RecordLanding(int slot, Vector origin, Vector velocity, bool ducked)
+    {
+        _landTick[slot]     = _moveTick[slot];
+        _landOrigin[slot]   = origin;
+        _landVelocity[slot] = velocity;
+        _landDucked[slot]   = ducked;
     }
 
     // Movement has been written back to the pawn by PostThink, so a teleport sticks.
@@ -139,19 +161,42 @@ internal unsafe partial class MovementFixModule
         {
             var trigger = gapHits[i];
 
-            if (Contains(currentHits, currentCount, trigger) || !CanTouch(trigger, pawn, handle))
+            if (!Contains(currentHits, currentCount, trigger) && CanTouch(trigger, pawn, handle))
             {
-                continue;
-            }
-
-            RunTriggerTeleport(trigger, pawn, out var teleported);
-
-            if (teleported)
-            {
-                return;
+                TouchOnce(trigger, pawn, _landVelocity[slot]);
             }
         }
     }
+
+    // ProcessImpacts: StartTouch and Touch at the velocity the player had then, EndTouch both ways, and keep any
+    // velocity the touch gave.
+    private static void TouchOnce(nint trigger, nint pawn, Vector velocity)
+    {
+        if (IsMarkedForDeletion(trigger) || IsMarkedForDeletion(pawn))
+        {
+            return;
+        }
+
+        var kept = *CBaseEntity_GetAbsVelocity(pawn);
+        CBaseEntity_SetAbsVelocity(pawn, &velocity);
+
+        CallTouch(trigger, CBaseEntity_StartTouch_index, pawn);
+        CallTouch(trigger, CBaseEntity_Touch_index, pawn);
+        CallTouch(trigger, CBaseEntity_EndTouch_index, pawn);
+        CallTouch(pawn, CBaseEntity_EndTouch_index, trigger);
+
+        var touched = *CBaseEntity_GetAbsVelocity(pawn);
+
+        if (touched != velocity)
+        {
+            kept = touched;
+        }
+
+        CBaseEntity_SetAbsVelocity(pawn, &kept);
+    }
+
+    private static void CallTouch(nint entity, int index, nint other)
+        => ((delegate* unmanaged<nint, nint, void>) (*(nint**) entity)[index])(entity, other);
 
     // Every trigger the hull overlaps at point.
     private static int CollectTriggers(TraceShapeRay* ray, Vector point, nint* hits)
@@ -233,7 +278,7 @@ internal unsafe partial class MovementFixModule
     [UnmanagedCallersOnly]
     private static bool TriggerFilterShouldHitEntity(CTraceFilter* filter, nint entity)
     {
-        if (entity != nint.Zero && *(nint*) entity == CTriggerTeleport_vtable && _triggerHitCount < MaxTriggerHits)
+        if (entity != nint.Zero && _triggerHitCount < MaxTriggerHits && IsTrigger(entity))
         {
             _triggerHits[_triggerHitCount++] = entity;
         }

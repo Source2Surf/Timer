@@ -101,7 +101,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
         timer_triggerjump = bridge.ConVarManager.CreateConVar("timer_triggerjump",
                                                               true,
-                                                              "Fire trigger_teleports lying in the gap between a landing player and the ground")
+                                                              "Touch the teleports, pushes and trigger_multiples (zones included) lying in the gap between a landing player and the ground")
             !;
 
         timer_teleport_keep_angles = bridge.ConVarManager.CreateConVar("timer_teleport_keep_angles",
