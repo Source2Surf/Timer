@@ -33,10 +33,11 @@ internal interface IMovementFixModule
 }
 
 // Fixes for stock CS2 movement bugs, one file per fix under MovementFix/.
-internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, IGameListener
+internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, IGameListener, IEntityListener
 {
     private readonly InterfaceBridge            _bridge;
     private readonly IInlineHookManager         _inlineHookManager;
+    private readonly IEventHookManager          _eventHook;
     private readonly ILogger<MovementFixModule> _logger;
 
     private static IMovementExtension _movementExtension = null!;
@@ -53,6 +54,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private readonly IConVar timer_stairs;
     private readonly IConVar timer_triggerjump;
     private readonly IConVar timer_teleport_keep_angles;
+    private readonly IConVar timer_mpbhops;
 
     private readonly IConVar sv_standable_normal;
     private readonly IConVar? sv_stepsize;
@@ -66,6 +68,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private static bool  _stairsEnabled;
     private static bool  _triggerJumpEnabled;
     private static bool  _keepTeleportAnglesEnabled;
+    private static bool  _mpbhopsEnabled;
     private static float _standableNormal;
     private static float _stepSize;
 
@@ -78,12 +81,14 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
     public MovementFixModule(InterfaceBridge            bridge,
                              IInlineHookManager         inlineHookManager,
+                             IEventHookManager          eventHook,
                              ILogger<MovementFixModule> logger,
                              IMovementExtension         movementExtension,
                              IMapInfoModule             mapInfo)
     {
         _bridge            = bridge;
         _inlineHookManager = inlineHookManager;
+        _eventHook         = eventHook;
         _logger            = logger;
         _movementExtension = movementExtension;
         _mapInfo           = mapInfo;
@@ -124,6 +129,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
                                                                        "Keep players' view angles and velocity when a trigger_teleport moves them, instead of turning both to the destination")
             !;
 
+        timer_mpbhops = bridge.ConVarManager.CreateConVar("timer_mpbhops",
+                                                          true,
+                                                          "On bhop maps, keep bhop platforms still and teleport or boost each player as the platform would have (from the next map)")
+            !;
+
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
         // Development-only, so only a full search finds it.
         sv_stepsize         = bridge.ConVarManager.FindConVar("sv_stepsize", true);
@@ -141,6 +151,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.InstallChangeHook(timer_stairs, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_teleport_keep_angles, OnConVarChanged);
+        _bridge.ConVarManager.InstallChangeHook(timer_mpbhops, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(sv_standable_normal, OnConVarChanged);
 
         if (sv_stepsize is not null)
@@ -153,6 +164,8 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerPostThink.InstallForward(OnPlayerPostThink);
         _bridge.ModSharp.InstallGameListener(this);
+        _bridge.EntityManager.InstallEntityListener(this);
+        _eventHook.ListenEvent("player_jump", OnBhopBlockJump);
 
         return true;
     }
@@ -160,6 +173,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     public void Shutdown()
     {
         _bridge.ModSharp.RemoveGameListener(this);
+        _bridge.EntityManager.RemoveEntityListener(this);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerPostThink.RemoveForward(OnPlayerPostThink);
 
@@ -170,6 +184,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.RemoveChangeHook(timer_stairs, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_teleport_keep_angles, OnConVarChanged);
+        _bridge.ConVarManager.RemoveChangeHook(timer_mpbhops, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(sv_standable_normal, OnConVarChanged);
 
         if (sv_stepsize is not null)
@@ -183,14 +198,23 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
             FreeTriggerFilterVtable();
         }
 
-        _globals = nint.Zero;
+        _globals    = nint.Zero;
+        _globalVars = null;
     }
 
     public void OnGameInit()
-        => _globals = _bridge.ModSharp.GetGlobals().GetAbsPtr();
+    {
+        _globalVars = _bridge.ModSharp.GetGlobals();
+        _globals    = _globalVars.GetAbsPtr();
+        ResetBhopBlocks();
+    }
 
     public void OnGameShutdown()
-        => _globals = nint.Zero;
+    {
+        _globals    = nint.Zero;
+        _globalVars = null;
+        ResetBhopBlocks();
+    }
 
     public int ListenerVersion  => IGameListener.ApiVersion;
     public int ListenerPriority => 0;
@@ -207,6 +231,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _stairsEnabled             = timer_stairs.GetBool();
         _triggerJumpEnabled        = timer_triggerjump.GetBool();
         _keepTeleportAnglesEnabled = timer_teleport_keep_angles.GetBool();
+        _mpbhopsEnabled            = timer_mpbhops.GetBool();
         _standableNormal           = sv_standable_normal.GetFloat();
         _stepSize                  = sv_stepsize?.GetFloat() ?? 18.0f;
     }
@@ -221,6 +246,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         Array.Fill(_teleportTick, int.MinValue);
         Array.Fill(_landTick, int.MinValue);
         Array.Fill(_touchingCount, 0);
+        ResetBhopBlocks();
     }
 
     private static HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      @params,

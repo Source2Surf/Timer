@@ -65,18 +65,18 @@ internal unsafe partial class MovementFixModule
         _triggerFilterVtable = null;
     }
 
-    // Teleports, boosters, and zones and map logic.
-    private static bool IsTrigger(nint entity)
+    private static ReadOnlySpan<byte> DesignerName(nint entity)
     {
         var identity = *(nint*) (entity + 0x10);
         var name     = identity != nint.Zero ? *(byte**) (identity + CEntityIdentity_m_designerName_offset) : null;
 
-        if (name == null)
-        {
-            return false;
-        }
+        return name == null ? default : MemoryMarshal.CreateReadOnlySpanFromNullTerminated(name);
+    }
 
-        var classname = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(name);
+    // Teleports, boosters, and zones and map logic.
+    private static bool IsTrigger(nint entity)
+    {
+        var classname = DesignerName(entity);
 
         return classname.SequenceEqual("trigger_teleport"u8)
                || classname.SequenceEqual("trigger_push"u8)
@@ -97,6 +97,11 @@ internal unsafe partial class MovementFixModule
         int slot = @params.Client.Slot;
 
         EndTouches(slot);
+
+        if (_bhopBlocks.Count > 0 && !_isFakeClient[slot])
+        {
+            ApplyBhopBlocks(@params.Pawn.GetAbsPtr(), slot);
+        }
 
         if (_landTick[slot] != _moveTick[slot])
         {
