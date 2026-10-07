@@ -932,6 +932,35 @@ public sealed class HudLocaleTests
         }
     }
 
+    // The timer's lines are formatted straight into a builder: every translation of one with up to two values must
+    // fill there as string formatting would, not fall back to English.
+    [Fact]
+    public void EveryTwoValueTranslationFillsInPlace()
+    {
+        foreach (var (key, translations) in Locale)
+        {
+            foreach (var (language, text) in translations)
+            {
+                if (Regex.Matches(text, @"{(\d+)}").Any(m => int.Parse(m.Groups[1].Value) > 1))
+                {
+                    continue;
+                }
+
+                var sb = Cysharp.Text.ZString.CreateStringBuilder(true);
+
+                try
+                {
+                    Assert.True(HudTemplate.TryAppend(ref sb, text, new TextArg("a"), new TextArg("b"), 2), $"{key} ({language})");
+                    Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, text, "a", "b"), sb.ToString());
+                }
+                finally
+                {
+                    sb.Dispose();
+                }
+            }
+        }
+    }
+
     // How Timer.Localization gets templates out of LocalizerManager, which only formats.
     [Fact]
     public void TemplatesFormattedWithTheirOwnPlaceholdersComeBackUnchanged()

@@ -64,6 +64,34 @@ internal readonly struct HudTr(Func<string, string?>? lookup)
         }
     }
 
+    /// <summary>
+    ///     The text appended to <paramref name="sb" />, its {n} written straight from the values; a translation whose
+    ///     placeholders don't fit is taken back and the English written instead.
+    /// </summary>
+    public void Format<T1>(ref Utf16ValueStringBuilder sb, HudText text, T1 a)
+        where T1 : struct, IHudArg
+        => Append(ref sb, text, a, default(NoArg), 1);
+
+    public void Format<T1, T2>(ref Utf16ValueStringBuilder sb, HudText text, T1 a, T2 b)
+        where T1 : struct, IHudArg
+        where T2 : struct, IHudArg
+        => Append(ref sb, text, a, b, 2);
+
+    private void Append<T1, T2>(ref Utf16ValueStringBuilder sb, HudText text, in T1 a, in T2 b, int args)
+        where T1 : struct, IHudArg
+        where T2 : struct, IHudArg
+    {
+        var start = sb.Length;
+
+        if (HudTemplate.TryAppend(ref sb, this[text], a, b, args))
+        {
+            return;
+        }
+
+        sb.Remove(start, sb.Length - start);
+        HudTemplate.TryAppend(ref sb, text.English, a, b, args);
+    }
+
     public string Format<T1, T2, T3>(HudText text, T1 a, T2 b, T3 c)
     {
         try
