@@ -983,6 +983,7 @@ internal partial class HudModule
 
         if (style < 0 || track < 0)
         {
+            p.RecordsDrawn = default;
             w.Text("Sr", "sr", p.Tr.Format(HudTexts.InfoSr, p.Tr[HudTexts.NotAvailable]));
             w.Text("Pb", "pb", p.Tr.Format(HudTexts.InfoPb, p.Tr[HudTexts.NotAvailable]));
 
@@ -990,12 +991,23 @@ internal partial class HudModule
         }
 
         var wr = _recordModule.GetWR(style, track);
+        var pb = _recordModule.GetPlayerRecord(pbSlot, style, track);
+
+        // Formatted again only when a record, the boards (the PB's rank) or the language may have changed.
+        var drawn = (true, style, track, wr, pb, _recordModule.RecordsVersion, p.TrEpoch);
+
+        if (p.RecordsDrawn == drawn)
+        {
+            return;
+        }
+
+        p.RecordsDrawn = drawn;
+
         w.Text("Sr",
                "sr",
                p.Tr.Format(HudTexts.InfoSr,
                            wr is null ? p.Tr[HudTexts.NotAvailable] : ZString.Concat(HudFormat.FormatTime(wr.Time), " (", wr.PlayerName, ')')));
 
-        var pb = _recordModule.GetPlayerRecord(pbSlot, style, track);
         w.Text("Pb",
                "pb",
                p.Tr.Format(HudTexts.InfoPb,
@@ -1032,7 +1044,22 @@ internal partial class HudModule
         var limit   = int.Parse(p.Setting(HudOptions.SplitRows), CultureInfo.InvariantCulture);
         var compare = p.Settings[HudOptions.Compare.Index];
         var fade    = p.IsOn(HudOptions.SplitFade);
-        var tag     = compare == HudOptions.ComparePersonalBest ? p.Tr[HudTexts.TagPb] : p.Tr[HudTexts.TagSr];
+
+        // The rows are formatted again only when a split arrived or was cleared, or a setting or the language changed.
+        var drawn = (true, run, run?.SplitSerial ?? 0, run?.SplitCleared ?? 0, compare, limit, fade, p.MenuOpen, p.TrEpoch);
+
+        if (drawn != p.SplitsDrawn)
+        {
+            p.SplitsDrawn = drawn;
+            WriteSplitRows(w, p, run, limit, compare, fade);
+        }
+
+        AnimateSplit(w, p, run);
+    }
+
+    private static void WriteSplitRows(HudWriter w, HudPlayer p, HudPlayer? run, int limit, int compare, bool fade)
+    {
+        var tag = compare == HudOptions.ComparePersonalBest ? p.Tr[HudTexts.TagPb] : p.Tr[HudTexts.TagSr];
 
         for (var i = 0; i < HudPlayer.MaxSplits; i++)
         {
@@ -1078,7 +1105,10 @@ internal partial class HudModule
         {
             w.Text("SplitsEmpty", "text", p.Tr[HudTexts.SplitsEmpty]);
         }
+    }
 
+    private static void AnimateSplit(HudWriter w, HudPlayer p, HudPlayer? run)
+    {
         // Each HUD animates a new split once, the runner's and every spectator's alike; not one that was cleared, or
         // what a newly watched player already had.
         if (run is not null && (p.SplitsFrom != run || p.SplitsSeen != run.SplitSerial))

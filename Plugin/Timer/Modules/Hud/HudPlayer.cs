@@ -238,7 +238,8 @@ internal sealed class HudPlayer
         Slot = slot;
 
         // Spread players over frames so their refreshes don't all land at once.
-        NextHudAt = now + ((slot % 6) / 64f);
+        NextHudAt   = now + ((slot % 6) / 64f);
+        TrSettledAt = now + 30f;
 
         Array.Fill(UnplaceAt, float.NaN);
     }
@@ -258,8 +259,21 @@ internal sealed class HudPlayer
     public readonly Dictionary<(string Panel, string Name), bool>   SentClass    = [];
     public readonly Dictionary<(string Panel, string Prefix), string> SentNumbered = [];
 
+    // ---- what the splits and records lines were last drawn from, so unchanged ones aren't formatted again
+    public (bool Drawn, HudPlayer? Run, int Serial, int Cleared, int Compare, int Limit, bool Fade, bool MenuOpen, int Epoch) SplitsDrawn;
+    public (bool Drawn, int Style, int Track, RunRecord? Wr, RunRecord? Pb, int Version, int Epoch)                        RecordsDrawn;
+
+    // ---- this player's translations. Their language arrives a second or so after joining (a cl_language query)
+    // and can't change after, so the cache is only cleared until TrSettledAt.
+    public readonly Dictionary<string, string?> TrCache = [];
+    public          float                       TrCacheUntil;
+    public          float                       TrSettledAt;
+    public          int                         TrEpoch;
+
     public void ForgetSent()
     {
+        SplitsDrawn  = default;
+        RecordsDrawn = default;
         SentText.Clear();
         SentClass.Clear();
         SentNumbered.Clear();

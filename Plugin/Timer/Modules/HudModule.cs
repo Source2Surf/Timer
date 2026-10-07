@@ -232,7 +232,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         }
 
         var p = new HudPlayer(slot, _bridge.GlobalVars.CurTime);
-        p.Tr           = new HudTr(key => _localization.GetText(slot, key));
+        p.Tr           = new HudTr(key => p.TrCache.TryGetValue(key, out var text) ? text : p.TrCache[key] = _localization.GetText(slot, key));
         _players[slot] = p;
 
         LoadSettings(p, client.SteamId);
@@ -483,6 +483,8 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         }
     }
 
+    private const float TranslationRefreshSeconds = 2f;
+
     private void Refresh(HudPlayer p, float now)
     {
         // Only for a fully connected player, like ModSharp's transmit example: the data is ready by then.
@@ -490,6 +492,13 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
             || controller.ConnectedState != PlayerConnectedState.PlayerConnected)
         {
             return;
+        }
+
+        if (now >= p.TrCacheUntil && now < p.TrSettledAt)
+        {
+            p.TrCache.Clear();
+            p.TrCacheUntil = now + TranslationRefreshSeconds;
+            p.TrEpoch++;
         }
 
         // A dead pawn stops running commands, so the run-command hook can't end its drag (and free the view): here.
