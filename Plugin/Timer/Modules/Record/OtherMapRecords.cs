@@ -25,13 +25,15 @@ using Source2Surf.Timer.Shared.Models;
 namespace Source2Surf.Timer.Modules.Record;
 
 /// <summary>
-///     Other maps' leaderboards for the leaderboard panel: the few viewed last, loaded on first read and refreshed in
-///     the background once a minute old. Game thread only.
+///     Other maps' leaderboards for the leaderboard panel: the few viewed last, loaded on first read, refreshed in
+///     the background once five minutes old, and dropped after ten unused (a big map's boards are tens of MB). Game
+///     thread only.
 /// </summary>
 internal sealed class OtherMapRecords
 {
-    internal const int  MaxMaps = 8;
-    internal const long StaleMs = 60_000;
+    internal const int  MaxMaps = 4;
+    internal const long StaleMs = 300_000;
+    internal const long EvictMs = 600_000;
     internal const long RetryMs = 10_000;
 
     private sealed class Entry
@@ -78,6 +80,13 @@ internal sealed class OtherMapRecords
     public IReadOnlyList<(int Style, int Track, int Stage)>? GetBoards(string map)
         => Touch(map) is { Boards: not null } entry ? entry.Keys : null;
 
+    /// <summary>Forgets every map: a new map is being played.</summary>
+    public void Clear()
+    {
+        _maps.Clear();
+        Version++;
+    }
+
     /// <summary>Drops a deleted run now, and reloads the map for the player's next run.</summary>
     public void OnRunDeleted(string map, long runId)
     {
@@ -104,6 +113,14 @@ internal sealed class OtherMapRecords
     private Entry Touch(string map)
     {
         var now = _clock();
+
+        foreach (var (name, unused) in _maps)
+        {
+            if (now - unused.UsedAt >= EvictMs)
+            {
+                _maps.Remove(name);
+            }
+        }
 
         if (!_maps.TryGetValue(map, out var entry))
         {
@@ -173,14 +190,48 @@ internal sealed class OtherMapRecords
                     return;
                 }
 
-                entry.Boards   = boards;
-                entry.Keys     = [.. boards.Keys.Order()];
                 entry.LoadedAt = _clock();
+
+                // A refresh that found nothing new doesn't redraw every open panel.
+                if (entry.Boards is { } held && SameBoards(held, boards))
+                {
+                    return;
+                }
+
+                entry.Boards = boards;
+                entry.Keys   = [.. boards.Keys.Order()];
                 Version++;
             }).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
         }
+    }
+
+    private static bool SameBoards(Dictionary<(int style, int track, int stage), List<RunRecord>> held,
+                                   Dictionary<(int style, int track, int stage), List<RunRecord>> loaded)
+    {
+        if (held.Count != loaded.Count)
+        {
+            return false;
+        }
+
+        foreach (var (key, records) in loaded)
+        {
+            if (!held.TryGetValue(key, out var old) || old.Count != records.Count)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < records.Count; i++)
+            {
+                if (old[i].Id != records[i].Id)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }

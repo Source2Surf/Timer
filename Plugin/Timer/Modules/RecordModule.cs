@@ -249,6 +249,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
     {
         var currentMapName = _bridge.CurrentMapName;
         _mapCache.Clear();
+        _otherMaps.Clear();
         _playerCache.ClearAll();
         var load = _mapCache.BeginLoad();
 
@@ -329,6 +330,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
         }
 
         _mapCache.Clear();
+        _otherMaps.Clear();
         _playerCache.ClearAll();
     }
 

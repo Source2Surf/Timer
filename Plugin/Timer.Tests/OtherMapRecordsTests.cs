@@ -161,4 +161,38 @@ public sealed class OtherMapRecordsTests
         Assert.NotEqual(version, cache.Version);
         Assert.Equal([(0, 0, 3), (1, 2, 0)], cache.GetBoards());
     }
+
+    [Fact]
+    public async Task ARefreshThatFindsNothingNewDoesntRedraw()
+    {
+        var cache = Create();
+        cache.GetRecords("surf_a", 0, 0, 0);
+        RunRecord a = Run(1, 80), b = Run(2, 90);
+        await Complete(0, [a, b]);
+        var version = cache.Version;
+
+        _now += OtherMapRecords.StaleMs;
+        cache.GetRecords("surf_a", 0, 0, 0);
+        await Complete(1, [b, a]);
+        Assert.Equal(version, cache.Version);
+
+        _now += OtherMapRecords.StaleMs;
+        cache.GetRecords("surf_a", 0, 0, 0);
+        await Complete(2, [a, b, Run(3, 70)]);
+        Assert.NotEqual(version, cache.Version);
+    }
+
+    [Fact]
+    public async Task AMapUnusedForLongIsDropped()
+    {
+        var cache = Create();
+        cache.GetRecords("surf_a", 0, 0, 0);
+        await Complete(0, [Run(1, 80)]);
+
+        _now += OtherMapRecords.EvictMs;
+        cache.GetRecords("surf_b", 0, 0, 0);
+
+        Assert.Null(cache.GetRecords("surf_a", 0, 0, 0));
+        Assert.Equal("surf_a", _fetches[^1].Map);
+    }
 }
