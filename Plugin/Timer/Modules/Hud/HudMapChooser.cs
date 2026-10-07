@@ -57,7 +57,10 @@ internal partial class HudModule
     private static string[] NominateIds(string part)
         => Enumerable.Range(0, NominateRows).Select(i => ZString.Concat("Nom", i, part)).ToArray();
 
-    private void UpdateMapChooser(HudWriter w, HudPlayer p, float now)
+    // Spectators vote with use: their clients don't send the inspect key (MapChooserModule.Input).
+    private const string SpectatorSelectKey = "use";
+
+    private void UpdateMapChooser(HudWriter w, HudPlayer p, float now, bool spectating)
     {
         var c       = p.Chooser;
         var version = _mapChooser.VersionFor(p.Slot);
@@ -69,7 +72,11 @@ internal partial class HudModule
             SyncNominateMenu(p, _mapChooser.GetNominateMenu(p.Slot));
         }
 
-        UpdateVotePanel(w, p, now, changed);
+        // Joining or leaving the spectators changes the select key.
+        var keysChanged = spectating != c.VoteSpectating;
+        c.VoteSpectating = spectating;
+
+        UpdateVotePanel(w, p, now, changed || keysChanged);
 
         w.Class("NMenu", "Closed", c.Menu is null);
 
@@ -177,10 +184,11 @@ internal partial class HudModule
             w.Class(VoteRowIds[i], "cur", i == cursor);
         }
 
-        var keys = _mapChooser.VoteKeys;
+        var keys   = _mapChooser.VoteKeys;
+        var select = c.VoteSpectating ? SpectatorSelectKey : keys.Select;
         w.Text("VoteKeyUp", "editkey", ZString.Concat('%', keys.Up, '%'));
         w.Text("VoteKeyDown", "editkey", ZString.Concat('%', keys.Down, '%'));
-        w.Text("VoteKeySelect", "editkey", ZString.Concat('%', keys.Select, '%'));
+        w.Text("VoteKeySelect", "editkey", ZString.Concat('%', select, '%'));
 
         var nonce = c.VoteRecheck ? LocsNonce : "";
 
@@ -194,7 +202,7 @@ internal partial class HudModule
         w.Text("VoteNoteExample", "text", ZString.Concat("bind f3 ", keys.Up));
         w.Text("VoteCmdUp", "text", keys.Up);
         w.Text("VoteCmdDown", "text", keys.Down);
-        w.Text("VoteCmdVote", "text", keys.Select);
+        w.Text("VoteCmdVote", "text", select);
         w.Text("VoteNoteUp", "text", tr[HudTexts.VoteNoteUp]);
         w.Text("VoteNoteDown", "text", tr[HudTexts.VoteNoteDown]);
         w.Text("VoteNoteVote", "text", tr[HudTexts.VoteNoteVote]);

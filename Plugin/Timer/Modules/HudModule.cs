@@ -655,8 +655,9 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
 
         if (pawn.AsObserver() is { } observer)
         {
-            // Spectating the central replay bot, E opens the replay menu.
+            // Spectating the central replay bot, E opens the replay menu, unless it's voting for the next map.
             if ((param.KeyButtons & param.ChangedButtons & UserCommandButtons.Use) != 0
+                && _mapChooser.Vote is null
                 && _central.CentralBot is { } central
                 && ObservedSlot(observer) == central.Slot)
             {

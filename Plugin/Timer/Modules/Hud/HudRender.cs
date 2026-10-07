@@ -201,7 +201,7 @@ internal partial class HudModule
             UpdateProfile(w, p);
         }
 
-        UpdateMapChooser(w, p, now);
+        UpdateMapChooser(w, p, now, controller.GetPawn()?.AsObserver() is not null);
         UpdateZones(w, p);
         UpdateLeaderboard(w, p);
         UpdateStyles(w, p);

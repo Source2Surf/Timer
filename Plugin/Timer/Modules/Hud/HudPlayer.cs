@@ -174,6 +174,7 @@ internal sealed class HudChooser
     public bool          VoteShown;
     public bool          VoteRecheck;  // flipped each time the vote panel shows, so its key caps look their keys up again
     public int           VoteSecond  = -1; // the countdown as last drawn, so it's only formatted when it changes
+    public bool          VoteSpectating;   // whose select key was last drawn: a spectator's or a player's
 }
 
 internal sealed class HudProfile

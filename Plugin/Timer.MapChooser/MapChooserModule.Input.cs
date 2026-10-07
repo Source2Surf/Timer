@@ -59,7 +59,8 @@ public sealed partial class MapChooserModule
             return;
         }
 
-        var select = _config.SelectButton;
+        // A spectator's client doesn't send the inspect key, so spectators vote with use too (the HUD shows it).
+        var select = param.Pawn.AsObserver() is null ? _config.SelectButton : _config.SelectButton | UserCommandButtons.Use;
 
         if ((param.KeyButtons & param.ChangedButtons & select) == 0 || (param.KeyButtons & UserCommandButtons.Speed) != 0)
         {
