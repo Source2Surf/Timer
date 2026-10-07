@@ -97,7 +97,9 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
 
         timer_god_mode                = bridge.ConVarManager.CreateConVar("timer_god_mode", 1)!;
         timer_remove_dropped_weapons  = bridge.ConVarManager.CreateConVar("timer_remove_dropped_weapons", true)!;
-        timer_remove_weapons_on_spawn = bridge.ConVarManager.CreateConVar("timer_remove_weapons_on_spawn", true)!;
+        timer_remove_weapons_on_spawn = bridge.ConVarManager.CreateConVar("timer_remove_weapons_on_spawn",
+                                                                          false,
+                                                                          "Take every weapon from players when they spawn")!;
 
         timer_desubtick_jump = bridge.ConVarManager.CreateConVar("timer_desubtick_jump",
                                                                  true,
