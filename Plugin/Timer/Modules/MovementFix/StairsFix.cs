@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Source2Surf.Timer.Modules.MapInfo;
@@ -24,18 +25,26 @@ using Source2Surf.Timer.Native;
 namespace Source2Surf.Timer.Modules;
 // ReSharper restore CheckNamespace
 
-// rngfix's stairs fix, surf only. Only a player on the ground steps up stairs, so one sliding down them in the air stops
-// at the next step's face. Put them on top of it instead, with the speed they had.
+// rngfix's stairs fix, surf only, on the ground too: CS2's own step up stops a fast player at the next step's face. A move
+// stopped by a step's face goes on from the top of the step, step after step, with the speed they had.
 internal unsafe partial class MovementFixModule
 {
-    private static void ApplyStairsFix(nint service, nint pawn, int slot, MoveData* mv, Vector origin, Vector velocity)
+    private const int MaxStairsBumps = 8;
+
+    private static void ApplyStairsFix(nint      service,
+                                       nint      pawn,
+                                       int       slot,
+                                       MoveData* mv,
+                                       Vector    start,
+                                       Vector    velocity,
+                                       bool      onGround)
     {
         if (!_stairsEnabled
             || !_canQueryTriggers
             || _globals == nint.Zero
             || _isFakeClient[slot]
-            || velocity.Z > 0.0f // the player could never slide up the step
             || (mv->Velocity - velocity).LengthSqr() < 1e-4f // TryPlayerMove ran into nothing
+            || (!onGround && velocity.Z > 0.0f)
             || GetMoveType(pawn) != MoveType.Walk
             || IsInWater(pawn)
             || _mapInfo.GetCurrentGameMode() != EGameMode.Surf)
@@ -44,17 +53,16 @@ internal unsafe partial class MovementFixModule
         }
 
         var frameTime = *(float*) (_globals + CGlobalVars_frametime_offset);
-        var direction = new Vector(velocity.X, velocity.Y, 0.0f);
-        var speed     = direction.Length();
+        var move      = velocity * frameTime;
+        var length    = new Vector(move.X, move.Y, 0.0f).Length();
 
-        if (speed * frameTime < 1.0f)
+        if (length < 1.0f)
         {
             return;
         }
 
-        direction /= speed;
-
-        var filter = stackalloc CTraceFilter[1];
+        var direction = new Vector(move.X / length, move.Y / length, 0.0f);
+        var filter    = stackalloc CTraceFilter[1];
 
         if (!InitPlayerMovementFilter(filter, pawn))
         {
@@ -63,41 +71,103 @@ internal unsafe partial class MovementFixModule
 
         var ray   = CreatePlayerHull(service);
         var trace = stackalloc CGameTrace[1];
-        var end   = origin + velocity * frameTime;
 
-        TracePlayerBBox(&origin, &end, &ray, filter, trace);
-
-        // A step's face is vertical.
-        if (trace->StartInSolid || trace->Fraction >= 1.0f || trace->PlaneNormal.Z != 0.0f)
+        // StepMove's move from a step up: left alone.
+        if (onGround && !FindGround(start, &ray, filter, trace, out _))
         {
             return;
         }
 
-        // Walkable ground within a step below where they ran into it.
-        var collision = trace->EndPosition;
-        var below     = collision;
+        var position = start;
+        var end      = start + move;
+        var steps    = 0;
+
+        for (var bump = 0; bump < MaxStairsBumps; bump++)
+        {
+            if (bump > 0)
+            {
+                var remaining = length - (position - start).Dot(direction);
+
+                if (remaining <= 0.0f)
+                {
+                    break;
+                }
+
+                end = position + direction * remaining;
+            }
+
+            TracePlayerBBox(&position, &end, &ray, filter, trace);
+
+            if (trace->StartInSolid)
+            {
+                break;
+            }
+
+            if (trace->Fraction >= 1.0f)
+            {
+                position = end;
+
+                break;
+            }
+
+            position = trace->EndPosition;
+
+            var normal = trace->PlaneNormal;
+
+            // Landed on a step's top: the rest of the move goes on along it.
+            if (bump == 0 && normal.Z >= 1.0f - 1e-4f)
+            {
+                continue;
+            }
+
+            if (MathF.Abs(normal.Z) > 1e-4f
+                || !TryStepUp(&ray, filter, trace, pawn, position, direction, out var top))
+            {
+                break;
+            }
+
+            position = top;
+            steps++;
+        }
+
+        var further = (position - mv->AbsOrigin).Dot(direction);
+
+        if (steps == 0 || further <= 0.03125f)
+        {
+            return;
+        }
+
+        mv->AbsOrigin = position;
+        mv->Velocity  = velocity;
+    }
+
+    // StepMove from where they ran into a face: walkable ground within a step below, up a step, 1 unit over, and back down
+    // onto walkable ground higher up.
+    private static bool TryStepUp(TraceShapeRay* ray,
+                                  CTraceFilter*  filter,
+                                  CGameTrace*    trace,
+                                  nint           pawn,
+                                  Vector         contact,
+                                  Vector         direction,
+                                  out Vector     top)
+    {
+        top = default;
+
+        var below = contact;
         below.Z -= _stepSize;
 
-        TracePlayerBBox(&collision, &below, &ray, filter, trace);
+        TracePlayerBBox(&contact, &below, ray, filter, trace);
 
         if (!trace->DidHit() || trace->PlaneNormal.Z < _standableNormal)
         {
-            return;
+            return false;
         }
 
         var bottom = trace->EndPosition;
-
-        // Likely a ledge with a fail teleport in front, not stairs.
-        if (WouldTrigger(&ray, bottom, pawn))
-        {
-            return;
-        }
-
-        // StepMove: up a step, 1 unit over, and back down onto walkable ground.
-        var up = bottom;
+        var up     = bottom;
         up.Z += _stepSize;
 
-        TracePlayerBBox(&bottom, &up, &ray, filter, trace);
+        TracePlayerBBox(&bottom, &up, ray, filter, trace);
 
         if (trace->DidHit())
         {
@@ -106,35 +176,40 @@ internal unsafe partial class MovementFixModule
 
         var over = up + direction;
 
-        TracePlayerBBox(&up, &over, &ray, filter, trace);
+        TracePlayerBBox(&up, &over, ray, filter, trace);
 
         if (trace->DidHit())
         {
-            return;
+            return false;
         }
 
         var down = over;
         down.Z -= _stepSize;
 
-        TracePlayerBBox(&over, &down, &ray, filter, trace);
+        TracePlayerBBox(&over, &down, ray, filter, trace);
 
-        if (!trace->DidHit() || trace->PlaneNormal.Z < _standableNormal)
+        if (!trace->DidHit() || trace->PlaneNormal.Z < _standableNormal || trace->EndPosition.Z <= bottom.Z + 0.03125f)
         {
-            return;
+            return false;
         }
 
-        mv->AbsOrigin = trace->EndPosition;
-        mv->Velocity  = velocity;
+        top = trace->EndPosition;
+
+        // Dropping onto a ledge with a fail teleport in front, likely, not stairs.
+        return contact.Z - bottom.Z <= 1.0f || !WouldTrigger(ray, bottom, contact, pawn);
     }
 
-    private static bool WouldTrigger(TraceShapeRay* ray, Vector point, nint pawn)
+    // A trigger they'd touch standing there; one they're in already changes nothing.
+    private static bool WouldTrigger(TraceShapeRay* ray, Vector point, Vector current, nint pawn)
     {
-        var hits  = stackalloc nint[MaxTriggerHits];
-        var count = CollectTriggers(ray, point, hits);
+        var hits     = stackalloc nint[MaxTriggerHits];
+        var count    = CollectTriggers(ray, point, hits);
+        var touching = stackalloc nint[MaxTriggerHits];
+        var touched  = CollectTriggers(ray, current, touching);
 
         for (var i = 0; i < count; i++)
         {
-            if (PassesTriggerFilters(hits[i], pawn))
+            if (!Contains(touching, touched, hits[i]) && PassesTriggerFilters(hits[i], pawn))
             {
                 return true;
             }

@@ -111,7 +111,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
         timer_stairs = bridge.ConVarManager.CreateConVar("timer_stairs",
                                                          true,
-                                                         "On surf maps, put players sliding down stairs in the air on top of the step they run into, keeping their speed")
+                                                         "On surf maps, let players slide up stairs at speed: on the ground, and landing on them after hitting a step's face")
             !;
 
         timer_triggerjump = bridge.ConVarManager.CreateConVar("timer_triggerjump",

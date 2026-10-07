@@ -636,9 +636,21 @@ internal unsafe partial class MovementFixModule
         var pawn = *(nint*) (service + CPlayerPawnComponent_m_pChainEntity_offset);
         var slot = pawn != nint.Zero ? GetPlayerSlot(pawn) : -1;
 
-        if (slot < 0 || IsOnGround(pawn))
+        if (slot < 0)
         {
             CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
+
+            return;
+        }
+
+        if (IsOnGround(pawn))
+        {
+            var groundOrigin   = mv->AbsOrigin;
+            var groundVelocity = mv->Velocity;
+
+            CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
+
+            ApplyStairsFix(service, pawn, slot, mv, groundOrigin, groundVelocity, true);
 
             return;
         }
@@ -651,7 +663,7 @@ internal unsafe partial class MovementFixModule
 
         CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
 
-        ApplyStairsFix(service, pawn, slot, mv, origin, velocity);
+        ApplyStairsFix(service, pawn, slot, mv, origin, velocity, false);
         RecordStepMove(slot, velocity, mv->Velocity);
     }
 
