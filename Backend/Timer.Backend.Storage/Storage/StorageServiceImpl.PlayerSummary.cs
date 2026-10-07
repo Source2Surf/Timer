@@ -27,18 +27,19 @@ internal sealed partial class StorageServiceImpl
                             .Where(x => x.SteamId == steamIdValue)
                             .Select(x => new SummaryBestRow
                             {
-                                MapId    = x.MapId,
-                                RunType  = x.RunType,
-                                Style    = x.Style,
-                                Track    = x.Track,
-                                Stage    = x.Stage,
-                                BestTime = x.BestTime,
+                                MapId     = x.MapId,
+                                RunType   = x.RunType,
+                                Style     = x.Style,
+                                Track     = x.Track,
+                                Stage     = x.Stage,
+                                BestTime  = x.BestTime,
+                                BestTicks = x.BestTicks,
                             })
                             .ToListAsync(OperationCancellation);
 
         // The server's best on each leaderboard the player is on, to tell which of theirs are records. A tie
         // counts as held.
-        var serverBest = new Dictionary<(ulong, RunType, int, ushort, ushort), float>();
+        var serverBest = new Dictionary<(ulong, RunType, int, ushort, ushort), SummaryBestRow>();
 
         foreach (var maps in mine.Select(x => x.MapId).Distinct().Chunk(SummaryMapChunk))
         {
@@ -47,18 +48,19 @@ internal sealed partial class StorageServiceImpl
                                 .GroupBy(x => new { x.MapId, x.RunType, x.Style, x.Track, x.Stage })
                                 .Select(x => new SummaryBestRow
                                 {
-                                    MapId    = x.MapId,
-                                    RunType  = x.RunType,
-                                    Style    = x.Style,
-                                    Track    = x.Track,
-                                    Stage    = x.Stage,
-                                    BestTime = SqlFunc.AggregateMin(x.BestTime),
+                                    MapId     = x.MapId,
+                                    RunType   = x.RunType,
+                                    Style     = x.Style,
+                                    Track     = x.Track,
+                                    Stage     = x.Stage,
+                                    BestTime  = SqlFunc.AggregateMin(x.BestTime),
+                                    BestTicks = SqlFunc.AggregateMin(x.BestTicks),
                                 })
                                 .ToListAsync(OperationCancellation);
 
             foreach (var row in rows)
             {
-                serverBest[(row.MapId, row.RunType, row.Style, row.Track, row.Stage)] = row.BestTime;
+                serverBest[(row.MapId, row.RunType, row.Style, row.Track, row.Stage)] = row;
             }
         }
 
@@ -73,7 +75,7 @@ internal sealed partial class StorageServiceImpl
             }
 
             var record = serverBest.TryGetValue((row.MapId, row.RunType, row.Style, row.Track, row.Stage), out var best)
-                         && row.BestTime <= best;
+                         && TimeOf(row.BestTicks, row.BestTime) <= TimeOf(best.BestTicks, best.BestTime);
 
             if (row.RunType == RunType.Stage)
             {
@@ -129,26 +131,28 @@ internal sealed partial class StorageServiceImpl
                                         && x.Style   == style
                                         && x.Track   == trackValue
                                         && x.Stage   == 0)
-                            .Select(x => new CompletedMapRow { MapId = x.MapId, BestTime = x.BestTime })
+                            .Select(x => new CompletedMapRow { MapId = x.MapId, BestTime = x.BestTime, BestTicks = x.BestTicks })
                             .ToListAsync(OperationCancellation);
 
-        return rows.ToDictionary(x => x.MapId, x => x.BestTime);
+        return rows.ToDictionary(x => x.MapId, x => TimeOf(x.BestTicks, x.BestTime));
     }
 
     private sealed class CompletedMapRow
     {
-        public ulong MapId    { get; set; }
-        public float BestTime { get; set; }
+        public ulong MapId     { get; set; }
+        public float BestTime  { get; set; }
+        public int   BestTicks { get; set; }
     }
 
     private sealed class SummaryBestRow
     {
-        public ulong   MapId    { get; set; }
-        public RunType RunType  { get; set; }
-        public int     Style    { get; set; }
-        public ushort  Track    { get; set; }
-        public ushort  Stage    { get; set; }
-        public float   BestTime { get; set; }
+        public ulong   MapId     { get; set; }
+        public RunType RunType   { get; set; }
+        public int     Style     { get; set; }
+        public ushort  Track     { get; set; }
+        public ushort  Stage     { get; set; }
+        public float   BestTime  { get; set; }
+        public int     BestTicks { get; set; }
     }
 
     private sealed class StyleCounts

@@ -70,7 +70,7 @@ internal sealed partial class StorageServiceImpl
                                     .Where(x => x.SteamId == steamId && x.MapId == mapId)
                                     .Select(x => new WipeRunRow
                                     {
-                                        Id = x.Id, RunType = x.RunType, Style = x.Style, Track = x.Track, Stage = x.Stage, Time = x.Time,
+                                        Id = x.Id, RunType = x.RunType, Style = x.Style, Track = x.Track, Stage = x.Stage, Time = x.Time, Ticks = x.Ticks,
                                     })
                                     .ToListAsync(OperationCancellation);
 
@@ -128,7 +128,7 @@ internal sealed partial class StorageServiceImpl
 
                 foreach (var run in runs)
                 {
-                    mapDeleted.Add(new TimerBackendWipedRun(mapName, run.Time,
+                    mapDeleted.Add(new TimerBackendWipedRun(mapName, TimeOf(run.Ticks, run.Time),
                                                             new TimerBackendDeletedRun(run.Id, player.AsPrimitive(), run.RunType == RunType.Stage,
                                                                                        run.Style, run.Track, run.Stage, best.Contains(run.Id),
                                                                                        replays.GetValueOrDefault(run.Id) ?? [])));
@@ -171,6 +171,7 @@ internal sealed partial class StorageServiceImpl
         public ushort  Track   { get; set; }
         public ushort  Stage   { get; set; }
         public float   Time    { get; set; }
+        public int     Ticks   { get; set; }
     }
 
     private sealed class WipeReplayRow

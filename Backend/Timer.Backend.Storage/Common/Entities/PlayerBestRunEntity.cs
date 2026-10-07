@@ -32,5 +32,8 @@ internal sealed class PlayerBestRunEntity : BaseSteamIdSerialEntity
     public ushort  Track    { get; set; }
     public ulong   RunId    { get; set; }
     public float   BestTime { get; set; }
+
+    [SugarColumn(DefaultValue = "0")]
+    public int BestTicks { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

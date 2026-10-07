@@ -232,6 +232,7 @@ internal sealed partial class StorageServiceImpl
         var expected = new HashSet<string>(MasterRunSchemaColumns, StringComparer.OrdinalIgnoreCase);
         expected.Add(RunDateUnixMillisecondsMigrationColumnName);
         expected.Add(RunDateDateTimeBackupColumnName);
+        expected.Add(nameof(RunEntity.Ticks)); // added by the backend after master
 
         foreach (var required in MasterRunSchemaColumns.Where(column => !string.Equals(column, MasterRunDateColumnName, StringComparison.Ordinal)))
         {

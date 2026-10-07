@@ -84,6 +84,7 @@ internal sealed partial class StorageServiceImpl
         nameof(BoardRow.VelocityStartX), nameof(BoardRow.VelocityStartY), nameof(BoardRow.VelocityStartZ),
         nameof(BoardRow.VelocityAvgX), nameof(BoardRow.VelocityAvgY), nameof(BoardRow.VelocityAvgZ),
         nameof(BoardRow.VelocityEndX), nameof(BoardRow.VelocityEndY), nameof(BoardRow.VelocityEndZ),
+        nameof(BoardRow.Ticks),
     ];
 
     // Integers are read as Int64 whatever their column type, which every provider widens to.
@@ -98,7 +99,7 @@ internal sealed partial class StorageServiceImpl
             Style          = (int)reader.GetInt64(o[5]),
             Track          = (int)reader.GetInt64(o[6]),
             Stage          = (int)reader.GetInt64(o[7]),
-            Time           = reader.GetFloat(o[8]),
+            Time           = TimeOf(reader.GetInt64(o[21]), reader.GetFloat(o[8])),
             Jumps          = (int)Math.Min(reader.GetInt64(o[9]), int.MaxValue),
             Strafes        = (int)Math.Min(reader.GetInt64(o[10]), int.MaxValue),
             Sync           = reader.GetFloat(o[11]),

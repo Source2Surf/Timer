@@ -121,6 +121,7 @@ internal sealed partial class StorageServiceImpl
 
         MigratePlayerJoinDates();
         RepairInvalidStoredPlayTimes();
+        SyncTicks();
         EnsureTrackScoreCoveringIndex();
         EnsureReadIndexes();
         EnsureScoreRecalcOutboxIndexes();

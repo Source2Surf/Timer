@@ -95,6 +95,10 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
             && sql.Contains("idx_surf_runs_recent_main", StringComparison.OrdinalIgnoreCase));
         Assert.Matches("(?is).*Date.*DESC.*Id.*DESC.*", recentIndexDdl);
 
+        // That check's CodeFirst brought Ticks early; the migration has to add it itself.
+        Assert.True(db.DbMaintenance.DropColumn("surf_runs", nameof(RunEntity.Ticks)));
+        Assert.DoesNotContain(DescribeColumns(db, "surf_runs"), column => string.Equals(column.Name, nameof(RunEntity.Ticks), StringComparison.OrdinalIgnoreCase));
+
         await RunBackendCliAsync(databaseType, "migrate", connectionString);
 
         var finalRunColumns = DescribeColumns(db, "surf_runs");
@@ -103,10 +107,14 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
         output.WriteLine($"surf_runs columns after migration: {string.Join(", ", finalRunColumns)}");
         output.WriteLine($"surf_runs indexes before conversion: {string.Join(", ", originalRunIndexes)}");
         output.WriteLine($"surf_runs indexes after migration: {string.Join(", ", finalRunIndexes)}");
+        // The backend adds Ticks to master runs; of the rest only Date's type changes.
+        static bool IsTicks(string name) => string.Equals(name, nameof(RunEntity.Ticks), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(finalRunColumns, column => IsTicks(column.Name));
+        var masterRunColumns = finalRunColumns.Where(column => !IsTicks(column.Name)).ToList();
         Assert.Equal(originalRunColumns.Select(column => column.Name).OrderBy(name => name),
-                     finalRunColumns.Select(column => column.Name).OrderBy(name => name));
+                     masterRunColumns.Select(column => column.Name).OrderBy(name => name));
         Assert.Equal(originalRunIndexes.OrderBy(name => name), finalRunIndexes.OrderBy(name => name));
-        Assert.Equal("Date", Assert.Single(finalRunColumns, column =>
+        Assert.Equal("Date", Assert.Single(masterRunColumns, column =>
             !string.Equals(column.Type, originalRunColumns.Single(before => before.Name == column.Name).Type,
                            StringComparison.OrdinalIgnoreCase)).Name,
             ignoreCase: true);
@@ -145,6 +153,11 @@ public sealed class MasterSqlMigrationAcceptanceTests(ITestOutputHelper output)
                                                      .Select(row => row.Points)
                                                      .SingleAsync());
         Assert.NotEmpty(await db.Queryable<PlayerBestRunEntity>().ToListAsync());
+
+        // Every master run and seeded best run got its ticks, worked out in SQL from the stored time.
+        Assert.Equal(0, await db.Queryable<RunEntity>().Where(run => run.Ticks <= 0 || run.Ticks != SqlFunc.ToInt32(run.Time * 64)).CountAsync());
+        Assert.Equal(0, await db.Queryable<PlayerBestRunEntity>()
+                                .Where(best => best.BestTicks <= 0 || best.BestTicks != SqlFunc.ToInt32(best.BestTime * 64)).CountAsync());
 
         var migratedPlayer = await db.Queryable<PlayerEntity>()
                                      .Where(row => row.SteamId == seeded.SteamId).SingleAsync();

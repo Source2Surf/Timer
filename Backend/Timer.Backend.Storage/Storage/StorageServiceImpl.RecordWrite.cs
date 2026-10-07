@@ -218,6 +218,7 @@ internal sealed partial class StorageServiceImpl
                     await _db.Updateable<PlayerBestRunEntity>()
                              .SetColumns(x => x.RunId == next)
                              .SetColumns(x => x.BestTime == SqlFunc.Subqueryable<RunEntity>().Where(r => r.Id == next).Select(r => r.Time))
+                             .SetColumns(x => x.BestTicks == SqlFunc.Subqueryable<RunEntity>().Where(r => r.Id == next).Select(r => r.Ticks))
                              .SetColumns(x => x.UpdatedAt == now)
                              .Where(x => x.Id == best!.Id)
                              .ExecuteCommandAsync(OperationCancellation);
@@ -465,6 +466,7 @@ internal sealed partial class StorageServiceImpl
             Style          = request.Style,
             Track          = ToUInt16(request.Track),
             Time           = request.Time,
+            Ticks          = TicksOf(request.Time),
             Jumps          = ToUInt32(request.Jumps),
             Strafes        = ToUInt32(request.Strafes),
             Sync           = request.Sync,

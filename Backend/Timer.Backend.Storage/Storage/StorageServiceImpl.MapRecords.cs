@@ -269,6 +269,7 @@ internal sealed partial class StorageServiceImpl
             Track                    = SqlFunc.ToInt32(run.Track),
             Stage                    = SqlFunc.ToInt32(run.Stage),
             Time                     = run.Time,
+            Ticks                    = SqlFunc.ToInt64(run.Ticks),
             Jumps                    = SqlFunc.ToInt64(run.Jumps),
             Strafes                  = SqlFunc.ToInt64(run.Strafes),
             Sync                     = run.Sync,
@@ -350,6 +351,7 @@ internal sealed partial class StorageServiceImpl
                                 Track = x.Track,
                                 Stage = x.Stage,
                                 Time = x.Time,
+                                Ticks = x.Ticks,
                             })
                             .Take(normalizedLimit)
                             .ToListAsync(OperationCancellation);
@@ -367,7 +369,7 @@ internal sealed partial class StorageServiceImpl
                 Style = row.Style,
                 Track = row.Track,
                 Stage = row.Stage,
-                Time = row.Time,
+                Time = TimeOf(row.Ticks, row.Time),
             });
         }
 
@@ -393,5 +395,7 @@ internal sealed partial class StorageServiceImpl
         public ushort Stage { get; set; }
 
         public float Time { get; set; }
+
+        public int Ticks { get; set; }
     }
 }

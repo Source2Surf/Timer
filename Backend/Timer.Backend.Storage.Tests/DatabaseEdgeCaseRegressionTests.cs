@@ -34,6 +34,9 @@ public sealed class DatabaseEdgeCaseRegressionTests
         await ImprovedBestUpdatesOwnRowBesideOtherPlayers(fixture);
         foreach (var time in new[] { 123.46875f, 10000.03125f })
             await TiesNeverBeatTheStoredTime(fixture, time);
+        foreach (var time in new[] { 1234.578125f, 10000.03125f })
+            await TimesReadBackExactlyThroughTheirTicks(fixture, time);
+        await TicksFollowAHandEditedTime(fixture);
         await LegacyJoinDateMigrationIsAdditiveAndIdempotent(fixture);
         await InvalidHistoricalTimesCanBeRepaired(fixture);
         if (type != DbType.Sqlite) await ConcurrentWritesPreserveJoinDatesAndCounters(fixture);
@@ -217,6 +220,60 @@ public sealed class DatabaseEdgeCaseRegressionTests
                            .ToListAsync();
         Assert.Equal(checked((ulong)record.Item2.Id), Assert.Single(bests, x => x.RunType == RunType.Main).RunId);
         Assert.Equal(checked((ulong)stageRecord.Item2.Id), Assert.Single(bests, x => x.RunType == RunType.Stage).RunId);
+    }
+
+    // MySQL hands a FLOAT back rounded to 6 digits (1234.578125 -> 1234.58); the ticks stored beside it are exact.
+    private static async Task TimesReadBackExactlyThroughTheirTicks(Fixture f, float time)
+    {
+        var map = await f.Store.GetMapInfo(Fixture.MapName());
+        var player = Fixture.Player();
+        var steamId = checked((long)player.AsPrimitive());
+        var ticks = checked((int)(time * 64));
+        await Profile(f.Store, steamId, "Long");
+
+        await f.Store.AddPlayerRecord(player, map.MapName, new RecordRequest { Time = time });
+        await f.Store.AddPlayerStageRecord(player, map.MapName, new RecordRequest { Stage = 1, Time = time });
+
+        Assert.All(await f.Store.Db.Queryable<RunEntity>().Where(x => x.MapId == map.MapId).ToListAsync(), x => Assert.Equal(ticks, x.Ticks));
+        Assert.All(await f.Store.Db.Queryable<PlayerBestRunEntity>().Where(x => x.MapId == map.MapId).ToListAsync(),
+                   x => Assert.Equal(ticks, x.BestTicks));
+
+        Assert.Equal(time, Assert.Single(await f.Store.GetMapRecords(map.MapName, 0, 0)).Time);
+        Assert.Equal(time, Assert.Single(await f.Store.GetPlayerRecords(player, map.MapName)).Time);
+        Assert.Equal(time, Assert.Single(await f.Store.GetPlayerStageRecords(player, map.MapName)).Time);
+        Assert.Equal(time, Assert.Single(await f.Store.GetMapStageRecords(map.MapName)).Time);
+    }
+
+    // The stored time is the authority: an edited one shows as it is, and startup brings its ticks back in line,
+    // like it fills in the ticks of runs from before they were kept.
+    private static async Task TicksFollowAHandEditedTime(Fixture f)
+    {
+        var map = await f.Store.GetMapInfo(Fixture.MapName());
+        var edited = Fixture.Player();
+        var legacy = Fixture.Player();
+        await Profile(f.Store, checked((long)edited.AsPrimitive()), "Edited");
+        await Profile(f.Store, checked((long)legacy.AsPrimitive()), "Legacy");
+        await f.Store.AddPlayerRecord(edited, map.MapName, new RecordRequest { Time = 90 });
+        await f.Store.AddPlayerRecord(legacy, map.MapName, new RecordRequest { Time = 95 });
+
+        var editedId = checked((long)edited.AsPrimitive());
+        var legacyId = checked((long)legacy.AsPrimitive());
+        await f.Store.Db.Updateable<RunEntity>().SetColumns(x => x.Time == 85.5f).Where(x => x.SteamId == editedId).ExecuteCommandAsync();
+        await f.Store.Db.Updateable<PlayerBestRunEntity>().SetColumns(x => x.BestTime == 85.5f).Where(x => x.SteamId == editedId).ExecuteCommandAsync();
+        await f.Store.Db.Updateable<RunEntity>().SetColumns(x => x.Ticks == 0).Where(x => x.SteamId == legacyId).ExecuteCommandAsync();
+        await f.Store.Db.Updateable<PlayerBestRunEntity>().SetColumns(x => x.BestTicks == 0).Where(x => x.SteamId == legacyId).ExecuteCommandAsync();
+
+        Assert.Equal([85.5f, 95f], (await f.Store.GetMapRecords(map.MapName, 0, 0)).Select(x => x.Time));
+
+        f.Store.SyncTicks();
+
+        var runs = await f.Store.Db.Queryable<RunEntity>().Where(x => x.MapId == map.MapId).ToListAsync();
+        var bests = await f.Store.Db.Queryable<PlayerBestRunEntity>().Where(x => x.MapId == map.MapId).ToListAsync();
+        Assert.Equal(5472, Assert.Single(runs, x => x.SteamId == editedId).Ticks);
+        Assert.Equal(6080, Assert.Single(runs, x => x.SteamId == legacyId).Ticks);
+        Assert.Equal(5472, Assert.Single(bests, x => x.SteamId == editedId).BestTicks);
+        Assert.Equal(6080, Assert.Single(bests, x => x.SteamId == legacyId).BestTicks);
+        Assert.Equal([85.5f, 95f], (await f.Store.GetMapRecords(map.MapName, 0, 0)).Select(x => x.Time));
     }
 
     private static async Task LegacyJoinDateMigrationIsAdditiveAndIdempotent(Fixture f)

@@ -145,6 +145,7 @@ internal sealed partial class StorageServiceImpl
                     Stage = x.Stage,
                     RunId = x.Id,
                     BestTime = x.Time,
+                    BestTicks = x.Ticks,
                     // Member expressions are required here: nameof strings become SQL
                     // parameters, which partition/order by constants and pick arbitrary runs.
                     RowNum = SqlFunc.RowNumber($"{x.Time} ASC, {x.Id} ASC", $"{x.Style}, {x.Track}, {x.Stage}, {x.SteamId}"),
@@ -191,7 +192,8 @@ internal sealed partial class StorageServiceImpl
         foreach (var row in rows)
         {
             if (existing.TryGetValue((row.SteamId, row.Style, row.Track, row.Stage), out var best)
-                && (best.BestTime < row.BestTime || (best.BestTime == row.BestTime && best.RunId <= row.RunId)))
+                && CompareTimes(best.BestTicks, best.BestTime, row.BestTicks, row.BestTime) is var order
+                && (order < 0 || (order == 0 && best.RunId <= row.RunId)))
             {
                 continue;
             }
@@ -206,7 +208,8 @@ internal sealed partial class StorageServiceImpl
                 Style     = row.Style,
                 Track     = row.Track,
                 RunId     = row.RunId,
-                BestTime  = row.BestTime,
+                BestTime  = TimeOf(row.BestTicks, row.BestTime),
+                BestTicks = row.BestTicks,
                 UpdatedAt = now,
             });
         }
@@ -216,8 +219,11 @@ internal sealed partial class StorageServiceImpl
         foreach (var batch in inserts.Chunk(500))
             await _db.Insertable(batch).ExecuteCommandAsync(OperationCancellation);
         foreach (var batch in updates.Chunk(500))
-            await _db.Updateable(batch).UpdateColumns(x => new { x.RunId, x.BestTime, x.UpdatedAt }).ExecuteCommandAsync(OperationCancellation);
+            await _db.Updateable(batch).UpdateColumns(x => new { x.RunId, x.BestTime, x.BestTicks, x.UpdatedAt }).ExecuteCommandAsync(OperationCancellation);
     }
+
+    private static int CompareTimes(int aTicks, float aTime, int bTicks, float bTime)
+        => TimeOf(aTicks, aTime).CompareTo(TimeOf(bTicks, bTime));
 
     private void RemoveBestRunSeedCacheForMap(ulong mapId)
     {
@@ -255,6 +261,8 @@ internal sealed partial class StorageServiceImpl
         public ulong RunId { get; set; }
 
         public float BestTime { get; set; }
+
+        public int BestTicks { get; set; }
 
         [SugarColumn(IsOnlyIgnoreInsert = true, IsOnlyIgnoreUpdate = true)]
         public int RowNum { get; set; }

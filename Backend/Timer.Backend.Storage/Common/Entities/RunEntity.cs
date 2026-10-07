@@ -69,6 +69,11 @@ internal sealed class RunEntity : BaseSteamIdSerialEntity
     public int      Style   { get; set; }
     public ushort   Track   { get; set; }
     public float    Time    { get; set; }
+
+    // The time in 64 Hz server ticks, which it always is a whole number of. Exact where a MySQL FLOAT read back
+    // is rounded to 6 digits; 0 on a row from before ticks were kept, until startup fills it in.
+    [SugarColumn(DefaultValue = "0")]
+    public int Ticks { get; set; }
     public uint     Jumps   { get; set; }
     public uint     Strafes { get; set; }
     public float    Sync    { get; set; }

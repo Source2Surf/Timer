@@ -92,6 +92,10 @@ internal sealed partial class StorageServiceImpl
                 "Master migration changed historical map/run row counts. Keep the old plugin stopped and inspect the database backup.");
         }
 
+        // Seeding copies ticks, which master runs don't have yet.
+        _db.CodeFirst.InitTables(typeof(RunEntity), typeof(PlayerBestRunEntity));
+        SyncTicks();
+
         // Populate historical best-run projections before accepting remote
         // writes. The existing seeder batches writes and skips unchanged rows;
         // running it here avoids per-board cold work on the write API.
@@ -175,6 +179,26 @@ internal sealed partial class StorageServiceImpl
             {
                 throw new InvalidOperationException($"Migration did not create required surf_maps.{name} column.");
             }
+        }
+    }
+
+    // Ticks follow the stored times: filled in for runs from before ticks were kept, and brought back in line with a
+    // hand-edited time. Worked out by the database from its stored FLOAT, which is exact there (one read back into C#
+    // from MySQL is rounded); a run time is a whole number of ticks, so nothing is lost.
+    internal void SyncTicks()
+    {
+        var runs = _db.Updateable<RunEntity>()
+                      .SetColumns(x => x.Ticks == SqlFunc.ToInt32(x.Time * TicksPerSecond))
+                      .Where(x => x.Ticks != SqlFunc.ToInt32(x.Time * TicksPerSecond))
+                      .ExecuteCommand();
+        var best = _db.Updateable<PlayerBestRunEntity>()
+                      .SetColumns(x => x.BestTicks == SqlFunc.ToInt32(x.BestTime * TicksPerSecond))
+                      .Where(x => x.BestTicks != SqlFunc.ToInt32(x.BestTime * TicksPerSecond))
+                      .ExecuteCommand();
+
+        if (runs + best > 0)
+        {
+            _logger.LogInformation("Brought the ticks of {Runs} runs and {Best} best runs in line with their times", runs, best);
         }
     }
 

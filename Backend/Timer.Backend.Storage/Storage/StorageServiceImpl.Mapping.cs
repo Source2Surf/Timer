@@ -38,6 +38,26 @@ internal sealed partial class StorageServiceImpl
         };
     }
 
+    // Run times are whole 64 Hz server ticks. A time made from its ticks is exact where a MySQL FLOAT read back is
+    // rounded to 6 digits, so it's taken when the ticks agree with the stored time. The time stays the authority:
+    // a hand-edited one is shown as it is, and startup brings the ticks back in line with it.
+    internal const float TicksPerSecond = 64f;
+
+    internal static int TicksOf(float seconds)
+        => checked((int)Math.Round(seconds * (double)TicksPerSecond));
+
+    internal static float TimeOf(long ticks, float time)
+    {
+        if (ticks <= 0)
+        {
+            return time;
+        }
+
+        var exact = ticks / TicksPerSecond;
+
+        return MathF.Abs(exact - time) <= (exact * 1e-5f) + 1e-4f ? exact : time;
+    }
+
     private static RunRecord ToRunRecord(BoardRow row)
         => new ()
         {
@@ -49,7 +69,7 @@ internal sealed partial class StorageServiceImpl
             Style          = row.Style,
             Track          = row.Track,
             Stage          = row.Stage,
-            Time           = row.Time,
+            Time           = TimeOf(row.Ticks, row.Time),
             Jumps          = (int)Math.Min(row.Jumps, int.MaxValue),
             Strafes        = (int)Math.Min(row.Strafes, int.MaxValue),
             Sync           = row.Sync,
@@ -77,6 +97,7 @@ internal sealed partial class StorageServiceImpl
         public int     Track                    { get; set; }
         public int     Stage                    { get; set; }
         public float   Time                     { get; set; }
+        public long    Ticks                    { get; set; }
         public long    Jumps                    { get; set; }
         public long    Strafes                  { get; set; }
         public float   Sync                     { get; set; }
@@ -101,7 +122,7 @@ internal sealed partial class StorageServiceImpl
             Style          = (int) run.Style,
             Track          = run.Track,
             Stage          = run.Stage,
-            Time           = run.Time,
+            Time           = TimeOf(run.Ticks, run.Time),
             Jumps          = ToInt32(run.Jumps),
             Strafes        = ToInt32(run.Strafes),
             Sync           = run.Sync,
