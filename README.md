@@ -56,6 +56,7 @@ private network. Upgrading an existing database, and the rest:
 | `timer-gamemodes.jsonc` | Surf/bhop by map prefix, cfgs, start-zone limits, airaccelerate. |
 | `timer-zones.jsonc` | Zone outline colours, flat types, width. |
 | `timer-ranks.jsonc` | Rank titles, chat tags, scoreboard. |
+| `timer-sounds.jsonc` | Finish sounds: random picks, rank sounds, your own `.vsndevts`. |
 | `timer-replay.jsonc` | Replay bots; `"type": 1` is the central bot `!replay` uses. |
 
 Per-map overrides go in `sharp/data/surftimer/map_configs/<map>.json`: `cmds`,

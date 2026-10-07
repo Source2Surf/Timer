@@ -1,0 +1,30 @@
+{
+    // Finish sounds. Each is a list of sound events, one played at random. [] plays none, except that a new best
+    // falls through to the next one that has sounds: ranks, server_record, worst, first_finish, personal_best.
+    // Players turn them off with !sounds. Sound events come from the game's soundevents files (e.g.
+    // game_sounds_ui.vsndevts), or your own: list their .vsndevts under "precache"; players need the addon that holds
+    // them. Edits apply from the next map.
+
+    // A new server record, to everyone (a stage record to its player only).
+    "server_record": [ "UIPanorama.XP.NewSkillGroup" ],
+
+    // A new personal best, to its player.
+    "personal_best": [ "UIPanorama.XP.NewRank" ],
+
+    // A player's first finish of a track, to its player.
+    "first_finish": [],
+
+    // A finish that isn't a personal best, to its player.
+    "no_improvement": [ "UI.XP.Milestone_01" ],
+
+    // A personal best that is the track's slowest time, once the track has worst_minimum times; to its player.
+    "worst": [],
+    "worst_minimum": 10,
+
+    // A track's new personal best at this rank, to everyone, instead of the sounds above.
+    // e.g. "ranks": { "2": [ "UIPanorama.XP.NewRank" ], "3": [ "UIPanorama.XP.NewRank" ] }
+    "ranks": {},
+
+    // Your own .vsndevts files, e.g. [ "soundevents/timer_sounds.vsndevts" ].
+    "precache": []
+}
