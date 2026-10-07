@@ -16,7 +16,6 @@
  */
 
 using System;
-using System.Numerics;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.HookParams;
@@ -52,6 +51,10 @@ internal class SoundFilterModule : IModule, ISoundFilterModule, IPlayerManagerLi
     private ulong _noFootsteps;
     private ulong _noWeapons;
 
+    // The sound hooks are only installed while someone mutes something: every sound pays for them.
+    private bool _soundHooks;
+    private bool _weaponSoundHooked;
+
     public SoundFilterModule(InterfaceBridge       bridge,
                              ICommandManager       commandManager,
                              IPlayerManager        playerManager,
@@ -69,8 +72,6 @@ internal class SoundFilterModule : IModule, ISoundFilterModule, IPlayerManagerLi
     {
         _playerManager.RegisterListener(this);
         _settings.Changed += OnSettingsChanged;
-        _bridge.HookManager.EmitSound.InstallHookPre(OnEmitSoundPre);
-        _bridge.HookManager.SoundEvent.InstallHookPre(OnSoundEventPre);
         _bridge.HookManager.PostEventAbstract.InstallHookPre(OnPostEventPre);
 
         _commandManager.AddClientChatCommand("footsteps", OnCommandFootsteps);
@@ -83,9 +84,14 @@ internal class SoundFilterModule : IModule, ISoundFilterModule, IPlayerManagerLi
     {
         _playerManager.UnregisterListener(this);
         _settings.Changed -= OnSettingsChanged;
-        _bridge.HookManager.EmitSound.RemoveHookPre(OnEmitSoundPre);
-        _bridge.HookManager.SoundEvent.RemoveHookPre(OnSoundEventPre);
         _bridge.HookManager.PostEventAbstract.RemoveHookPre(OnPostEventPre);
+
+        if (_soundHooks)
+        {
+            _bridge.HookManager.EmitSound.RemoveHookPre(OnEmitSoundPre);
+            _bridge.HookManager.SoundEvent.RemoveHookPre(OnSoundEventPre);
+            _soundHooks = false;
+        }
     }
 
     public void OnClientPutInServer(PlayerSlot slot)
@@ -95,12 +101,44 @@ internal class SoundFilterModule : IModule, ISoundFilterModule, IPlayerManagerLi
     {
         _noFootsteps &= ~Bit(slot);
         _noWeapons   &= ~Bit(slot);
+        UpdateHooks();
     }
 
     private void OnSettingsChanged(PlayerSlot slot)
     {
         _noFootsteps = Set(_noFootsteps, slot, !_settings.HearsFootsteps(slot));
         _noWeapons   = Set(_noWeapons, slot, !_settings.HearsWeaponSounds(slot));
+        UpdateHooks();
+    }
+
+    private void UpdateHooks()
+    {
+        // CS_UM_WeaponSound only reaches PostEventAbstract once hooked, and the engine can't unhook it.
+        if (_noWeapons != 0 && !_weaponSoundHooked)
+        {
+            _bridge.ModSharp.HookNetMessage(ProtobufNetMessageType.CS_UM_WeaponSound);
+            _weaponSoundHooked = true;
+        }
+
+        var wanted = (_noFootsteps | _noWeapons) != 0;
+
+        if (wanted == _soundHooks)
+        {
+            return;
+        }
+
+        _soundHooks = wanted;
+
+        if (wanted)
+        {
+            _bridge.HookManager.EmitSound.InstallHookPre(OnEmitSoundPre);
+            _bridge.HookManager.SoundEvent.InstallHookPre(OnSoundEventPre);
+        }
+        else
+        {
+            _bridge.HookManager.EmitSound.RemoveHookPre(OnEmitSoundPre);
+            _bridge.HookManager.SoundEvent.RemoveHookPre(OnSoundEventPre);
+        }
     }
 
     private ECommandAction OnCommandFootsteps(PlayerSlot slot, StringCommand command)
@@ -128,43 +166,53 @@ internal class SoundFilterModule : IModule, ISoundFilterModule, IPlayerManagerLi
     // ------------------------------------------------------------------ sounds
 
     private HookReturnValue<SoundOpEventGuid> OnEmitSoundPre(IEmitSoundHookParams @params, HookReturnValue<SoundOpEventGuid> previous)
-        => Filter(@params.EntityIndex, @params.SoundName, @params.HasReceiver, @params.RemoveReceiver);
+    {
+        if (Kept(@params.Receivers, @params.EntityIndex, @params.SoundName) is not { } kept)
+        {
+            return new (EHookAction.Ignored);
+        }
+
+        @params.UpdateReceiver(kept);
+
+        return new (EHookAction.ChangeParamReturnDefault);
+    }
 
     private HookReturnValue<SoundOpEventGuid> OnSoundEventPre(ISoundEventHookParams @params, HookReturnValue<SoundOpEventGuid> previous)
-        => Filter(@params.EntityIndex, @params.SoundName, @params.HasReceiver, @params.RemoveReceiver);
-
-    private HookReturnValue<SoundOpEventGuid> Filter(EntityIndex entity,
-                                                    string sound,
-                                                    Func<PlayerSlot, bool> hasReceiver,
-                                                    Action<PlayerSlot> removeReceiver)
     {
-        var blocked = (_noFootsteps | _noWeapons) == 0 ? SoundKind.Other : Classify(sound);
-        var muting  = blocked switch
+        if (Kept(@params.Receivers, @params.EntityIndex, @params.SoundName) is not { } kept)
+        {
+            return new (EHookAction.Ignored);
+        }
+
+        @params.UpdateReceiver(kept);
+
+        return new (EHookAction.ChangeParamReturnDefault);
+    }
+
+    // The receivers once those muting this kind of sound are taken out (never its own player); null when that's
+    // nobody.
+    private ulong? Kept(ulong receivers, EntityIndex entity, string sound)
+    {
+        if ((receivers & (_noFootsteps | _noWeapons)) == 0)
+        {
+            return null;
+        }
+
+        var muting = Classify(sound) switch
         {
             SoundKind.Footstep => _noFootsteps,
             SoundKind.Weapon   => _noWeapons,
             _                  => 0UL,
         };
 
-        if (muting == 0 || SourceSlot(entity) is not { } source)
+        if ((receivers & muting) == 0 || SourceSlot(entity) is not { } source)
         {
-            return new (EHookAction.Ignored);
+            return null;
         }
 
-        var removed = false;
+        var kept = receivers & ~(muting & ~Bit(source));
 
-        for (var bits = muting & ~Bit(source); bits != 0; bits &= bits - 1)
-        {
-            PlayerSlot slot = (byte) BitOperations.TrailingZeroCount(bits);
-
-            if (hasReceiver(slot))
-            {
-                removeReceiver(slot);
-                removed = true;
-            }
-        }
-
-        return new (removed ? EHookAction.ChangeParamReturnDefault : EHookAction.Ignored);
+        return kept == receivers ? null : kept;
     }
 
     private HookReturnValue<NetworkReceiver> OnPostEventPre(IPostEventAbstractHookParams @params, HookReturnValue<NetworkReceiver> previous)
@@ -177,15 +225,10 @@ internal class SoundFilterModule : IModule, ISoundFilterModule, IPlayerManagerLi
             return new (EHookAction.Ignored);
         }
 
-        var receivers = @params.Receivers;
-        var kept      = receivers;
+        ulong receivers = @params.Receivers;
+        var   kept      = receivers & ~(_noWeapons & ~Bit(source));
 
-        for (var bits = _noWeapons & ~Bit(source); bits != 0; bits &= bits - 1)
-        {
-            kept = kept.Remove((byte) BitOperations.TrailingZeroCount(bits));
-        }
-
-        return kept.Count() == receivers.Count()
+        return kept == receivers
             ? new (EHookAction.Ignored)
             : new (EHookAction.ChangeParamReturnDefault, kept);
     }
