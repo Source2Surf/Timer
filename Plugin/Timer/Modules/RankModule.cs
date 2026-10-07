@@ -73,6 +73,10 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     private          int       _total;
     private          bool      _refreshing;
     private          bool      _refreshAgain;
+    private          float     _refreshDueAt = float.PositiveInfinity; // the next scheduled refresh; none at infinity
+
+    // Host_Say sends a chat line to each recipient in turn, ~64 copies in one tick: it's rendered once.
+    private (int Tick, int Index, string Token, string? Name, string? Text, string Line)? _lastChat;
     private          bool      _shutDown;
     private          Guid      _refreshTimer;
 
@@ -162,8 +166,33 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
         }
     }
 
+    // Joins and records ask for one: a refresh already due as soon covers them, so a burst makes one request.
     private void RefreshAfter(double seconds)
-        => _bridge.ModSharp.PushTimer(Refresh, seconds);
+    {
+        var now = _bridge.GlobalVars.CurTime;
+        var due = now + (float) seconds;
+
+        // One due already passed never ran (a timer lost with the map): it doesn't count.
+        if (due >= _refreshDueAt && _refreshDueAt > now)
+        {
+            return;
+        }
+
+        _refreshDueAt = due;
+        _bridge.ModSharp.PushTimer(RefreshWhenDue, seconds);
+    }
+
+    // A timer outrun by an earlier one finds its refresh done.
+    private void RefreshWhenDue()
+    {
+        if (_bridge.GlobalVars.CurTime + 0.01f < _refreshDueAt)
+        {
+            return;
+        }
+
+        _refreshDueAt = float.PositiveInfinity;
+        Refresh();
+    }
 
     // Everyone on the server in one request; a refresh asked for meanwhile runs right after.
     private void Refresh()
@@ -335,15 +364,28 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
             return new (EHookAction.Ignored);
         }
 
-        var slot   = (byte) (index - 1);
-        var title  = TitleOf(slot);
-        var format = title is null ? _config.ChatFormatUntitled : _config.ChatFormat;
+        var name = data.ReadString("param1");
+        var text = data.ReadString("param2");
+        var tick = _bridge.GlobalVars.TickCount;
 
-        var line = RankTitles.Render(format, title, _ranks[slot], _total,
-                                     StripColors(data.ReadString("param1")), StripColors(data.ReadString("param2")), Prefix(token));
+        string line;
 
-        // A leading color code needs something before it to render.
-        data.SetString("messagename", " " + line);
+        if (_lastChat is { } last && last.Tick == tick && last.Index == index && last.Token == token && last.Name == name && last.Text == text)
+        {
+            line = last.Line;
+        }
+        else
+        {
+            var slot   = (byte) (index - 1);
+            var title  = TitleOf(slot);
+            var format = title is null ? _config.ChatFormatUntitled : _config.ChatFormat;
+
+            // A leading color code needs something before it to render.
+            line      = " " + RankTitles.Render(format, title, _ranks[slot], _total, StripColors(name), StripColors(text), Prefix(token));
+            _lastChat = (tick, index, token, name, text, line);
+        }
+
+        data.SetString("messagename", line);
         data.SetString("param1", "");
         data.SetString("param2", "");
         data.SetString("param3", "");
