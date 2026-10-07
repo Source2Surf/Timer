@@ -286,10 +286,12 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                 var wrCheckpointMap = wrCheckpointResults
                     .ToDictionary(r => r.key, r => r.checkpoints);
 
+                var boards = _mapCache.Group(records, stageRecords);
+
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
                     if (!_mapCache.IsCurrent(load)) return;
-                    _mapCache.Populate(records, stageRecords, load);
+                    _mapCache.Populate(boards, load);
 
                     foreach (var ((style, track), checkpoints) in wrCheckpointMap)
                     {

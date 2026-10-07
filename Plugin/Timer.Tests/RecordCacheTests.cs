@@ -97,4 +97,47 @@ public sealed class RecordCacheTests
         Assert.Same(current, cache.GetWR(0, 0));
         Assert.Null(cache.GetWR(0, 0, 1));
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void ANewBestTakesItsPlaceAndReplacesThePlayersOld(int stage)
+    {
+        var cache = new MapRecordCache(NullLogger.Instance);
+        var load  = cache.BeginLoad();
+        var a     = new RunRecord { Id = 1, SteamId = 1, Time = 50, Stage = stage };
+        var b     = new RunRecord { Id = 2, SteamId = 2, Time = 60, Stage = stage };
+        var c     = new RunRecord { Id = 3, SteamId = 3, Time = 70, Stage = stage };
+        cache.Populate(stage == 0 ? [a, b, c] : [], stage == 0 ? [] : [a, b, c], load);
+        var version = cache.Version;
+
+        var better = new RunRecord { Id = 4, SteamId = 3, Time = 55, Stage = stage };
+        cache.Upsert(0, 0, stage, better);
+
+        var board = stage == 0 ? cache.GetRecords(0, 0) : cache.GetStageRecords(0, 0, stage)!;
+        Assert.Equal([a, better, b], board);
+        Assert.NotEqual(version, cache.Version);
+
+        var record = new RunRecord { Id = 5, SteamId = 9, Time = 40, Stage = stage };
+        cache.Upsert(0, 0, stage, record);
+        Assert.Same(record, cache.GetWR(0, 0, stage));
+    }
+
+    [Fact]
+    public void ALoadBegunBeforeANewBestCannotUndoIt()
+    {
+        var cache   = new MapRecordCache(NullLogger.Instance);
+        var stale   = cache.BeginLoad();
+        var old     = new RunRecord { Id = 1, SteamId = 1, Time = 80 };
+        var best    = new RunRecord { Id = 2, SteamId = 1, Time = 60 };
+
+        var upsert = cache.Upsert(0, 0, 0, best);
+        cache.RefreshTrack(0, 0, [old], stale);
+        cache.SetWRCheckpoints(0, 0, [], stale);
+
+        Assert.Same(best, cache.GetWR(0, 0));
+        RunCheckpoint[] checkpoints = [new () { RecordId = best.Id, Time = 30 }];
+        cache.SetWRCheckpoints(0, 0, checkpoints, upsert);
+        Assert.Same(checkpoints, cache.GetWRCheckpoints(0, 0));
+    }
 }

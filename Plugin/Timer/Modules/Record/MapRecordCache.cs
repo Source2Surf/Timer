@@ -64,64 +64,159 @@ internal sealed class MapRecordCache
         }
     }
 
-    public void Populate(IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords, LoadToken load)
+    /// <summary>
+    ///     A map's records by board, each sorted: done off the game thread, which only swaps them in.
+    /// </summary>
+    public (Dictionary<(int Style, int Track), List<RunRecord>> Tracks, Dictionary<(int Style, int Track, int Stage), List<RunRecord>> Stages)
+        Group(IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords)
     {
-        if (!IsCurrent(load)) return;
+        var tracks = new Dictionary<(int Style, int Track), List<RunRecord>>();
+        var stages = new Dictionary<(int Style, int Track, int Stage), List<RunRecord>>();
 
-        foreach (var group in records.GroupBy(record => (record.Style, record.Track)))
+        foreach (var record in records)
         {
-            RefreshTrack(group.Key.Style, group.Key.Track, group.ToList(), load);
+            if (!tracks.TryGetValue((record.Style, record.Track), out var list))
+            {
+                tracks[(record.Style, record.Track)] = list = [];
+            }
+
+            list.Add(record);
         }
 
-        foreach (var group in stageRecords.GroupBy(record => (record.Style, record.Track, record.Stage)))
+        foreach (var record in stageRecords)
         {
-            var (style, track, stage) = group.Key;
-
-            if (!IsValidStageIndex(stage))
+            if (!IsValidStageIndex(record.Stage))
             {
                 _logger.LogWarning("Ignore invalid stage record during map cache warm-up. style={style}, track={track}, stage={stage}",
-                                   style,
-                                   track,
-                                   stage);
+                                   record.Style,
+                                   record.Track,
+                                   record.Stage);
 
                 continue;
             }
 
-            RefreshStage(style, track, stage, group.ToList(), load);
+            if (!stages.TryGetValue((record.Style, record.Track, record.Stage), out var list))
+            {
+                stages[(record.Style, record.Track, record.Stage)] = list = [];
+            }
+
+            list.Add(record);
+        }
+
+        foreach (var list in tracks.Values)
+        {
+            list.Sort();
+        }
+
+        foreach (var list in stages.Values)
+        {
+            list.Sort();
+        }
+
+        return (tracks, stages);
+    }
+
+    public void Populate(IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords, LoadToken load)
+        => Populate(Group(records, stageRecords), load);
+
+    public void Populate((Dictionary<(int Style, int Track), List<RunRecord>> Tracks, Dictionary<(int Style, int Track, int Stage), List<RunRecord>> Stages) boards,
+                         LoadToken                                                                                                                       load)
+    {
+        if (!IsCurrent(load)) return;
+
+        foreach (var ((style, track), records) in boards.Tracks)
+        {
+            RefreshTrack(style, track, records, load, sorted: true);
+        }
+
+        foreach (var ((style, track, stage), records) in boards.Stages)
+        {
+            RefreshStage(style, track, stage, records, load, sorted: true);
         }
     }
 
-    public void RefreshTrack(int style, int track, IReadOnlyList<RunRecord> records, LoadToken load)
+    public void RefreshTrack(int style, int track, IReadOnlyList<RunRecord> records, LoadToken load, bool sorted = false)
     {
         if (!IsCurrent(load) || load.Sequence < _trackLoads[style, track]) return;
         _trackLoads[style, track] = load.Sequence;
         var list = _mapRecords[style, track];
         list.Clear();
         list.AddRange(records);
-        list.Sort();
+
+        if (!sorted)
+        {
+            list.Sort();
+        }
+
         Version++;
     }
 
-    public void RefreshStage(int style, int track, int stage, IReadOnlyList<RunRecord> records, LoadToken load)
+    public void RefreshStage(int style, int track, int stage, IReadOnlyList<RunRecord> records, LoadToken load, bool sorted = false)
     {
         var key = (style, track, stage);
         if (!IsCurrent(load) || (_stageLoads.TryGetValue(key, out var sequence) && load.Sequence < sequence)) return;
         _stageLoads[key] = load.Sequence;
 
-        if (_stageRecords.TryGetValue(key, out var existing))
+        if (!_stageRecords.TryGetValue(key, out var list))
         {
-            existing.Clear();
-            existing.AddRange(records);
-            existing.Sort();
+            _stageRecords[key] = list = new List<RunRecord>(records.Count);
         }
-        else
+
+        list.Clear();
+        list.AddRange(records);
+
+        if (!sorted)
         {
-            var list = new List<RunRecord>(records);
             list.Sort();
-            _stageRecords[key] = list;
         }
 
         Version++;
+    }
+
+    /// <summary>
+    ///     A player's new best in place of their old one, where the board's order puts it. A load begun before it
+    ///     can't overwrite it; the returned one is for the server record's checkpoints.
+    /// </summary>
+    public LoadToken Upsert(int style, int track, int stage, RunRecord record)
+    {
+        var load = new LoadToken(Volatile.Read(ref _generation), Interlocked.Increment(ref _loadSequence));
+        List<RunRecord> list;
+
+        if (stage == 0)
+        {
+            list                      = _mapRecords[style, track];
+            _trackLoads[style, track] = load.Sequence;
+        }
+        else
+        {
+            if (!IsValidStageIndex(stage))
+            {
+                return load;
+            }
+
+            if (!_stageRecords.TryGetValue((style, track, stage), out list!))
+            {
+                _stageRecords[(style, track, stage)] = list = [];
+            }
+
+            _stageLoads[(style, track, stage)] = load.Sequence;
+        }
+
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (list[i].SteamId == record.SteamId)
+            {
+                list.RemoveAt(i);
+
+                break;
+            }
+        }
+
+        var at = list.BinarySearch(record);
+        list.Insert(at < 0 ? ~at : at, record);
+        Version++;
+
+        return load;
     }
 
     public int GetRankForTime(int style, int track, float time)

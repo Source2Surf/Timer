@@ -256,6 +256,7 @@ internal sealed class RecordSaver
 
         var acknowledged = RemoteRunSubmissionMapper.ToAcknowledgedRun(request, response, playerName, mapId);
         var boardMissing = false;
+        MapRecordCache.LoadToken? newServerRecord = null;
         await _bridge.ModSharp.InvokeFrameActionAsync(() =>
         {
             if (!_mapCache.IsCurrent(mapLoad))
@@ -305,13 +306,24 @@ internal sealed class RecordSaver
                                        recordRequest.Track,
                                        acknowledged.SavedRecord);
             }
+
+            // The board takes the new best in place; only a new server record's checkpoints are fetched.
+            var upsert = _mapCache.Upsert(recordRequest.Style, recordRequest.Track, 0, acknowledged.SavedRecord);
+
+            if (_mapCache.GetWR(recordRequest.Style, recordRequest.Track)?.Id == acknowledged.SavedRecord.Id)
+            {
+                newServerRecord = upsert;
+            }
         }, ct).ConfigureAwait(false);
 
-        // A finish that is no record leaves the board as it was. It also means the board has records,
-        // so an empty one here was never loaded (a failed map-start read) and is fetched now.
-        if (acknowledged.RecordType >= EAttemptResult.NewPersonalRecord || boardMissing)
+        // An empty board here was never loaded (a failed map-start read), and is fetched now.
+        if (boardMissing)
         {
             await RefreshMapRecord(mapName, recordRequest.Style, recordRequest.Track, mapLoad).ConfigureAwait(false);
+        }
+        else if (newServerRecord is { } recordLoad)
+        {
+            await RefreshWrCheckpoints(recordRequest.Style, recordRequest.Track, acknowledged.SavedRecord.Id, recordLoad).ConfigureAwait(false);
         }
     }
 
@@ -402,9 +414,14 @@ internal sealed class RecordSaver
                                             recordRequest.Stage,
                                             acknowledged.SavedRecord);
             }
+
+            if (acknowledged.RecordType >= EAttemptResult.NewPersonalRecord)
+            {
+                _mapCache.Upsert(recordRequest.Style, recordRequest.Track, recordRequest.Stage, acknowledged.SavedRecord);
+            }
         }, ct).ConfigureAwait(false);
 
-        if (acknowledged.RecordType >= EAttemptResult.NewPersonalRecord || boardMissing)
+        if (boardMissing)
         {
             await RefreshMapStageRecord(mapName,
                                         recordRequest.Style,
@@ -461,9 +478,12 @@ internal sealed class RecordSaver
                 ).ConfigureAwait(false);
             }
 
+            var sorted = new List<RunRecord>(records);
+            sorted.Sort();
+
             await _bridge.ModSharp.InvokeFrameActionAsync(() =>
             {
-                _mapCache.RefreshTrack(style, track, records, load);
+                _mapCache.RefreshTrack(style, track, sorted, load, sorted: true);
 
                 if (wrCheckpoints is not null)
                 {
@@ -478,6 +498,23 @@ internal sealed class RecordSaver
         catch (Exception e)
         {
             _logger.LogError(e, "Error when trying to update map record with style {s}, track: {t}", style, track);
+        }
+    }
+
+    private async Task RefreshWrCheckpoints(int style, int track, long recordId, MapRecordCache.LoadToken load)
+    {
+        try
+        {
+            var checkpoints = await RetryHelper.RetryAsync(() => _request.GetRecordCheckpoints(recordId),
+                                                           RetryHelper.IsTransient,
+                                                           _logger,
+                                                           "GetRecordCheckpoints").ConfigureAwait(false);
+
+            await _bridge.ModSharp.InvokeFrameActionAsync(() => _mapCache.SetWRCheckpoints(style, track, checkpoints, load));
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error when fetching the server record's checkpoints, style {s}, track: {t}", style, track);
         }
     }
 
@@ -502,7 +539,10 @@ internal sealed class RecordSaver
                 RetryHelper.IsTransient, _logger, "GetMapStageRecords"
             ).ConfigureAwait(false);
 
-            await _bridge.ModSharp.InvokeFrameActionAsync(() => { _mapCache.RefreshStage(style, track, stage, records, load); });
+            var sorted = new List<RunRecord>(records);
+            sorted.Sort();
+
+            await _bridge.ModSharp.InvokeFrameActionAsync(() => { _mapCache.RefreshStage(style, track, stage, sorted, load, sorted: true); });
         }
         catch (Exception e)
         {
