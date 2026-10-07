@@ -909,21 +909,31 @@ internal partial class HudModule
             return null;
         }
 
-        ReplayContent?     replay;
+        ReplayFileHeader   header;
+        int                frameCount;
         ClosestFrameIndex? frames = null;
 
         if (compare == HudOptions.ComparePersonalBest)
         {
-            replay = _recordModule.GetPlayerRecord(s.Slot, timerInfo.Style, timerInfo.Track) is { } pb
-                ? _personalBests.GetPersonalBest(s.Slot, pb, out frames)
-                : null;
+            if (_recordModule.GetPlayerRecord(s.Slot, timerInfo.Style, timerInfo.Track) is not { } pb
+                || _personalBests.GetPersonalBest(s.Slot, pb) is not { } own)
+            {
+                return null;
+            }
+
+            (header, frameCount, frames) = (own.Header, own.FrameCount, own.Index);
         }
         else
         {
-            replay = _replayModule.GetCachedReplay(timerInfo.Style, timerInfo.Track, 0);
+            if (_replayModule.GetCachedReplay(timerInfo.Style, timerInfo.Track, 0) is not { } record)
+            {
+                return null;
+            }
+
+            (header, frameCount) = (record.Header, record.Frames.Count);
         }
 
-        if (replay is null || replay.Frames.Count == 0)
+        if (frameCount == 0)
         {
             return null;
         }
@@ -932,15 +942,15 @@ internal partial class HudModule
         // the player's elapsed-time projection, so an exact spatial tie can't jump to an unrelated point.
         // A timescale style's frames each hold less than a tick of its time.
         var frameTime      = TimerConstants.TickInterval * _styleModule.GetStyleSetting(timerInfo.Style).TimerScale;
-        var projectedFrame = replay.Header.PreFrame + ((double) timerInfo.Time / frameTime);
-        var preferredFrame = (int) Math.Clamp(Math.Round(projectedFrame), 0d, replay.Frames.Count - 1d);
+        var projectedFrame = header.PreFrame + ((double) timerInfo.Time / frameTime);
+        var preferredFrame = (int) Math.Clamp(Math.Round(projectedFrame), 0d, frameCount - 1d);
 
         // No distance limit, like bhoptimer: only the replay's end bounds it, past which the player is beyond its route.
         var position = s.Pawn.GetAbsOrigin();
         var index = compare == HudOptions.ComparePersonalBest
             ? frames?.FindClosest(position, preferredFrame, out _) ?? -1
             : _replayModule.FindClosestFrameIndex(timerInfo.Style, timerInfo.Track, 0, position, preferredFrame, out _);
-        var finish = replay.Header.PostFrame > 0 ? replay.Header.PostFrame : replay.Frames.Count - 1;
+        var finish = header.PostFrame > 0 ? header.PostFrame : frameCount - 1;
 
         if (index < 0 || index >= finish)
         {
@@ -948,7 +958,7 @@ internal partial class HudModule
         }
 
         // Still within the replay's lead-in: the player is at or near the start zone.
-        var recordFrames = index - replay.Header.PreFrame;
+        var recordFrames = index - header.PreFrame;
 
         if (recordFrames <= 0)
         {

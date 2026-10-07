@@ -31,11 +31,16 @@ namespace Source2Surf.Timer.Modules;
 internal interface IPersonalBestReplays
 {
     /// <summary>
-    ///     The replay of <paramref name="pb" /> (the player's best on a track, any style) and its spatial index, once
-    ///     loaded; until then null, and it starts loading. A newer PB replaces the one held.
+    ///     The replay of <paramref name="pb" /> (the player's best on a track, any style), once loaded; until then
+    ///     null, and it starts loading. A newer PB replaces the one held.
     /// </summary>
-    ReplayContent? GetPersonalBest(PlayerSlot slot, RunRecord pb, out ClosestFrameIndex? index);
+    PersonalBestReplay? GetPersonalBest(PlayerSlot slot, RunRecord pb);
 }
+
+/// <summary>
+///     A PB replay as the live difference uses it: its header, length and spatial index. The frames aren't kept.
+/// </summary>
+internal sealed record PersonalBestReplay(ReplayFileHeader Header, int FrameCount, ClosestFrameIndex Index);
 
 // One PB replay per player, for the run they're on: from the server record's replay when theirs is the record,
 // else from disk or the replay store like any run. A failed load is retried, since a new PB's replay can still be on
@@ -48,44 +53,44 @@ internal partial class ReplayPlaybackModule : IPersonalBestReplays
     private sealed class PersonalBest
     {
         public required long RunId;
-        public ReplayContent?     Content;
-        public ClosestFrameIndex? Index;
-        public bool               Loading;
+        public PersonalBestReplay? Replay;
+        public bool                Loading;
         public float              RetryAt;
         public int                Failures;
     }
 
     private readonly PersonalBest?[] _personalBests = new PersonalBest?[PlayerSlot.MaxPlayerCount];
 
-    public ReplayContent? GetPersonalBest(PlayerSlot slot, RunRecord pb, out ClosestFrameIndex? index)
+    public PersonalBestReplay? GetPersonalBest(PlayerSlot slot, RunRecord pb)
     {
-        // Theirs is the server record: its replay and index are already here.
-        if (_replayCache.TryGetValue((pb.Style, pb.Track, 0), out var record)
-            && record.Header.SteamId == pb.SteamId
-            && MathF.Abs(record.Header.Time - pb.Time) < 0.01f
-            && _closestFrameIndices.TryGetValue((pb.Style, pb.Track, 0), out var recordIndex))
-        {
-            index = recordIndex;
-
-            return record;
-        }
-
         var entry = _personalBests[slot];
 
         if (entry is null || entry.RunId != pb.Id)
         {
             entry                = new PersonalBest { RunId = pb.Id };
             _personalBests[slot] = entry;
-            LoadPersonalBest(slot, entry, pb);
         }
-        else if (entry.Content is null && !entry.Loading && _bridge.GlobalVars.CurTime >= entry.RetryAt)
+
+        // Theirs is the server record: its replay and index are already here.
+        if (_replayCache.TryGetValue((pb.Style, pb.Track, 0), out var record)
+            && record.Header.SteamId == pb.SteamId
+            && MathF.Abs(record.Header.Time - pb.Time) < 0.01f
+            && _closestFrameIndices.TryGetValue((pb.Style, pb.Track, 0), out var recordIndex))
+        {
+            if (entry.Replay is not { } held || !ReferenceEquals(held.Index, recordIndex))
+            {
+                entry.Replay = new PersonalBestReplay(record.Header, record.Frames.Count, recordIndex);
+            }
+
+            return entry.Replay;
+        }
+
+        if (entry.Replay is null && !entry.Loading && _bridge.GlobalVars.CurTime >= entry.RetryAt)
         {
             LoadPersonalBest(slot, entry, pb);
         }
 
-        index = entry.Index;
-
-        return entry.Content;
+        return entry.Replay;
     }
 
     private void LoadPersonalBest(PlayerSlot slot, PersonalBest entry, RunRecord pb)
@@ -135,8 +140,7 @@ internal partial class ReplayPlaybackModule : IPersonalBestReplays
                                                                       return;
                                                                   }
 
-                                                                  entry.Content = content;
-                                                                  entry.Index   = index;
+                                                                  entry.Replay = new PersonalBestReplay(content!.Header, content.Frames.Count, index);
                                                               },
                                                               token)
                              .ConfigureAwait(false);
