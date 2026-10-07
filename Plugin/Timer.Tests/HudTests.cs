@@ -260,10 +260,18 @@ public sealed class HudFormatTests
     public void HeadingSpacersFollowShownGroupsWithSomethingAfterThem()
     {
         // title, time, stage, lines
-        Assert.Equal([true, true, false], HudFormat.SpacersShown([true, true, false, true]));
-        Assert.Equal([false, false, false], HudFormat.SpacersShown([false, false, false, true]));
-        Assert.Equal([false, true, false], HudFormat.SpacersShown([false, true, true, false]));
-        Assert.Equal([false, false, false], HudFormat.SpacersShown([false, false, true, false]));
+        Assert.Equal([true, true, false], Spacers(true, true, false, true));
+        Assert.Equal([false, false, false], Spacers(false, false, false, true));
+        Assert.Equal([false, true, false], Spacers(false, true, true, false));
+        Assert.Equal([false, false, false], Spacers(false, false, true, false));
+    }
+
+    private static bool[] Spacers(params bool[] groups)
+    {
+        var spacers = new bool[groups.Length - 1];
+        HudFormat.SpacersShown(groups, spacers);
+
+        return spacers;
     }
 }
 
@@ -365,7 +373,7 @@ public sealed class HudPlayerTests
         Assert.Empty(p.Splits);
         Assert.Null(p.Finish);
         Assert.False(p.Stopped);
-        Assert.Equal(p.SplitSerial, p.SplitShown);
+        Assert.Equal(p.SplitSerial, p.SplitCleared);
     }
 }
 

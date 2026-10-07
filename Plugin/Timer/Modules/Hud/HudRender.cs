@@ -539,7 +539,23 @@ internal partial class HudModule
 
         public readonly bool[]    Shown = new bool[HudLines.Count]; // by line
         public readonly string?[] Texts = new string?[HudLines.Count];
+
+        public TimerView Reset()
+        {
+            Title        = TitleClass = TimeLabel = Time = TimeCmp = StageTime = StageCmp = null;
+            Finished     = false;
+            TimeCmpSign  = 0;
+            Stage        = null;
+            StageCmpSign = 0;
+            Array.Clear(Shown);
+            Array.Clear(Texts);
+
+            return this;
+        }
     }
+
+    // One for every draw: the HUD runs on the game thread only.
+    private readonly TimerView _timerView = new ();
 
     /// <summary>
     ///     One layout per state: start zone (zone, mode, speed, sync), running (time and its comparison, zone,
@@ -567,7 +583,7 @@ internal partial class HudModule
                 _                              => null,
             };
 
-        var view = new TimerView();
+        var view = _timerView.Reset();
 
         // The time's difference: live against the record's replay, else at the last split passed, or at the finish.
         long? timeDiff = null; // ms
@@ -644,19 +660,45 @@ internal partial class HudModule
         view.Shown[(int) HudLine.Jumps]   = running && p.IsOn(HudOptions.Jumps);
         view.Shown[(int) HudLine.Strafes] = running && p.IsOn(HudOptions.Strafes);
 
-        view.Texts[(int) HudLine.Zone]    = tr.Format(HudTexts.LineZone, ZoneName(tr, run, info, running || stopped));
-        view.Texts[(int) HudLine.Mode]    = tr.Format(HudTexts.LineMode, _styleModule.GetStyleSetting(info.Style).Name);
-        view.Texts[(int) HudLine.Speed]   = tr.Format(HudTexts.LineSpeed, HudFormat.RoundSpeed(speed));
-        view.Texts[(int) HudLine.Sync]    = tr.Format(HudTexts.LineSync, (info.Sync * 100f).ToString("F2", CultureInfo.InvariantCulture));
-        view.Texts[(int) HudLine.Jumps]   = tr.Format(HudTexts.LineJumps, info.Jumps);
-        view.Texts[(int) HudLine.Strafes] = tr.Format(HudTexts.LineStrafes, info.Strafes);
+        // Only the lines that show are formatted.
+        if (view.Shown[(int) HudLine.Zone])
+        {
+            view.Texts[(int) HudLine.Zone] = tr.Format(HudTexts.LineZone, ZoneName(tr, run, info, running || stopped));
+        }
 
-        if (finish is not null)
+        if (view.Shown[(int) HudLine.Mode])
+        {
+            view.Texts[(int) HudLine.Mode] = tr.Format(HudTexts.LineMode, _styleModule.GetStyleSetting(info.Style).Name);
+        }
+
+        if (view.Shown[(int) HudLine.Speed])
+        {
+            view.Texts[(int) HudLine.Speed] = tr.Format(HudTexts.LineSpeed, HudFormat.RoundSpeed(speed));
+        }
+
+        if (view.Shown[(int) HudLine.Sync])
+        {
+            view.Texts[(int) HudLine.Sync] = tr.Format(HudTexts.LineSync, (info.Sync * 100f).ToString("F2", CultureInfo.InvariantCulture));
+        }
+
+        if (view.Shown[(int) HudLine.Jumps])
+        {
+            view.Texts[(int) HudLine.Jumps] = tr.Format(HudTexts.LineJumps, info.Jumps);
+        }
+
+        if (view.Shown[(int) HudLine.Strafes])
+        {
+            view.Texts[(int) HudLine.Strafes] = tr.Format(HudTexts.LineStrafes, info.Strafes);
+        }
+
+        var startShown = view.Shown[(int) HudLine.Start];
+
+        if (startShown && finish is not null)
         {
             view.Texts[(int) HudLine.Start] =
                 ZString.Concat(tr.Format(HudTexts.LineEnd, finish.End), SpeedCmp(tr, tag, finish.End, Against(finish.EndPb, finish.EndWr)));
         }
-        else if (running)
+        else if (startShown && running)
         {
             var start  = HudFormat.RoundSpeed(info.StartVelocity.Length2D());
             var target = compare switch
@@ -680,7 +722,7 @@ internal partial class HudModule
     /// </summary>
     private void UpdateReplayTimer(HudWriter w, HudPlayer p, IReplayBotData bot, float speed)
     {
-        var view   = new TimerView();
+        var view   = _timerView.Reset();
         var header = bot.Header;
 
         if (bot.Status == EReplayBotStatus.Idle || header is null)
@@ -717,7 +759,7 @@ internal partial class HudModule
     private static void WriteTimer(HudWriter w, HudPlayer p, TimerView view)
     {
         // Lines in the player's order; the blank line only shows between two lines that do.
-        var shown = new bool[HudLines.Count];
+        Span<bool> shown = stackalloc bool[HudLines.Count];
 
         for (var i = 0; i < HudLines.Count; i++)
         {
@@ -728,12 +770,14 @@ internal partial class HudModule
         shown[gapAt] = HudFormat.GapShown(shown, gapAt);
 
         // Heading groups, then the lines as one more; a spacer follows a group that shows when a later one does.
-        var spacers = HudFormat.SpacersShown([
-            view.Title is not null,
-            view.Time is not null || view.TimeCmp is not null,
-            view.Stage is not null,
-            Array.IndexOf(shown, true) >= 0,
-        ]);
+        Span<bool> spacers = stackalloc bool[HeadingGaps.Length];
+        HudFormat.SpacersShown([
+                                   view.Title is not null,
+                                   view.Time is not null || view.TimeCmp is not null,
+                                   view.Stage is not null,
+                                   shown.Contains(true),
+                               ],
+                               spacers);
 
         w.Class("Title", "Hidden", view.Title is null);
         w.Class("Time", "Hidden", view.Time is null);
@@ -1025,9 +1069,18 @@ internal partial class HudModule
             w.Text("SplitsEmpty", "text", p.Tr[HudTexts.SplitsEmpty]);
         }
 
-        if (run is not null && run.SplitSerial != run.SplitShown)
+        // Each HUD animates a new split once, the runner's and every spectator's alike; not one that was cleared, or
+        // what a newly watched player already had.
+        if (run is not null && (p.SplitsFrom != run || p.SplitsSeen != run.SplitSerial))
         {
-            run.SplitShown = run.SplitSerial;
+            var animate = p.SplitsFrom == run && run.SplitSerial != run.SplitCleared;
+            p.SplitsFrom = run;
+            p.SplitsSeen = run.SplitSerial;
+
+            if (!animate)
+            {
+                return;
+            }
 
             var flip = run.SplitSerial % 2 == 0;
             w.Class("SplitsBody", "shift-a", flip);

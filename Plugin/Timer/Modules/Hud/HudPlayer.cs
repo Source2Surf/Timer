@@ -339,8 +339,12 @@ internal sealed class HudPlayer
 
     // ---- this player's run, as the HUD shows it
     public readonly List<HudSplit> Splits = []; // newest first
-    public          int            SplitSerial; // counts splits, so the HUD knows one arrived...
-    public          int            SplitShown;  // ...and which one it last animated
+    public          int            SplitSerial;  // counts splits, so a HUD showing them knows one arrived
+    public          int            SplitCleared; // the serial when the run was cleared: no split since to animate
+
+    // ---- the run this player's HUD shows splits from (theirs, or a spectated player's), and its last animated split
+    public HudPlayer? SplitsFrom;
+    public int        SplitsSeen;
 
     public HudFinish?      Finish;
     public HudStageResult? LastStage;  // the last stage finished, for the finish summary
@@ -372,8 +376,8 @@ internal sealed class HudPlayer
     {
         Finish     = null;
         LastStage  = null;
-        Stopped    = false;
-        SplitShown = SplitSerial;
+        Stopped      = false;
+        SplitCleared = SplitSerial;
         Splits.Clear();
     }
 

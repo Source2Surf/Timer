@@ -301,12 +301,12 @@ internal static class HudFormat
     /// <summary>
     ///     Whether the blank line at <paramref name="gapAt" /> shows: only between two lines that do.
     /// </summary>
-    public static bool GapShown(IReadOnlyList<bool> shown, int gapAt)
+    public static bool GapShown(ReadOnlySpan<bool> shown, int gapAt)
     {
         var before = false;
         var after  = false;
 
-        for (var i = 0; i < shown.Count; i++)
+        for (var i = 0; i < shown.Length; i++)
         {
             if (i < gapAt)
             {
@@ -323,20 +323,21 @@ internal static class HudFormat
 
     /// <summary>
     ///     Which heading spacers show: a spacer follows its group when that group shows and any later one does.
-    ///     <paramref name="groups" /> ends with the lines under the heading, which have no spacer of their own.
+    ///     <paramref name="groups" /> ends with the lines under the heading, which have no spacer of their own; one
+    ///     fewer <paramref name="spacers" />.
     /// </summary>
-    public static bool[] SpacersShown(IReadOnlyList<bool> groups)
+    public static void SpacersShown(ReadOnlySpan<bool> groups, Span<bool> spacers)
     {
-        var spacers = new bool[Math.Max(0, groups.Count - 1)];
-
         for (var i = 0; i < spacers.Length; i++)
         {
+            spacers[i] = false;
+
             if (!groups[i])
             {
                 continue;
             }
 
-            for (var j = i + 1; j < groups.Count; j++)
+            for (var j = i + 1; j < groups.Length; j++)
             {
                 if (groups[j])
                 {
@@ -346,7 +347,5 @@ internal static class HudFormat
                 }
             }
         }
-
-        return spacers;
     }
 }
