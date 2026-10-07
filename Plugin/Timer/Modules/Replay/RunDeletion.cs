@@ -128,7 +128,7 @@ internal partial class ReplayPlaybackModule : IRunDeletionListener
                     return;
                 }
 
-                var index = new ClosestFrameIndex(content.Frames);
+                var index = key.stage == 0 ? new ClosestFrameIndex(content.Frames) : null;
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
@@ -139,8 +139,13 @@ internal partial class ReplayPlaybackModule : IRunDeletionListener
                         return;
                     }
 
-                    _replayCache[key]         = content;
-                    _closestFrameIndices[key] = index;
+                    _replayCache[key] = content;
+
+                    if (index is not null)
+                    {
+                        _closestFrameIndices[key] = index;
+                    }
+
                     UpdateReplayBots(key.style, key.track, key.stage);
                 }, linkedToken.Token);
             }

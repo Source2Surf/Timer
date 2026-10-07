@@ -487,25 +487,31 @@ internal static class ReplayShared
     }
 
     /// <summary>
+    /// A player's recording buffer to start with: 64 KB, below the large object heap. It grows with their runs.
+    /// </summary>
+    public const int InitialFrames = 1024;
+
+    /// <summary>
     /// Create a main replay snapshot from PlayerFrameData.
     /// Resets the frame buffer and timer state on the source frame data.
     /// </summary>
     public static ReplaySaveSnapshot CreateMainReplaySnapshot(PlayerFrameData frame)
     {
-        var framesBuffer = frame.Frames;
+        // The replay gets an exact copy and the buffer is kept for the next run, at its size unless it grew far past
+        // this run (a long warm-up, then short attempts).
+        var buffer       = frame.Frames;
+        var framesBuffer = buffer.ToArray();
+        buffer.Clear();
 
-        // Size the next buffer to ~2x the last run's frame count (or baseline, whichever is larger).
-        // Steady-length players skip the doubling chain; players whose run length collapses
-        // (one long warm-up, then short attempts) get memory back instead of holding a
-        // worst-case buffer forever.
-        var baseline    = TimerConstants.Tickrate * 60 * 5;
-        var newCapacity = Math.Max(baseline, framesBuffer.Count * 2);
-        frame.Frames    = new List<ReplayFrameData>(newCapacity);
+        if (buffer.Capacity > 4 * Math.Max(framesBuffer.Length, InitialFrames))
+        {
+            buffer.Capacity = Math.Max(framesBuffer.Length, InitialFrames);
+        }
 
         var header = new ReplayFileHeader
         {
             SteamId     = frame.SteamId,
-            TotalFrames = framesBuffer.Count,
+            TotalFrames = framesBuffer.Length,
             PreFrame    = frame.TimerStartFrame,
             PostFrame   = frame.TimerFinishFrame,
             Time        = frame.FinishTime,

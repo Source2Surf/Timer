@@ -89,6 +89,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
     private readonly IConVar timer_replay_stage_postrun_time;
     private readonly IConVar timer_replay_file_compression_level;
     private readonly IConVar timer_replay_file_compression_workers;
+    private readonly IConVar timer_replay_max_minutes;
     private readonly IConVar timer_replay_pending_timeout;
     private readonly IConVar timer_replay_fallback_ttl;
     private readonly IConVar timer_replay_slower_runs;
@@ -138,6 +139,9 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         timer_replay_file_compression_workers
             = bridge.ConVarManager.CreateConVar("timer_replay_file_compression_workers", 0, 0, 256, "Number of threads for replay file compression, 0 to disable")!;
+
+        timer_replay_max_minutes
+            = bridge.ConVarManager.CreateConVar("timer_replay_max_minutes", 120, 0, 1440, "Longest run that's recorded, in minutes; a longer one keeps no replay. 0 = no limit")!;
 
         timer_replay_pending_timeout
             = bridge.ConVarManager.CreateConVar("timer_replay_pending_timeout",
@@ -397,7 +401,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         var data = new PlayerFrameData
         {
-            Frames  = new List<ReplayFrameData>(TimerConstants.Tickrate * 60 * 5),
+            Frames  = new List<ReplayFrameData>(ReplayShared.InitialFrames),
             SteamId = client.SteamId,
             Name    = client.Name,
             Lineage = _nextLineage++,
@@ -496,6 +500,8 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         }
 
         StartNewAttempt(frameData);
+
+        frameData.Overflowed = false;
 
         var maxPreFrame = (int) (timer_replay_prerun_time.GetFloat() * TimerConstants.Tickrate);
         ReplayShared.TrimPreRunFrames(frameData, maxPreFrame);
@@ -795,6 +801,14 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                     int             style, int                track)
     {
         var isStage = stage > 0;
+
+        if (frame.Overflowed)
+        {
+            _logger.LogInformation("No replay for {SteamId} style={Style} track={Track} stage={Stage}: the run outgrew timer_replay_max_minutes",
+                                   frame.SteamId, style, track, stage);
+
+            return;
+        }
 
         if (snapshot.Frames.Count < MinValidFrames)
         {
@@ -1796,31 +1810,42 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
             return;
         }
 
-        var angles  = pawn.GetEyeAngles();
-        var service = arg.Service;
+        // A run past the longest recorded (an AFK one, say) stops growing the buffer: ~4 KB/s each.
+        var maxFrames = timer_replay_max_minutes.GetInt32() * 60 * TimerConstants.Tickrate;
 
-        frameData.Frames.Add(new ()
+        if (maxFrames > 0 && frameData.Frames.Count >= maxFrames)
         {
-            Origin         = pawn.GetAbsOrigin(),
-            Angles         = new (angles.X, angles.Y),
-            PressedButtons = service.KeyButtons,
-            ChangedButtons = service.KeyChangedButtons,
-            ScrollButtons  = service.ScrollButtons,
-            MoveType       = pawn.MoveType,
-            Velocity       = pawn.GetAbsVelocity(),
-        });
+            frameData.Overflowed = true;
+        }
+        else
+        {
+            var angles  = pawn.GetEyeAngles();
+            var service = arg.Service;
+
+            frameData.Frames.Add(new ()
+            {
+                Origin         = pawn.GetAbsOrigin(),
+                Angles         = new (angles.X, angles.Y),
+                PressedButtons = service.KeyButtons,
+                ChangedButtons = service.KeyChangedButtons,
+                ScrollButtons  = service.ScrollButtons,
+                MoveType       = pawn.MoveType,
+                Velocity       = pawn.GetAbsVelocity(),
+            });
+        }
 
         // Frames are otherwise only trimmed at timer start, so a player idling without a run
-        // (in a zone, AFK) grows this buffer by ~4 KB/s for as long as they stay. Trim once it is
-        // well past the pre-run window, so RemoveRange runs about once a minute, not every tick.
+        // (in a zone, AFK), or on a practice run that can't be saved, grows this buffer by ~4 KB/s for as long as
+        // they stay. Trim once it is well past the pre-run window, so RemoveRange runs about once a minute.
         var maxPreFrame = (int) (timer_replay_prerun_time.GetFloat() * TimerConstants.Tickrate);
 
         if (frameData.Frames.Count > maxPreFrame + IdleFrameTrimSlack
             && frameData.PostFrameTimer is null
             && frameData.StagePostFrameTimer is null
             && !frameData.StageFinishPending
-            && _timerModule.GetTimerInfo(slot) is not { Status: not ETimerStatus.Stopped }
-            && _timerModule.GetStageTimerInfo(slot) is not { Status: not ETimerStatus.Stopped })
+            && (_practiceModule.IsInPractice(slot)
+                || (_timerModule.GetTimerInfo(slot) is not { Status: not ETimerStatus.Stopped }
+                    && _timerModule.GetStageTimerInfo(slot) is not { Status: not ETimerStatus.Stopped })))
         {
             ReplayShared.TrimIdleFrames(frameData, maxPreFrame);
             frameData.Lineage = _nextLineage++;

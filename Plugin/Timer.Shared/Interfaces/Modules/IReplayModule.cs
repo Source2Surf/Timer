@@ -38,7 +38,7 @@ public interface IReplayModule
     ///     Returns the index of the finite replay frame whose Origin is closest to
     ///     <paramref name="position" />. Equal-distance candidates prefer the index nearest
     ///     <paramref name="preferredFrameIndex" />. Returns <c>-1</c> when no searchable replay
-    ///     frame is cached or the query position is not finite.
+    ///     frame is cached or the query position is not finite. Only main and bonus runs (stage 0) are searchable.
     /// </summary>
     /// <param name="distanceSquared">
     ///     Squared distance between <paramref name="position" /> and the closest frame's origin,

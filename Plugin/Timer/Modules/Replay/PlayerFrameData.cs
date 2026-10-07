@@ -56,4 +56,9 @@ internal class PlayerFrameData
     /// must not move in between, so idle trimming waits for this to clear.
     /// </summary>
     public bool StageFinishPending { get; set; }
+
+    /// <summary>
+    /// The run outgrew timer_replay_max_minutes: nothing more is recorded, and it keeps no replay.
+    /// </summary>
+    public bool Overflowed { get; set; }
 }

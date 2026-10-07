@@ -267,7 +267,11 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
                 foreach (var (key, content) in results)
                 {
                     linkedToken.Token.ThrowIfCancellationRequested();
-                    preBuiltIndices[key] = new ClosestFrameIndex(content.Frames);
+                    // Only main and bonus runs are searched by position.
+                    if (key.stage == 0)
+                    {
+                        preBuiltIndices[key] = new ClosestFrameIndex(content.Frames);
+                    }
                 }
                 stopwatch.Stop();
                 _logger.LogInformation("BuildClosestIndex: {elapsed}", stopwatch.Elapsed);
@@ -290,8 +294,13 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
                                                                           continue;
                                                                       }
 
-                                                                      _replayCache[key]         = content;
-                                                                      _closestFrameIndices[key] = preBuiltIndices[key];
+                                                                      _replayCache[key] = content;
+
+                                                                      if (preBuiltIndices.TryGetValue(key, out var index))
+                                                                      {
+                                                                          _closestFrameIndices[key] = index;
+                                                                      }
+
                                                                       UpdateReplayBots(key.style, key.track, key.stage);
                                                                   }
                                                               },
@@ -483,6 +492,11 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
     // late-finishing stale build is discarded rather than clobbering the current index.
     private void BuildClosestFrameIndexAsync((int style, int track, int stage) key, ReplayContent content)
     {
+        if (key.stage != 0)
+        {
+            return;
+        }
+
         _ = Task.Run(async () =>
         {
             try
