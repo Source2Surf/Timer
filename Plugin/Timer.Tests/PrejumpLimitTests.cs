@@ -1,5 +1,8 @@
+using Sharp.Shared.Types;
 using Source2Surf.Timer.Modules;
+using Source2Surf.Timer.Modules.Timer;
 using Source2Surf.Timer.Shared.Models.Style;
+using Source2Surf.Timer.Shared.Models.Zone;
 using Xunit;
 
 namespace Timer.Tests;
@@ -15,4 +18,23 @@ public sealed class PrejumpLimitTests
     [InlineData(-1, false, 5, -1)]   // a map without a limit
     public void TheMapThenTheStyleThenTheGameModeDecide(int? map, bool custom, int style, int expected)
         => Assert.Equal(expected, TimerModule.ResolveMaxPrejumps(map, new StyleSetting { CustomPrejumps = custom, Prejumps = style }, 1));
+
+    [Fact]
+    public void AStageZoneLimitsJumpsOnlyWhenItStartsTheStageOnItsOwn()
+    {
+        var run   = new TimerInfo();
+        var stage = new StageTimerInfo();
+        stage.UpdateInZone(EZoneType.Stage);
+
+        // Practising the stage.
+        Assert.True(TimerModule.IsStageStart(run, stage));
+
+        // Bhopping through it in the middle of a run.
+        run.StartTimer(0, new Vector());
+        Assert.False(TimerModule.IsStageStart(run, stage));
+
+        stage.UpdateInZone(EZoneType.Invalid);
+        run.StopTimer();
+        Assert.False(TimerModule.IsStageStart(run, stage));
+    }
 }

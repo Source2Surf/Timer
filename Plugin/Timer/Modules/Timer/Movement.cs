@@ -65,8 +65,8 @@ internal partial class TimerModule
             return;
         }
 
-        var inMainStartZone  = timerInfo.InZone  == EZoneType.Start;
-        var inStageStartZone = stageTimer.InZone == EZoneType.Stage;
+        var inMainStartZone  = timerInfo.InZone == EZoneType.Start;
+        var inStageStartZone = IsStageStart(timerInfo, stageTimer);
 
         if (!onGround && (inMainStartZone || inStageStartZone))
         {
@@ -121,6 +121,13 @@ internal partial class TimerModule
             timer.WasOnGround = onGround;
         }
     }
+
+    /// <summary>
+    ///     In a stage zone that starts the stage on its own, where its jump limit applies. In the middle of a run it's
+    ///     only passed through, as its speed limits are: a second hop in it had the player stopped dead.
+    /// </summary>
+    internal static bool IsStageStart(TimerInfo timerInfo, TimerInfo stageTimer)
+        => stageTimer.InZone == EZoneType.Stage && !timerInfo.IsTimerRunning();
 
     private unsafe void OnPlayerProcessMovePost(IPlayerProcessMoveForwardParams arg)
     {
