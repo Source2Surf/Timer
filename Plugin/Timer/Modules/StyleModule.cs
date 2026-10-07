@@ -120,9 +120,6 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     // Cached last-applied style key to skip redundant Set() calls across players.
     // Combines style index + inStartZone flag into a single value.
     // Only when the composite key changes do we call Set() on all ConVars.
-    private int  _lastStyleIndex = -1;
-    private bool _lastInStartZone;
-
     // By slot: the keys force_hsw 2 or a_or_d_only settled on this run, -1 until then.
     private readonly int[] _keyCombo = Enumerable.Repeat(-1, PlayerSlot.MaxPlayerCount).ToArray();
 
@@ -269,19 +266,14 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
         var inStartZone = mainTimer.InZone == EZoneType.Start;
 
-        if (mainTimer.Style != _lastStyleIndex || inStartZone != _lastInStartZone)
-        {
-            var airAccel = style.CustomAirAccelerate ? style.AirAccelerate : _mapInfoModule.GetDefaultAirAccelerate();
-            sv_airaccelerate.Set(airAccel);
-            sv_autobunnyhopping.Set(!inStartZone && style.AutoBhop);
-            sv_accelerate.Set(style.Accelerate);
-            sv_friction.Set(style.Friction);
-            sv_air_max_wishspeed.Set(style.WishSpeed ?? _mapInfoModule.GetGameModeWishSpeed());
-            sv_enablebunnyhopping.Set(style.AllowBunnyhopping);
-
-            _lastStyleIndex  = mainTimer.Style;
-            _lastInStartZone = inStartZone;
-        }
+        // The movement cvars are global, set before each player's movement. Only the ones that differ from the last
+        // player's are written: each write is a native call with the engine's change callbacks.
+        SetIfChanged(sv_airaccelerate, style.CustomAirAccelerate ? style.AirAccelerate : _mapInfoModule.GetDefaultAirAccelerate());
+        SetIfChanged(sv_autobunnyhopping, !inStartZone && style.AutoBhop);
+        SetIfChanged(sv_accelerate, style.Accelerate);
+        SetIfChanged(sv_friction, style.Friction);
+        SetIfChanged(sv_air_max_wishspeed, style.WishSpeed ?? _mapInfoModule.GetGameModeWishSpeed());
+        SetIfChanged(sv_enablebunnyhopping, style.AllowBunnyhopping);
 
         var mv = @params.Info;
 
@@ -322,6 +314,22 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
             {
                 ApplyInputRules(client, style, mv, service, inStartZone);
             }
+        }
+    }
+
+    private static void SetIfChanged(IConVar cvar, float value)
+    {
+        if (cvar.GetFloat() != value)
+        {
+            cvar.Set(value);
+        }
+    }
+
+    private static void SetIfChanged(IConVar cvar, bool value)
+    {
+        if (cvar.GetBool() != value)
+        {
+            cvar.Set(value);
         }
     }
 
