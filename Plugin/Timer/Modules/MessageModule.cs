@@ -43,6 +43,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
     private readonly IRecordModule         _recordModule;
     private readonly ITimerModule          _timerModule;
     private readonly IStyleModule          _styleModule;
+    private readonly IZoneModule           _zoneModule;
     private readonly ILocalizationProvider  _localization;
     private readonly IRequestManager        _request;
     private readonly ILogger<MessageModule> _logger;
@@ -56,6 +57,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
                          IRecordModule          recordModule,
                          ITimerModule           timerModule,
                          IStyleModule           styleModule,
+                         IZoneModule            zoneModule,
                          ILocalizationProvider  localization,
                          IRequestManager        request,
                          ILogger<MessageModule> logger)
@@ -64,6 +66,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
         _recordModule = recordModule;
         _timerModule  = timerModule;
         _styleModule  = styleModule;
+        _zoneModule   = zoneModule;
         _localization = localization;
         _request      = request;
         _logger       = logger;
@@ -115,26 +118,57 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
                                   ITimerInfo        timerInfo,
                                   int               checkpoint)
     {
-        var tr      = _localization.For(controller.PlayerSlot);
-        var message = tr.Format(ChatTexts.Checkpoint, checkpoint, Utils.ColoredTime(timerInfo.Time));
+        var wr    = _recordModule.GetWRCheckpoints(timerInfo.Style, timerInfo.Track);
+        var pb    = GetPbCheckpoints(controller.PlayerSlot, timerInfo.Style, timerInfo.Track);
+        var index = checkpoint - 1;
 
-        // WR checkpoint diff
-        var wrCheckpoints = _recordModule.GetWRCheckpoints(timerInfo.Style, timerInfo.Track);
-
-        if (wrCheckpoints is { Count: > 0 } && checkpoint >= 1 && checkpoint <= wrCheckpoints.Count)
-        {
-            message = ZString.Concat(message, tr.Format(ChatTexts.VsSr, Utils.SignedDelta(timerInfo.Time - wrCheckpoints[checkpoint - 1].Time)));
-        }
-
-        if (GetPbCheckpoints(controller.PlayerSlot, timerInfo.Style, timerInfo.Track) is { } pbCheckpoints
-            && checkpoint >= 1
-            && checkpoint <= pbCheckpoints.Count)
-        {
-            message = ZString.Concat(message, tr.Format(ChatTexts.VsPb, Utils.SignedDelta(timerInfo.Time - pbCheckpoints[checkpoint - 1].Time)));
-        }
-
-        pawn.PrintToChat(message);
+        pawn.PrintToChat(CheckpointLine(_localization.For(controller.PlayerSlot),
+                                        checkpoint,
+                                        _zoneModule.GetLastCheckpoint(timerInfo.Track),
+                                        timerInfo.Time,
+                                        wr is not null && index >= 0 && index < wr.Count ? timerInfo.Time - wr[index].Time : null,
+                                        pb is not null && index >= 0 && index < pb.Count ? timerInfo.Time - pb[index].Time : null,
+                                        index >= 0 && index < timerInfo.Checkpoints.Count
+                                            ? timerInfo.Checkpoints[index].EndVelocity.Length2D()
+                                            : null));
     }
+
+    /// <summary>
+    ///     "CP 1/4 | 16.171 | SR -0.123 | PB +0.045 | 1290 u/s": grey, with its values in colour. Without an SR, a PB
+    ///     or a speed, that part is left out.
+    /// </summary>
+    internal static string CheckpointLine(ChatTr tr, int checkpoint, int total, float time, float? vsSr, float? vsPb, float? speed)
+    {
+        var line = ZString.Concat(ChatColor.Grey,
+                                  tr.Format(ChatTexts.Checkpoint,
+                                            InGrey(ChatColor.White, checkpoint),
+                                            InGrey(ChatColor.White, Math.Max(total, checkpoint)),
+                                            InGrey(ChatColor.Gold, Utils.FormatTime(time, true))));
+
+        if (vsSr is { } sr)
+        {
+            line = ZString.Concat(line, tr.Format(ChatTexts.VsSr, InGrey(Utils.SignedDelta(sr))));
+        }
+
+        if (vsPb is { } pb)
+        {
+            line = ZString.Concat(line, tr.Format(ChatTexts.VsPb, InGrey(Utils.SignedDelta(pb))));
+        }
+
+        if (speed is { } s && float.IsFinite(s))
+        {
+            line = ZString.Concat(line, tr.Format(ChatTexts.CheckpointSpeed, InGrey(ChatColor.Blue, (int) MathF.Round(s))));
+        }
+
+        return line;
+    }
+
+    // A coloured value in a grey line.
+    private static string InGrey<T>(string color, T value)
+        => ZString.Concat(color, value, ChatColor.Grey);
+
+    private static string InGrey(string colored)
+        => ZString.Concat(colored, ChatColor.Grey);
 
     public void OnPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
     {

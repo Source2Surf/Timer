@@ -16,6 +16,7 @@
  */
 
 using System;
+using Cysharp.Text;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
@@ -378,8 +379,7 @@ internal partial class RecordModule
                                      var pbCp = pbCheckpoints[i];
                                      var wrCp = wrCheckpoints[i];
 
-                                     ctrl.PrintToChat(tr.Format(ChatTexts.Checkpoint, i + 1, Utils.ColoredTime(pbCp.Time))
-                                                      + tr.Format(ChatTexts.VsSr, Utils.SignedDelta(pbCp.Time - wrCp.Time)));
+                                     ctrl.PrintToChat(MessageModule.CheckpointLine(tr, i + 1, count, pbCp.Time, pbCp.Time - wrCp.Time, null, null));
                                  }
 
                                  // Final time diff
@@ -388,8 +388,9 @@ internal partial class RecordModule
                                      return;
                                  }
 
-                                 ctrl.PrintToChat(tr.Format(ChatTexts.CprFinal, Utils.ColoredTime(pb.Time))
-                                                  + tr.Format(ChatTexts.VsSr, Utils.SignedDelta(pb.Time - wr.Time)));
+                                 ctrl.PrintToChat(ZString.Concat(ChatColor.Grey,
+                                                                 tr.Format(ChatTexts.CprFinal, ZString.Concat(ChatColor.Gold, Utils.FormatTime(pb.Time, true), ChatColor.Grey)),
+                                                                 tr.Format(ChatTexts.VsSr, ZString.Concat(Utils.SignedDelta(pb.Time - wr.Time), ChatColor.Grey))));
                              });
 
         return ECommandAction.Handled;

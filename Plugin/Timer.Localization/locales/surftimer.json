@@ -1564,8 +1564,12 @@
     "zh-cn": "奖励关 {0} 关卡 {1}"
   },
   "chat.checkpoint": {
-    "en-us": "CP{0}: {1}",
-    "zh-cn": "检查点 {0}：{1}"
+    "en-us": "CP {0}/{1} | {2}",
+    "zh-cn": "检查点 {0}/{1} | {2}"
+  },
+  "chat.checkpoint.speed": {
+    "en-us": " | {0} u/s",
+    "zh-cn": " | {0} u/s"
   },
   "chat.vs_sr": {
     "en-us": " | SR {0}",
