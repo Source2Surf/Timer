@@ -44,7 +44,7 @@ using Source2Surf.Timer.Shared.Models.Timer;
 
 namespace Source2Surf.Timer.Modules;
 
-internal class ReplayRecorderModule : IReplayRecorderModule,
+internal partial class ReplayRecorderModule : IReplayRecorderModule,
                                       IReplayRewind,
                                       IModule,
                                       IGameListener,
@@ -208,11 +208,15 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
 
         _recordModule.RegisterListener(this);
 
+        _ = RetryUploadsAsync(_uploadRetry.Token);
+
         return true;
     }
 
     public void Shutdown()
     {
+        _uploadRetry.Cancel();
+
         _bridge.HookManager.PlayerRunCommand.RemoveHookPost(OnPlayerRunCommandPost);
 
         _bridge.ModSharp.RemoveGameListener(this);
@@ -229,6 +233,7 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
         // Restore any fallback records persisted from a previous session before doing TTL cleanup,
         // so a late OnRecordSaved after a crash/restart can still find its .tmp.
         LoadFallbackRecordsFromDisk();
+        LoadPendingUploads();
 
         // TTL cleanup: drop entries older than timer_replay_fallback_ttl.
         ExpireFallbackRecords("map activate");
@@ -1078,6 +1083,11 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                          style,
                                          track,
                                          stage);
+
+                        if (isNewBest)
+                        {
+                            QueueUploadRetry(filePath, new PendingUpload(mapName, style, track, stage, header.SteamId, (ulong) savedRunId));
+                        }
                     }
                 }
 
@@ -1460,6 +1470,11 @@ internal class ReplayRecorderModule : IReplayRecorderModule,
                                         style,
                                         track,
                                         stage);
+
+                        if (isNewBest)
+                        {
+                            QueueUploadRetry(finalPath, new PendingUpload(mapName, style, track, stage, recordSteamId, (ulong) runId));
+                        }
                     }
                 }
             }
