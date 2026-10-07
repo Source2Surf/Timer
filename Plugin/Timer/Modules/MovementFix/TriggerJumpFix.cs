@@ -264,11 +264,11 @@ internal unsafe partial class MovementFixModule
             }
         }
 
-        var passesTriggerFilters
-            = (delegate* unmanaged<nint, nint, bool>) (*(nint**) trigger)[CBaseTrigger_PassesTriggerFilters_index];
-
-        return passesTriggerFilters(trigger, pawn);
+        return PassesTriggerFilters(trigger, pawn);
     }
+
+    private static bool PassesTriggerFilters(nint trigger, nint pawn)
+        => ((delegate* unmanaged<nint, nint, bool>) (*(nint**) trigger)[CBaseTrigger_PassesTriggerFilters_index])(trigger, pawn);
 
     [UnmanagedCallersOnly]
     private static void TriggerFilterDestructor(nint filter)

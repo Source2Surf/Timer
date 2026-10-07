@@ -95,6 +95,7 @@ internal unsafe partial class MovementFixModule
 
     private static bool _canTrace;
     private static bool _canSetVelocity;
+    private static bool _canQueryTriggers;
     private static bool _canTriggerJump;
 
     private void InstallHooks()
@@ -222,19 +223,26 @@ internal unsafe partial class MovementFixModule
         gameData.GetVFuncIndex("CBaseEntity::Touch", out CBaseEntity_Touch_index);
         gameData.GetVFuncIndex("CBaseEntity::EndTouch", out CBaseEntity_EndTouch_index);
 
-        _canTriggerJump = _canTrace
+        _canQueryTriggers = _canTrace
+                            && CEntityIdentity_m_designerName_offset > 0
+                            && CBaseTrigger_PassesTriggerFilters_index > 0;
+
+        _canTriggerJump = _canQueryTriggers
                           && _canSetVelocity
-                          && CEntityIdentity_m_designerName_offset > 0
-                          && CBaseTrigger_PassesTriggerFilters_index > 0
                           && CBaseEntity_StartTouch_index > 0
                           && CBaseEntity_Touch_index > 0
                           && CBaseEntity_EndTouch_index > 0;
 
-        if (_canTriggerJump)
+        if (_canQueryTriggers)
         {
             CreateTriggerFilterVtable();
         }
         else
+        {
+            _logger.LogWarning("The stairs fix is disabled, a native it needs is missing");
+        }
+
+        if (!_canTriggerJump)
         {
             _logger.LogWarning("The trigger jump fix is disabled, a native it needs is missing");
         }
@@ -638,10 +646,12 @@ internal unsafe partial class MovementFixModule
         // These only move the start of the move, never the velocity.
         ApplyPreMoveFixes(service, pawn, slot, mv);
 
+        var origin   = mv->AbsOrigin;
         var velocity = mv->Velocity;
 
         CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
 
+        ApplyStairsFix(service, pawn, slot, mv, origin, velocity);
         RecordStepMove(slot, velocity, mv->Velocity);
     }
 

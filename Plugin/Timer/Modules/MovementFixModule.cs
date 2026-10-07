@@ -39,6 +39,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private readonly ILogger<MovementFixModule> _logger;
 
     private static IMovementExtension _movementExtension = null!;
+    private static IMapInfoModule     _mapInfo           = null!;
 
     // cvars
     // ReSharper disable InconsistentNaming
@@ -47,10 +48,12 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private readonly IConVar timer_uphill;
     private readonly IConVar timer_telehop;
     private readonly IConVar timer_edgebug;
+    private readonly IConVar timer_stairs;
     private readonly IConVar timer_triggerjump;
     private readonly IConVar timer_teleport_keep_angles;
 
     private readonly IConVar sv_standable_normal;
+    private readonly IConVar sv_stepsize;
 
     // ReSharper restore InconsistentNaming
 
@@ -58,9 +61,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private static bool  _uphillEnabled;
     private static bool  _telehopEnabled;
     private static bool  _edgebugEnabled;
+    private static bool  _stairsEnabled;
     private static bool  _triggerJumpEnabled;
     private static bool  _keepTeleportAnglesEnabled;
     private static float _standableNormal;
+    private static float _stepSize;
 
     // CGlobalVars*, set once a map is loaded.
     private static nint _globals;
@@ -72,12 +77,14 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     public MovementFixModule(InterfaceBridge            bridge,
                              IInlineHookManager         inlineHookManager,
                              ILogger<MovementFixModule> logger,
-                             IMovementExtension         movementExtension)
+                             IMovementExtension         movementExtension,
+                             IMapInfoModule             mapInfo)
     {
         _bridge            = bridge;
         _inlineHookManager = inlineHookManager;
         _logger            = logger;
         _movementExtension = movementExtension;
+        _mapInfo           = mapInfo;
 
         timer_slopefix = bridge.ConVarManager.CreateConVar("timer_slopefix",
                                                            true,
@@ -99,6 +106,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
                                                           "Land players on the edge of a block instead of letting them slide off it depending on where in the tick they hit it")
             !;
 
+        timer_stairs = bridge.ConVarManager.CreateConVar("timer_stairs",
+                                                         true,
+                                                         "On surf maps, put players sliding down stairs in the air on top of the step they run into, keeping their speed")
+            !;
+
         timer_triggerjump = bridge.ConVarManager.CreateConVar("timer_triggerjump",
                                                               true,
                                                               "Touch the teleports, pushes and trigger_multiples (zones included) lying in the gap between a landing player and the ground")
@@ -110,6 +122,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
             !;
 
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
+        sv_stepsize         = bridge.ConVarManager.FindConVar("sv_stepsize")!;
     }
 
     public bool Init()
@@ -121,9 +134,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.InstallChangeHook(timer_uphill, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_edgebug, OnConVarChanged);
+        _bridge.ConVarManager.InstallChangeHook(timer_stairs, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(timer_teleport_keep_angles, OnConVarChanged);
         _bridge.ConVarManager.InstallChangeHook(sv_standable_normal, OnConVarChanged);
+        _bridge.ConVarManager.InstallChangeHook(sv_stepsize, OnConVarChanged);
 
         InstallHooks();
 
@@ -144,9 +159,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.ConVarManager.RemoveChangeHook(timer_uphill, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_telehop, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_edgebug, OnConVarChanged);
+        _bridge.ConVarManager.RemoveChangeHook(timer_stairs, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_triggerjump, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(timer_teleport_keep_angles, OnConVarChanged);
         _bridge.ConVarManager.RemoveChangeHook(sv_standable_normal, OnConVarChanged);
+        _bridge.ConVarManager.RemoveChangeHook(sv_stepsize, OnConVarChanged);
 
         // InlineHookManager shuts down first and removes the detours.
         if (_triggerFilterVtable != null)
@@ -175,9 +192,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _uphillEnabled             = timer_uphill.GetBool();
         _telehopEnabled            = timer_telehop.GetBool();
         _edgebugEnabled            = timer_edgebug.GetBool();
+        _stairsEnabled             = timer_stairs.GetBool();
         _triggerJumpEnabled        = timer_triggerjump.GetBool();
         _keepTeleportAnglesEnabled = timer_teleport_keep_angles.GetBool();
         _standableNormal           = sv_standable_normal.GetFloat();
+        _stepSize                  = sv_stepsize.GetFloat();
     }
 
     private static void ResetPlayerState()
