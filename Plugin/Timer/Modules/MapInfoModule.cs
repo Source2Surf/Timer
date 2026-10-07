@@ -113,6 +113,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         "sv_subtick_movement_view_angles 0",
         "mp_solid_enemies 0",
         "mp_solid_teammates 0",
+        "mp_drop_knife_enable 1",
         "sv_legacy_jump 1",
         "bot_auto_vacate 0",
         "ms_override_team_limit 1",
