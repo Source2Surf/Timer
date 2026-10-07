@@ -50,6 +50,26 @@ internal partial class HudModule
             return;
         }
 
+        // Only a player whose SSJ someone shows is followed; tracking that starts again starts a fresh chain.
+        var bit = 1UL << param.Client.Slot;
+
+        if ((_jumpsWanted & bit) == 0)
+        {
+            if ((_jumpsTracked & bit) != 0)
+            {
+                _jumpsTracked &= ~bit;
+                p.Ssj.Break();
+            }
+
+            return;
+        }
+
+        if ((_jumpsTracked & bit) == 0)
+        {
+            _jumpsTracked |= bit;
+            p.Ssj.Break();
+        }
+
         var pawn = param.Pawn;
 
         if (!pawn.IsAlive || pawn.ActualMoveType != MoveType.Walk)

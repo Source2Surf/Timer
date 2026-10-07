@@ -182,6 +182,7 @@ internal partial class HudModule
         UpdateMapInfo(w, p);
 
         var source = ResolveSource(p, controller);
+        p.Watched = source is { Replay: null } live ? (int) live.Slot : -1;
         w.Class("TimerRoot", "Hidden", source is null);
 
         if (source is not { } s)

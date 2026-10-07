@@ -460,11 +460,19 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         SyncRoundTime(gameRules, now);
         RebuildSpectators(now);
 
+        ulong turns = 0, jumps = 0;
+
         foreach (var p in _players)
         {
             if (p is null)
             {
                 continue;
+            }
+
+            if (p.Watched >= 0)
+            {
+                turns |= p.IsOn(HudOptions.Keys) && p.IsOn(HudOptions.KeyMouse) ? 1UL << p.Watched : 0;
+                jumps |= p.IsOn(HudOptions.Ssj) ? 1UL << p.Watched : 0;
             }
 
             // CurTime starts over on a map change, so a time further ahead than it could be is stale.
@@ -481,7 +489,15 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
             p.NextHudAt = now + HudUpdateInterval;
             Refresh(p, now);
         }
+
+        _turnsWanted = turns;
+        _jumpsWanted = jumps;
     }
+
+    // By slot: whose turn arrows and SSJ someone's HUD shows (from the last refresh), and whose are being tracked. The
+    // others aren't followed every tick.
+    private ulong _turnsWanted, _turnsTracked;
+    private ulong _jumpsWanted, _jumpsTracked;
 
     private const float TranslationRefreshSeconds = 2f;
 
@@ -615,8 +631,22 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         var slot = param.Client.Slot;
         var pawn = param.Pawn;
         var now  = _bridge.GlobalVars.CurTime;
+        var bit  = 1UL << slot;
 
-        TrackTurn(slot, pawn.GetEyeAngles().Y, now);
+        if ((_turnsWanted & bit) == 0)
+        {
+            _turnsTracked &= ~bit;
+        }
+        else if ((_turnsTracked & bit) == 0)
+        {
+            _turnsTracked |= bit;
+            _keyYaw[slot]  =  pawn.GetEyeAngles().Y; // from here on, not from a stale angle
+            _turn[slot]    =  0;
+        }
+        else
+        {
+            TrackTurn(slot, pawn.GetEyeAngles().Y, now);
+        }
 
         if (param.Client.IsFakeClient || _players[slot] is not { } p)
         {

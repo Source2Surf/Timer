@@ -380,6 +380,9 @@ internal sealed class HudPlayer
     public          bool        SsjWasGone;
     public          (SsjJump Jump, int Rows, int Epoch)? SsjDrawn; // what the card's texts were written for
 
+    // The live player whose keys and jumps this HUD shows (itself, or one spectated); -1 for none or a replay bot.
+    public int Watched = -1;
+
     /// <summary>
     ///     The player's PB checkpoint splits, which the record cache doesn't keep, fetched per style and track.
     /// </summary>
