@@ -47,7 +47,14 @@ public sealed partial class MapChooserModule
     {
         try
         {
-            return string.Format(template, args);
+            var values = new object?[args.Length];
+
+            for (var i = 0; i < args.Length; i++)
+            {
+                values[i] = ChatColorTags.Recolor(template, i, args[i]);
+            }
+
+            return string.Format(template, values);
         }
         catch (FormatException)
         {

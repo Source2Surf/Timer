@@ -72,6 +72,44 @@ public static class ChatColorTags
     }
 
     /// <summary>
+    ///     A value for <paramref name="template" />'s {<paramref name="index" />}: when a colour tag comes right before
+    ///     the placeholder, without the colour the value starts with, so the tag colours it.
+    /// </summary>
+    public static T Recolor<T>(string template, int index, T value)
+    {
+        if (value is not string { Length: > 0 } text || !IsColor(text[0]) || template.Length < 2)
+        {
+            return value;
+        }
+
+        for (var at = template.IndexOf('{', 1); at > 0; at = template.IndexOf('{', at + 1))
+        {
+            if (!IsColor(template[at - 1]))
+            {
+                continue;
+            }
+
+            var end    = at + 1;
+            var number = 0;
+
+            while (end < template.Length && char.IsAsciiDigit(template[end]) && number < 1000)
+            {
+                number = number * 10 + (template[end++] - '0');
+            }
+
+            if (end > at + 1 && number == index && end < template.Length && template[end] is '}' or ':' or ',')
+            {
+                return (T) (object) text[1..];
+            }
+        }
+
+        return value;
+    }
+
+    private static bool IsColor(char c)
+        => c is >= '\x01' and <= '\x10';
+
+    /// <summary>
     ///     What goes before every timer chat message: timer.jsonc's chat.prefix, or <see cref="DefaultPrefix" />, coloured
     ///     and after a space, as chat needs one before a colour.
     /// </summary>

@@ -40,6 +40,17 @@ public sealed class CheckpointMessageTests
                      Plain(MessageModule.CheckpointLine(chinese, 1, 4, Time, -0.123f, 0.045f, 1290f)));
     }
 
+    // A custom translation recolours a value with a tag right before its placeholder.
+    [Fact]
+    public void ATranslationRecoloursTheTime()
+    {
+        var custom = new ChatTr(new Custom("chat.checkpoint", "CP {0}/{1} | {red}{2}"), default);
+        var line   = MessageModule.CheckpointLine(custom, 1, 4, Time, null, null, null);
+
+        Assert.Contains(ChatColor.Red + "16.171" + ChatColor.Grey, line, StringComparison.Ordinal);
+        Assert.DoesNotContain(ChatColor.Gold, line, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ACheckpointPastTheMapsLastCountsAsTheTotal()
         => Assert.StartsWith("CP 3/3 |", Plain(MessageModule.CheckpointLine(default, 3, 0, Time, null, null, null)));
@@ -47,6 +58,12 @@ public sealed class CheckpointMessageTests
     // Without the colour codes.
     private static string Plain(string line)
         => new (line.Where(c => c >= ' ').ToArray());
+
+    private sealed class Custom(string key, string text) : ILocalizationProvider
+    {
+        public string? GetText(PlayerSlot slot, string k)
+            => k == key ? text : null;
+    }
 
     private sealed class LocaleFile(string language) : ILocalizationProvider
     {

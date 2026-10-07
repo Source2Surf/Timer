@@ -38,7 +38,7 @@ internal sealed record ChatText(string Key, string English);
 /// </summary>
 internal readonly struct ChatTr(ILocalizationProvider? provider, PlayerSlot slot)
 {
-    // Translations can colour their text with {green}-style tags.
+    // Translations can colour their text with {green}-style tags, and a value with one right before it.
     public string this[ChatText text]
         => ChatColorTags.Apply(provider?.GetText(slot, text.Key) ?? text.English);
 
@@ -46,7 +46,9 @@ internal readonly struct ChatTr(ILocalizationProvider? provider, PlayerSlot slot
     {
         try
         {
-            return ZString.Format(this[text], a);
+            var t = this[text];
+
+            return ZString.Format(t, ChatColorTags.Recolor(t, 0, a));
         }
         catch (FormatException)
         {
@@ -58,7 +60,9 @@ internal readonly struct ChatTr(ILocalizationProvider? provider, PlayerSlot slot
     {
         try
         {
-            return ZString.Format(this[text], a, b);
+            var t = this[text];
+
+            return ZString.Format(t, ChatColorTags.Recolor(t, 0, a), ChatColorTags.Recolor(t, 1, b));
         }
         catch (FormatException)
         {
@@ -70,7 +74,9 @@ internal readonly struct ChatTr(ILocalizationProvider? provider, PlayerSlot slot
     {
         try
         {
-            return ZString.Format(this[text], a, b, c);
+            var t = this[text];
+
+            return ZString.Format(t, ChatColorTags.Recolor(t, 0, a), ChatColorTags.Recolor(t, 1, b), ChatColorTags.Recolor(t, 2, c));
         }
         catch (FormatException)
         {
@@ -82,7 +88,13 @@ internal readonly struct ChatTr(ILocalizationProvider? provider, PlayerSlot slot
     {
         try
         {
-            return ZString.Format(this[text], a, b, c, d);
+            var t = this[text];
+
+            return ZString.Format(t,
+                                  ChatColorTags.Recolor(t, 0, a),
+                                  ChatColorTags.Recolor(t, 1, b),
+                                  ChatColorTags.Recolor(t, 2, c),
+                                  ChatColorTags.Recolor(t, 3, d));
         }
         catch (FormatException)
         {
