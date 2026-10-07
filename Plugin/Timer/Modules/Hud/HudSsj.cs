@@ -128,6 +128,8 @@ internal partial class HudModule
 
         if (jump is null)
         {
+            p.SsjDrawn = default;
+
             return;
         }
 
@@ -137,6 +139,22 @@ internal partial class HudModule
         p.SsjWasGone = gone;
         w.Class("SsjCard", "gone", gone);
         w.Class("SsjCard", "snap", snap);
+
+        // The card's texts follow the jump shown, the rows picked and the language; fading is only classes.
+        var rows = (p.IsOn(HudOptions.SsjSpeedDiff) ? 1 : 0)
+                   | (p.IsOn(HudOptions.SsjHeight) ? 2 : 0)
+                   | (p.IsOn(HudOptions.SsjGain) ? 4 : 0)
+                   | (p.IsOn(HudOptions.SsjSync) ? 8 : 0)
+                   | (p.IsOn(HudOptions.SsjStrafes) ? 16 : 0)
+                   | (p.IsOn(HudOptions.SsjEfficiency) ? 32 : 0);
+
+        if (p.SsjDrawn is { } drawn && ReferenceEquals(drawn.Jump, jump) && drawn.Rows == rows && drawn.Epoch == p.TrEpoch)
+        {
+            return;
+        }
+
+        p.SsjDrawn = (jump, rows, p.TrEpoch);
+
         w.Text("SsjJump", "text", tr.Format(HudTexts.SsjJumpN, jump.Number));
         w.Text("SsjSpeed", "text", HudFormat.RoundSpeed(jump.Speed).ToString(CultureInfo.InvariantCulture));
 
@@ -144,32 +162,32 @@ internal partial class HudModule
 
         if (jump.Stats is { } stats)
         {
-            if (p.IsOn(HudOptions.SsjSpeedDiff))
+            if ((rows & 1) != 0)
             {
                 SsjRow(w, tr, row++, null, HudFormat.Signed(stats.SpeedDiff), null);
             }
 
-            if (p.IsOn(HudOptions.SsjHeight))
+            if ((rows & 2) != 0)
             {
                 SsjRow(w, tr, row++, HudTexts.SsjHeightN, HudFormat.Signed(stats.HeightDiff), null);
             }
 
-            if (p.IsOn(HudOptions.SsjGain))
+            if ((rows & 4) != 0)
             {
                 SsjRow(w, tr, row++, HudTexts.SsjGainN, HudFormat.Percent(stats.Gain), HudFormat.Tier(stats.Gain, PercentBars));
             }
 
-            if (p.IsOn(HudOptions.SsjSync))
+            if ((rows & 8) != 0)
             {
                 SsjRow(w, tr, row++, HudTexts.SsjSyncN, HudFormat.Percent(stats.Sync), HudFormat.Tier(stats.Sync, PercentBars));
             }
 
-            if (p.IsOn(HudOptions.SsjStrafes))
+            if ((rows & 16) != 0)
             {
                 SsjRow(w, tr, row++, HudTexts.SsjStrafesN, stats.Strafes.ToString(CultureInfo.InvariantCulture), null);
             }
 
-            if (p.IsOn(HudOptions.SsjEfficiency))
+            if ((rows & 32) != 0)
             {
                 SsjRow(w, tr, row++, HudTexts.SsjEfficiencyN, HudFormat.Percent(stats.Efficiency), HudFormat.Tier(stats.Efficiency, PercentBars));
             }

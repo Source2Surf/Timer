@@ -274,6 +274,7 @@ internal sealed class HudPlayer
     {
         SplitsDrawn  = default;
         RecordsDrawn = default;
+        SsjDrawn     = null;
         SentText.Clear();
         SentClass.Clear();
         SentNumbered.Clear();
@@ -377,6 +378,7 @@ internal sealed class HudPlayer
     public          float       SsjShownAt; // game time it was picked; it fades out a few seconds later
     public          bool        SsjSnap;    // as last sent: transitions off, from faded out until it shows again
     public          bool        SsjWasGone;
+    public          (SsjJump Jump, int Rows, int Epoch)? SsjDrawn; // what the card's texts were written for
 
     /// <summary>
     ///     The player's PB checkpoint splits, which the record cache doesn't keep, fetched per style and track.
