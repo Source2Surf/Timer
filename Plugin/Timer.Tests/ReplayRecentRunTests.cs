@@ -42,6 +42,17 @@ public sealed class ReplayRecentRunTests : IDisposable
         Assert.Empty(Kept(Player, stage: 0));
     }
 
+    [Fact]
+    public void KeepingAllDeletesNone()
+    {
+        foreach (var runId in new long[] { 3, 1, 4, 2 })
+        {
+            Keep(Player, stage: 0, runId, keep: int.MaxValue);
+        }
+
+        Assert.Equal([1L, 2L, 3L, 4L], Kept(Player, stage: 0));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(3)]

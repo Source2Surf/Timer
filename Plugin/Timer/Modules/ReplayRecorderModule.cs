@@ -93,6 +93,7 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
     private readonly IConVar timer_replay_pending_timeout;
     private readonly IConVar timer_replay_fallback_ttl;
     private readonly IConVar timer_replay_slower_runs;
+    private readonly IConVar timer_replay_keep_all_runs;
     private readonly IConVar timer_replay_keep_runs;
     private readonly IConVar timer_replay_keep_stage_runs;
     private readonly IConVar timer_replay_recent_max_days;
@@ -164,6 +165,11 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                                                 0,
                                                 2,
                                                 "Runs that don't beat the player's PB: 0 not saved, 1 kept on disk for a few days, 2 also uploaded to the replay store")!;
+
+        timer_replay_keep_all_runs
+            = bridge.ConVarManager.CreateConVar("timer_replay_keep_all_runs",
+                                                false,
+                                                "Keep every run's replay for good: slower runs are saved whatever timer_replay_slower_runs says, and never deleted by count or age (uploading them still takes timer_replay_slower_runs 2)")!;
 
         timer_replay_keep_runs
             = bridge.ConVarManager.CreateConVar("timer_replay_keep_runs",
@@ -304,15 +310,22 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
         }
     }
 
+    private int SlowerRuns()
+        => timer_replay_keep_all_runs.GetBool()
+            ? Math.Max(timer_replay_slower_runs.GetInt32(), 1)
+            : timer_replay_slower_runs.GetInt32();
+
     private int KeepRuns(int stage)
-        => stage == 0 ? timer_replay_keep_runs.GetInt32() : timer_replay_keep_stage_runs.GetInt32();
+        => timer_replay_keep_all_runs.GetBool() ? int.MaxValue
+           : stage == 0                         ? timer_replay_keep_runs.GetInt32()
+                                                  : timer_replay_keep_stage_runs.GetInt32();
 
     // Once the map has loaded its replays, off the main thread.
     private void ScheduleHousekeeping()
     {
         _bridge.ModSharp.PushTimer(() =>
                                    {
-                                       var maxDays     = timer_replay_recent_max_days.GetInt32();
+                                       var maxDays     = timer_replay_keep_all_runs.GetBool() ? 0 : timer_replay_recent_max_days.GetInt32();
                                        var cacheSizeMb = timer_replay_cache_size_mb.GetInt32();
 
                                        Task.Run(async () =>
@@ -819,7 +832,7 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
     // after the finish, a last stage finishing with the run) it's captured as ever and sorted out when the result comes.
     private bool NeedsNoReplay(PendingRecordResult? result, int attemptId, int style, int track, int stage, float time)
         => result is not null
-           && NeedsNoReplay(result, attemptId, timer_replay_slower_runs.GetInt32() >= 1, _playbackModule.GetCachedReplay(style, track, stage), time);
+           && NeedsNoReplay(result, attemptId, SlowerRuns() >= 1, _playbackModule.GetCachedReplay(style, track, stage), time);
 
     internal static bool NeedsNoReplay(PendingRecordResult? result, int attemptId, bool keepsSlowerRuns, ReplayContent? playing, float time)
         => result is { RecordEvent: { RecordType: EAttemptResult.NoNewRecord } recordEvent }
@@ -1019,7 +1032,7 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
         var compressionLevel   = timer_replay_file_compression_level.GetInt32();
         var compressionWorkers = timer_replay_file_compression_workers.GetInt32();
         var keepRuns           = KeepRuns(stage);
-        var slowerRuns         = timer_replay_slower_runs.GetInt32();
+        var slowerRuns         = SlowerRuns();
 
         // A slower run is only written when the server keeps those; playback still gets it below.
         var writeFile = context.AttemptResult != EAttemptResult.NoNewRecord || slowerRuns >= 1;
@@ -1298,7 +1311,7 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
         var inMemoryContent     = fallback.Content;
         var replayDirectory     = _replayDirectory;
         var keepRuns            = KeepRuns(stage);
-        var slowerRuns          = timer_replay_slower_runs.GetInt32();
+        var slowerRuns          = SlowerRuns();
 
         // The run is confirmed; if its temp file cannot be used, a PB/WR must still reach playback
         // from the copy held in memory (the playback cache is not fed until confirmation).

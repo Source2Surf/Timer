@@ -67,7 +67,8 @@ Per-map overrides go in `sharp/data/surftimer/map_configs/<map>.json`: `cmds`,
 
 Set `replay.storage_base_url` in `timer.jsonc` to an HTTP store with
 PUT/GET/DELETE; `tools/ReplayStorageServer` is a reference one (port 5080).
-Failed uploads are retried. Slower runs are kept per `timer_replay_slower_runs`.
+Failed uploads are retried. Slower runs are kept per `timer_replay_slower_runs`;
+`timer_replay_keep_all_runs 1` keeps every run's replay for good.
 
 ## Commands
 

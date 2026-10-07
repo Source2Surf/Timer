@@ -54,7 +54,8 @@ internal static class ReplayShared
 
     /// <summary>
     ///     Keeps a slower run's replay so its player can watch it from !replay: moves it among their recent runs on
-    ///     that leaderboard and deletes all but the newest <paramref name="keep" />. With keep 0 it's just deleted.
+    ///     that leaderboard and deletes all but the newest <paramref name="keep" />. With keep 0 it's just deleted, with
+    ///     int.MaxValue none are.
     /// </summary>
     public static void KeepRecentRun(string filePath, string replayDirectory, string mapName, int style, int track, int stage,
                                      ulong steamId, long runId, int keep, ILogger logger)
@@ -84,6 +85,11 @@ internal static class ReplayShared
 
             // Its age limit counts from now.
             File.SetLastWriteTimeUtc(target, DateTime.UtcNow);
+
+            if (keep == int.MaxValue)
+            {
+                return;
+            }
 
             var runs = new List<(long RunId, string Path)>();
 
