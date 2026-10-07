@@ -18,6 +18,7 @@
 using System;
 using System.Runtime.InteropServices;
 using Sharp.Shared.Enums;
+using Sharp.Shared.GameEntities;
 using Sharp.Shared.HookParams;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
@@ -29,15 +30,20 @@ namespace Source2Surf.Timer.Modules;
 
 // rngfix's trigger jump fix. CS2 lands a player while they still hover up to 2 units above the ground, and triggers fire
 // from where the player ends the tick, so landing and jumping straight away skips triggers lying in that gap. After the
-// tick, touch the ones there the game won't touch itself, the way FinishMove touches what the move ran into.
+// tick, start touching the ones there the game won't touch itself, and end it on the player's next tick, as a physics
+// touch of one tick does (and Source 1's touch links did).
 internal unsafe partial class MovementFixModule
 {
     private const int MaxTriggerHits = 16;
 
-    private static readonly int[]    _landTick     = new int[PlayerSlot.MaxPlayerCount];
-    private static readonly Vector[] _landOrigin   = new Vector[PlayerSlot.MaxPlayerCount];
-    private static readonly Vector[] _landVelocity = new Vector[PlayerSlot.MaxPlayerCount];
-    private static readonly bool[]   _landDucked   = new bool[PlayerSlot.MaxPlayerCount];
+    private static readonly int[]    _landTick   = new int[PlayerSlot.MaxPlayerCount];
+    private static readonly Vector[] _landOrigin = new Vector[PlayerSlot.MaxPlayerCount];
+    private static readonly bool[]   _landDucked = new bool[PlayerSlot.MaxPlayerCount];
+
+    // By slot: the touches to end on the player's next tick, by handle (a trigger_once removes itself).
+    private static readonly uint[] _touchingPawn     = new uint[PlayerSlot.MaxPlayerCount];
+    private static readonly uint[] _touchingTriggers = new uint[(int) PlayerSlot.MaxPlayerCount * MaxTriggerHits];
+    private static readonly int[]  _touchingCount    = new int[PlayerSlot.MaxPlayerCount];
 
     // Filled by TriggerFilterShouldHitEntity while a trigger query runs.
     private static readonly nint[] _triggerHits = new nint[MaxTriggerHits];
@@ -78,18 +84,19 @@ internal unsafe partial class MovementFixModule
                || classname.SequenceEqual("trigger_once"u8);
     }
 
-    private static void RecordLanding(int slot, Vector origin, Vector velocity, bool ducked)
+    private static void RecordLanding(int slot, Vector origin, bool ducked)
     {
-        _landTick[slot]     = _moveTick[slot];
-        _landOrigin[slot]   = origin;
-        _landVelocity[slot] = velocity;
-        _landDucked[slot]   = ducked;
+        _landTick[slot]   = _moveTick[slot];
+        _landOrigin[slot] = origin;
+        _landDucked[slot] = ducked;
     }
 
     // Movement has been written back to the pawn by PostThink, so a teleport sticks.
     private static void OnPlayerPostThink(IPlayerThinkForwardParams @params)
     {
         int slot = @params.Client.Slot;
+
+        EndTouches(slot);
 
         if (_landTick[slot] != _moveTick[slot])
         {
@@ -161,39 +168,61 @@ internal unsafe partial class MovementFixModule
         {
             var trigger = gapHits[i];
 
-            if (!Contains(currentHits, currentCount, trigger) && CanTouch(trigger, pawn, handle))
+            // CBaseTrigger::StartTouch fires its outputs again for a player it already lists.
+            if (Contains(currentHits, currentCount, trigger)
+                || !CanTouch(trigger, pawn, handle)
+                || IsMarkedForDeletion(trigger)
+                || IsMarkedForDeletion(pawn))
             {
-                TouchOnce(trigger, pawn, _landVelocity[slot]);
+                continue;
             }
+
+            // What the physics does for a pair that starts touching.
+            CallTouch(trigger, CBaseEntity_StartTouch_index, pawn);
+            CallTouch(trigger, CBaseEntity_Touch_index, pawn);
+            CallTouch(pawn, CBaseEntity_StartTouch_index, trigger);
+            CallTouch(pawn, CBaseEntity_Touch_index, trigger);
+
+            _touchingPawn[slot] = handle;
+            _touchingTriggers[slot * MaxTriggerHits + _touchingCount[slot]++] = GetRefHandle(trigger);
         }
     }
 
-    // ProcessImpacts: StartTouch and Touch at the velocity the player had then, EndTouch both ways, and keep any
-    // velocity the touch gave.
-    private static void TouchOnce(nint trigger, nint pawn, Vector velocity)
+    // The player's next tick: what the physics does for a pair that stops touching.
+    private static void EndTouches(int slot)
     {
-        if (IsMarkedForDeletion(trigger) || IsMarkedForDeletion(pawn))
+        var count = _touchingCount[slot];
+
+        if (count == 0)
         {
             return;
         }
 
-        var kept = *CBaseEntity_GetAbsVelocity(pawn);
-        CBaseEntity_SetAbsVelocity(pawn, &velocity);
+        _touchingCount[slot] = 0;
 
-        CallTouch(trigger, CBaseEntity_StartTouch_index, pawn);
-        CallTouch(trigger, CBaseEntity_Touch_index, pawn);
-        CallTouch(trigger, CBaseEntity_EndTouch_index, pawn);
-        CallTouch(pawn, CBaseEntity_EndTouch_index, trigger);
+        var pawn = EntityFromHandle(_touchingPawn[slot]);
 
-        var touched = *CBaseEntity_GetAbsVelocity(pawn);
-
-        if (touched != velocity)
+        if (pawn == nint.Zero)
         {
-            kept = touched;
+            return;
         }
 
-        CBaseEntity_SetAbsVelocity(pawn, &kept);
+        for (var i = 0; i < count; i++)
+        {
+            var trigger = EntityFromHandle(_touchingTriggers[slot * MaxTriggerHits + i]);
+
+            if (trigger == nint.Zero)
+            {
+                continue;
+            }
+
+            CallTouch(trigger, CBaseEntity_EndTouch_index, pawn);
+            CallTouch(pawn, CBaseEntity_EndTouch_index, trigger);
+        }
     }
+
+    private static nint EntityFromHandle(uint handle)
+        => _entityManager.FindEntityByHandle(new CEntityHandle<IBaseEntity>(handle))?.GetAbsPtr() ?? nint.Zero;
 
     private static void CallTouch(nint entity, int index, nint other)
         => ((delegate* unmanaged<nint, nint, void>) (*(nint**) entity)[index])(entity, other);

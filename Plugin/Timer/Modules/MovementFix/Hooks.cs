@@ -617,7 +617,7 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
-        RecordLanding(slot, mv->AbsOrigin, mv->Velocity, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
+        RecordLanding(slot, mv->AbsOrigin, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
 
         // TryPlayerMove already clipped it.
         if (step.Moved && !step.Collided)

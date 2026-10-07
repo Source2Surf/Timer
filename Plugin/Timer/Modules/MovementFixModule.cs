@@ -19,6 +19,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.HookParams;
 using Sharp.Shared.Listeners;
+using Sharp.Shared.Managers;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
@@ -40,6 +41,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
     private static IMovementExtension _movementExtension = null!;
     private static IMapInfoModule     _mapInfo           = null!;
+    private static IEntityManager     _entityManager     = null!;
 
     // cvars
     // ReSharper disable InconsistentNaming
@@ -85,6 +87,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _logger            = logger;
         _movementExtension = movementExtension;
         _mapInfo           = mapInfo;
+        _entityManager     = bridge.EntityManager;
 
         timer_slopefix = bridge.ConVarManager.CreateConVar("timer_slopefix",
                                                            true,
@@ -208,6 +211,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         Array.Fill(_speedLossTick, int.MinValue);
         Array.Fill(_teleportTick, int.MinValue);
         Array.Fill(_landTick, int.MinValue);
+        Array.Fill(_touchingCount, 0);
     }
 
     private static HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      @params,
