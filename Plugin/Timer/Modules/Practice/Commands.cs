@@ -183,7 +183,7 @@ internal sealed partial class PracticeManager
             var loc = locs[i];
 
             controller.PrintToChat(ZString.Concat(tr.Format(ChatTexts.LocListRow, i + 1, tr.Track(loc.Track)),
-                                                  loc.Segmented ? ZString.Concat(ChatColor.Grey, tr[ChatTexts.LocListSegmented], ChatColor.White) : "",
+                                                  loc.Segmented ? tr[ChatTexts.LocListSegmented] : "",
                                                   i == cursor ? tr[ChatTexts.LocListCurrent] : ""));
         }
 

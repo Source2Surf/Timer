@@ -47,14 +47,7 @@ public sealed partial class MapChooserModule
     {
         try
         {
-            var values = new object?[args.Length];
-
-            for (var i = 0; i < args.Length; i++)
-            {
-                values[i] = ChatColorTags.Recolor(template, i, args[i]);
-            }
-
-            return string.Format(template, values);
+            return string.Format(template, args);
         }
         catch (FormatException)
         {
@@ -82,9 +75,6 @@ public sealed partial class MapChooserModule
         }
     }
 
-    private static string Map(string map)
-        => $"{ChatColor.Lime}{map}{ChatColor.White}";
-
     private string OptionLabel(IGameClient client, MapVoteOption option)
     {
         if (option.IsExtend)
@@ -92,7 +82,7 @@ public sealed partial class MapChooserModule
             return string.Format(Text(client, ChooserTexts.VoteExtend), option.ExtendMinutes);
         }
 
-        return option.Tier > 0 ? $"{Map(option.Map)} (T{option.Tier})" : Map(option.Map);
+        return option.Tier > 0 ? $"{option.Map} (T{option.Tier})" : option.Map;
     }
 
     private static string Duration(float seconds)

@@ -830,7 +830,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         var tr      = _localization.For(slot);
         var current = _timerModule.GetTimerInfo(slot)?.Style ?? DefaultStyle;
 
-        controller.PrintToChat(tr.Format(ChatTexts.StyleList, Utils.Highlight(GetStyleSetting(current).Name)));
+        controller.PrintToChat(tr.Format(ChatTexts.StyleList, GetStyleSetting(current).Name));
 
         foreach (var id in _ids)
         {
@@ -839,9 +839,9 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
                                                          .Select(c => "!" + c));
 
             controller.PrintToChat(setting.Description.Length > 0
-                                       ? tr.Format(ChatTexts.StyleRowDescribed, Utils.Highlight(setting.Name), aliases,
+                                       ? tr.Format(ChatTexts.StyleRowDescribed, setting.Name, aliases,
                                                    ChatColorTags.Apply(setting.Description))
-                                       : tr.Format(ChatTexts.StyleRow, Utils.Highlight(setting.Name), aliases));
+                                       : tr.Format(ChatTexts.StyleRow, setting.Name, aliases));
         }
 
         return ECommandAction.Handled;

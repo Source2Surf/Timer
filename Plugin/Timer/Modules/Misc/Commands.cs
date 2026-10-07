@@ -103,7 +103,7 @@ internal unsafe partial class MiscModule
 
             if (_bridge.EntityManager.FindPlayerPawnBySlot(found)?.AsPlayer() is not { IsAlive: true })
             {
-                controller.PrintToChat(tr.Format(ChatTexts.SpecUnavailable, Utils.Highlight(_bridge.ClientManager.GetGameClient(found)?.Name ?? name)));
+                controller.PrintToChat(tr.Format(ChatTexts.SpecUnavailable, _bridge.ClientManager.GetGameClient(found)?.Name ?? name));
 
                 return ECommandAction.Handled;
             }
@@ -150,7 +150,7 @@ internal unsafe partial class MiscModule
         }
 
         var target     = _bridge.GetObservedSlot(controller) ?? slot;
-        var targetName = Utils.Highlight(_bridge.ClientManager.GetGameClient(target)?.Name ?? "?");
+        var targetName = _bridge.ClientManager.GetGameClient(target)?.Name ?? "?";
         var names      = new List<string>();
 
         foreach (var client in _bridge.ClientManager.GetGameClients(true))

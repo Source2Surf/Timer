@@ -8,36 +8,15 @@ namespace Timer.Tests;
 public sealed class ChatColorTagTests
 {
     [Theory]
+    [InlineData("[green]PB[white]: {0}", ChatColor.Green + "PB" + ChatColor.White + ": {0}")]
     [InlineData("{green}PB{white}: {0}", ChatColor.Green + "PB" + ChatColor.White + ": {0}")]
-    [InlineData("{LIME}x", ChatColor.Lime + "x")]
+    [InlineData("[LIME]x{red}", ChatColor.Lime + "x" + ChatColor.Red)]
+    [InlineData("[{title}] [nope] [", "[{title}] [nope] [")]
+    [InlineData("[ {red}", "[ " + ChatColor.Red)]
     [InlineData("{{0}} {nope} {", "{{0}} {nope} {")]
     [InlineData("no tags", "no tags")]
     public void KnownTagsBecomeColoursAndTheRestStays(string text, string expected)
         => Assert.Equal(expected, ChatColorTags.Apply(text));
-
-    [Theory]
-    [InlineData("CP {0} | {red}{1}", 1, "16.171" + ChatColor.Grey)]
-    [InlineData("CP {0} | {red}{1:0}", 1, "16.171" + ChatColor.Grey)]
-    [InlineData("CP {red}{0} | {1}", 1, ChatColor.Gold + "16.171" + ChatColor.Grey)]
-    [InlineData("CP {0} | {1}", 1, ChatColor.Gold + "16.171" + ChatColor.Grey)]
-    [InlineData("CP {red} {1}", 1, ChatColor.Gold + "16.171" + ChatColor.Grey)]
-    [InlineData("{red}{11}", 1, ChatColor.Gold + "16.171" + ChatColor.Grey)]
-    public void ATagRightBeforeAPlaceholderDropsItsValuesOwnColour(string text, int index, string expected)
-    {
-        var template = ChatColorTags.Apply(text);
-        var value    = ChatColorTags.Recolor(template, index, ChatColor.Gold + "16.171" + ChatColor.Grey);
-
-        Assert.Equal(expected, value);
-    }
-
-    [Fact]
-    public void UncolouredAndNonStringValuesStayAsTheyAre()
-    {
-        var template = ChatColorTags.Apply("{red}{0} {red}{1}");
-
-        Assert.Equal("16.171", ChatColorTags.Recolor(template, 0, "16.171"));
-        Assert.Equal(42, ChatColorTags.Recolor(template, 1, 42));
-    }
 
     [Fact]
     public void ThePrefixComesFromTimerJsoncsChatSection()

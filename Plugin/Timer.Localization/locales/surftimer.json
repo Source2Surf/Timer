@@ -960,20 +960,20 @@
     "zh-cn": "投票选择下一张地图：在聊天中输入 !1 到 !{0}，或使用投票按键。"
   },
   "mc.vote.option": {
-    "en-us": "{0}. {1}",
-    "zh-cn": "{0}. {1}"
+    "en-us": "{0}. [lime]{1}[white]",
+    "zh-cn": "{0}. [lime]{1}[white]"
   },
   "mc.vote.extend": {
     "en-us": "Extend {0} minutes",
     "zh-cn": "延长 {0} 分钟"
   },
   "mc.vote.cast": {
-    "en-us": "You voted for {0}.",
-    "zh-cn": "你投给了 {0}。"
+    "en-us": "You voted for [lime]{0}[white].",
+    "zh-cn": "你投给了 [lime]{0}[white]。"
   },
   "mc.vote.won": {
-    "en-us": "Next map: {0} ({1} of {2} votes).",
-    "zh-cn": "下一张地图：{0}（{2} 票中得 {1} 票）。"
+    "en-us": "Next map: [lime]{0}[white] ({1} of {2} votes).",
+    "zh-cn": "下一张地图：[lime]{0}[white]（{2} 票中得 {1} 票）。"
   },
   "mc.vote.extended": {
     "en-us": "The map was extended by {0} minutes.",
@@ -988,8 +988,8 @@
     "zh-cn": "投票已取消。"
   },
   "mc.changing": {
-    "en-us": "Changing to {0} in {1} seconds.",
-    "zh-cn": "{1} 秒后更换到 {0}。"
+    "en-us": "Changing to [lime]{0}[white] in {1} seconds.",
+    "zh-cn": "{1} 秒后更换到 [lime]{0}[white]。"
   },
   "mc.rtv.wants": {
     "en-us": "{0} wants to rock the vote ({1}/{2}).",
@@ -1020,16 +1020,16 @@
     "zh-cn": "在菜单中选择地图，或输入 !nominate <地图名> 或 !nominate <难度>。"
   },
   "mc.nominate.done": {
-    "en-us": "{0} nominated {1}.",
-    "zh-cn": "{0} 提名了 {1}。"
+    "en-us": "{0} nominated [lime]{1}[white].",
+    "zh-cn": "{0} 提名了 [lime]{1}[white]。"
   },
   "mc.nominate.changed": {
-    "en-us": "{0} changed their nomination to {1}.",
-    "zh-cn": "{0} 将提名改为 {1}。"
+    "en-us": "{0} changed their nomination to [lime]{1}[white].",
+    "zh-cn": "{0} 将提名改为 [lime]{1}[white]。"
   },
   "mc.nominate.taken": {
-    "en-us": "{0} is already nominated.",
-    "zh-cn": "{0} 已被提名。"
+    "en-us": "[lime]{0}[white] is already nominated.",
+    "zh-cn": "[lime]{0}[white] 已被提名。"
   },
   "mc.nominate.full": {
     "en-us": "The nominations are full.",
@@ -1040,8 +1040,8 @@
     "zh-cn": "这是当前地图。"
   },
   "mc.nominate.recent": {
-    "en-us": "{0} was played recently.",
-    "zh-cn": "{0} 最近玩过了。"
+    "en-us": "[lime]{0}[white] was played recently.",
+    "zh-cn": "[lime]{0}[white] 最近玩过了。"
   },
   "mc.nominate.not_found": {
     "en-us": "{0} isn't one of the maps.",
@@ -1064,28 +1064,28 @@
     "zh-cn": "你还没有提名地图。"
   },
   "mc.nominate.removed": {
-    "en-us": "Your nomination of {0} was removed.",
-    "zh-cn": "你对 {0} 的提名已撤回。"
+    "en-us": "Your nomination of [lime]{0}[white] was removed.",
+    "zh-cn": "你对 [lime]{0}[white] 的提名已撤回。"
   },
   "mc.nominations": {
-    "en-us": "Nominated: {0}",
-    "zh-cn": "已提名：{0}"
+    "en-us": "Nominated: [lime]{0}[white]",
+    "zh-cn": "已提名：[lime]{0}[white]"
   },
   "mc.nominations.none": {
     "en-us": "Nothing is nominated yet.",
     "zh-cn": "还没有地图被提名。"
   },
   "mc.nextmap": {
-    "en-us": "Next map: {0}.",
-    "zh-cn": "下一张地图：{0}。"
+    "en-us": "Next map: [lime]{0}[white].",
+    "zh-cn": "下一张地图：[lime]{0}[white]。"
   },
   "mc.nextmap.pending": {
     "en-us": "The next map hasn't been chosen yet.",
     "zh-cn": "下一张地图尚未确定。"
   },
   "mc.nextmap.set": {
-    "en-us": "The next map was set to {0}.",
-    "zh-cn": "下一张地图已设为 {0}。"
+    "en-us": "The next map was set to [lime]{0}[white].",
+    "zh-cn": "下一张地图已设为 [lime]{0}[white]。"
   },
   "mc.timeleft": {
     "en-us": "Time left on this map: {0}.",
@@ -1564,16 +1564,16 @@
     "zh-cn": "奖励关 {0} 关卡 {1}"
   },
   "chat.checkpoint": {
-    "en-us": "CP {0}/{1} | {2}",
-    "zh-cn": "检查点 {0}/{1} | {2}"
+    "en-us": "[grey]CP [white]{0}[grey]/[white]{1}[grey] | [gold]{2}[grey]",
+    "zh-cn": "[grey]检查点 [white]{0}[grey]/[white]{1}[grey] | [gold]{2}[grey]"
   },
   "chat.checkpoint.speed": {
-    "en-us": " | {0} u/s",
-    "zh-cn": " | {0} u/s"
+    "en-us": " | [blue]{0}[grey] u/s",
+    "zh-cn": " | [blue]{0}[grey] u/s"
   },
   "chat.vs_sr": {
-    "en-us": " | SR {0}",
-    "zh-cn": " | SR {0}"
+    "en-us": " | SR {0}[grey]",
+    "zh-cn": " | SR {0}[grey]"
   },
   "chat.duration.hours": {
     "en-us": "{0}h {1}m",
@@ -1584,12 +1584,12 @@
     "zh-cn": "{0} 分钟"
   },
   "chat.finish": {
-    "en-us": "{0} finished {1} - {2} in {3}",
-    "zh-cn": "{0} 完成了 {1} - {2}，用时 {3}"
+    "en-us": "[lightgreen]{0}[white] finished {1} - {2} in [lightgreen]{3}[white]",
+    "zh-cn": "[lightgreen]{0}[white] 完成了 {1} - {2}，用时 [lightgreen]{3}[white]"
   },
   "chat.finish.sr": {
-    "en-us": "New SR!",
-    "zh-cn": "新服务器纪录！"
+    "en-us": "[gold]New SR![white]",
+    "zh-cn": "[gold]新服务器纪录！[white]"
   },
   "chat.finish.vs_sr": {
     "en-us": " (SR {0})",
@@ -1656,8 +1656,8 @@
     "zh-cn": "用法：!bpb [奖励关]"
   },
   "chat.sr": {
-    "en-us": "SR: {0}",
-    "zh-cn": "SR：{0}"
+    "en-us": "SR: [lightgreen]{0}[white]",
+    "zh-cn": "SR：[lightgreen]{0}[white]"
   },
   "chat.sr.none": {
     "en-us": "No SR found for this track.",
@@ -1676,8 +1676,8 @@
     "zh-cn": "无法查询地图列表，请稍后再试。"
   },
   "chat.record.deleted": {
-    "en-us": "Deleted {0}'s {1} run.",
-    "zh-cn": "已删除 {0} 的 {1} 成绩。"
+    "en-us": "Deleted [lightgreen]{0}[white]'s [lightgreen]{1}[white] run.",
+    "zh-cn": "已删除 [lightgreen]{0}[white] 的 [lightgreen]{1}[white] 成绩。"
   },
   "chat.record.already_deleted": {
     "en-us": "That run was already deleted.",
@@ -1692,48 +1692,48 @@
     "zh-cn": "用法：!wipeplayer <SteamID64 或玩家名>"
   },
   "chat.wipe.nothing": {
-    "en-us": "{0} has no runs.",
-    "zh-cn": "{0} 没有任何成绩。"
+    "en-us": "[lightgreen]{0}[white] has no runs.",
+    "zh-cn": "[lightgreen]{0}[white] 没有任何成绩。"
   },
   "chat.wipe.confirm": {
-    "en-us": "{0} has {1} runs on {2} maps. Type !wipeplayer {3} again within 30 seconds to delete them all.",
-    "zh-cn": "{0} 在 {2} 张地图上共有 {1} 条成绩。30 秒内再次输入 !wipeplayer {3} 以全部删除。"
+    "en-us": "[lightgreen]{0}[white] has {1} runs on {2} maps. Type !wipeplayer {3} again within 30 seconds to delete them all.",
+    "zh-cn": "[lightgreen]{0}[white] 在 {2} 张地图上共有 {1} 条成绩。30 秒内再次输入 !wipeplayer {3} 以全部删除。"
   },
   "chat.wipe.done": {
-    "en-us": "Deleted all {1} runs of {0} on {2} maps.",
-    "zh-cn": "已删除 {0} 在 {2} 张地图上的全部 {1} 条成绩。"
+    "en-us": "Deleted all {1} runs of [lightgreen]{0}[white] on {2} maps.",
+    "zh-cn": "已删除 [lightgreen]{0}[white] 在 {2} 张地图上的全部 {1} 条成绩。"
   },
   "chat.wipe.failed": {
-    "en-us": "Couldn't wipe {0}'s runs; see the server log.",
-    "zh-cn": "清除 {0} 的成绩失败，请查看服务器日志。"
+    "en-us": "Couldn't wipe [lightgreen]{0}[white]'s runs; see the server log.",
+    "zh-cn": "清除 [lightgreen]{0}[white] 的成绩失败，请查看服务器日志。"
   },
   "chat.sr.stage": {
-    "en-us": "Stage {0} SR: {1} by {2}",
-    "zh-cn": "关卡 {0} SR：{1}，保持者 {2}"
+    "en-us": "Stage {0} SR: [lightgreen]{1}[white] by [lightgreen]{2}[white]",
+    "zh-cn": "关卡 {0} SR：[lightgreen]{1}[white]，保持者 [lightgreen]{2}[white]"
   },
   "chat.sr.stage_none": {
     "en-us": "No SR found for stage {0}.",
     "zh-cn": "关卡 {0} 还没有 SR。"
   },
   "chat.sr.bonus": {
-    "en-us": "Bonus {0} SR: {1} by {2}",
-    "zh-cn": "奖励关 {0} SR：{1}，保持者 {2}"
+    "en-us": "Bonus {0} SR: [lightgreen]{1}[white] by [lightgreen]{2}[white]",
+    "zh-cn": "奖励关 {0} SR：[lightgreen]{1}[white]，保持者 [lightgreen]{2}[white]"
   },
   "chat.sr.bonus_none": {
     "en-us": "No SR found for bonus {0}.",
     "zh-cn": "奖励关 {0} 还没有 SR。"
   },
   "chat.pb": {
-    "en-us": "PB: {0} (#{1}/{2})",
-    "zh-cn": "PB：{0}（#{1}/{2}）"
+    "en-us": "PB: [lightgreen]{0}[white] (#{1}/{2})",
+    "zh-cn": "PB：[lightgreen]{0}[white]（#{1}/{2}）"
   },
   "chat.pb.none": {
     "en-us": "No personal best found for this track.",
     "zh-cn": "你在这条路线还没有个人最佳。"
   },
   "chat.pb.stage": {
-    "en-us": "Stage {0} PB: {1}",
-    "zh-cn": "关卡 {0} PB：{1}"
+    "en-us": "Stage {0} PB: [lightgreen]{1}[white]",
+    "zh-cn": "关卡 {0} PB：[lightgreen]{1}[white]"
   },
   "chat.pb.stage_none": {
     "en-us": "No PB found for stage {0}.",
@@ -1744,32 +1744,32 @@
     "zh-cn": "（SR {0}）"
   },
   "chat.pb.bonus": {
-    "en-us": "Bonus {0} PB: {1} (#{2}/{3})",
-    "zh-cn": "奖励关 {0} PB：{1}（#{2}/{3}）"
+    "en-us": "Bonus {0} PB: [lightgreen]{1}[white] (#{2}/{3})",
+    "zh-cn": "奖励关 {0} PB：[lightgreen]{1}[white]（#{2}/{3}）"
   },
   "chat.pb.bonus_none": {
     "en-us": "No PB found for bonus {0}.",
     "zh-cn": "你在奖励关 {0} 还没有 PB。"
   },
   "chat.rank": {
-    "en-us": "Rank: #{0}/{1} | PB: {2}",
-    "zh-cn": "排名：#{0}/{1} | PB：{2}"
+    "en-us": "Rank: #[lightgreen]{0}[white]/{1} | PB: [lightgreen]{2}[white]",
+    "zh-cn": "排名：#[lightgreen]{0}[white]/{1} | PB：[lightgreen]{2}[white]"
   },
   "chat.rank.none": {
     "en-us": "No record found. Complete the map first.",
     "zh-cn": "还没有成绩，请先完成地图。"
   },
   "chat.top": {
-    "en-us": "#1: {0} ({1} records)",
-    "zh-cn": "#1：{0}（共 {1} 个成绩）"
+    "en-us": "#1: [lightgreen]{0}[white] ({1} records)",
+    "zh-cn": "#1：[lightgreen]{0}[white]（共 {1} 个成绩）"
   },
   "chat.top.none": {
     "en-us": "No records found for this track.",
     "zh-cn": "这条路线还没有成绩。"
   },
   "chat.top.row": {
-    "en-us": "#{0}: {1} - {2}",
-    "zh-cn": "#{0}：{1} - {2}"
+    "en-us": "#{0}: [lightgreen]{1}[white] - [lightgreen]{2}[white]",
+    "zh-cn": "#{0}：[lightgreen]{1}[white] - [lightgreen]{2}[white]"
   },
   "chat.top.bonus": {
     "en-us": "Top records for Bonus {0}:",
@@ -1784,8 +1784,8 @@
     "zh-cn": "PB 与 SR 检查点对比："
   },
   "chat.cpr.final": {
-    "en-us": "Final: {0}",
-    "zh-cn": "最终：{0}"
+    "en-us": "[grey]Final: [gold]{0}[grey]",
+    "zh-cn": "[grey]最终：[gold]{0}[grey]"
   },
   "chat.cpr.no_sr": {
     "en-us": "No SR checkpoints available.",
@@ -1804,28 +1804,28 @@
     "zh-cn": "没有最近的成绩。"
   },
   "chat.recent.row": {
-    "en-us": "{0} | {1}",
-    "zh-cn": "{0} | {1}"
+    "en-us": "[lightgreen]{0}[white] | [grey]{1}[white]",
+    "zh-cn": "[lightgreen]{0}[white] | [grey]{1}[white]"
   },
   "chat.recent.row_bonus": {
-    "en-us": "{0} B{1} | {2}",
-    "zh-cn": "{0} 奖励关 {1} | {2}"
+    "en-us": "[lightgreen]{0}[white] B{1} | [grey]{2}[white]",
+    "zh-cn": "[lightgreen]{0}[white] 奖励关 {1} | [grey]{2}[white]"
   },
   "chat.map.tier": {
-    "en-us": "{0} | Tier: {1}",
-    "zh-cn": "{0} | 难度：{1}"
+    "en-us": "{0} | Tier: [lightgreen]{1}[white]",
+    "zh-cn": "{0} | 难度：[lightgreen]{1}[white]"
   },
   "chat.map.playtime": {
-    "en-us": "Playtime on {0}: {1} | Plays: {2}",
-    "zh-cn": "{0} 游戏时长：{1} | 游玩次数：{2}"
+    "en-us": "Playtime on [lightgreen]{0}[white]: [lightgreen]{1}[white] | Plays: [lightgreen]{2}[white]",
+    "zh-cn": "[lightgreen]{0}[white] 游戏时长：[lightgreen]{1}[white] | 游玩次数：[lightgreen]{2}[white]"
   },
   "chat.map.info": {
-    "en-us": "{0} | Tier: {1} | Mode: {2}",
-    "zh-cn": "{0} | 难度：{1} | 玩法：{2}"
+    "en-us": "[lightgreen]{0}[white] | Tier: [lightgreen]{1}[white] | Mode: [lightgreen]{2}[white]",
+    "zh-cn": "[lightgreen]{0}[white] | 难度：[lightgreen]{1}[white] | 玩法：[lightgreen]{2}[white]"
   },
   "chat.map.type": {
-    "en-us": "Type: {0}",
-    "zh-cn": "类型：{0}"
+    "en-us": "Type: [lightgreen]{0}[white]",
+    "zh-cn": "类型：[lightgreen]{0}[white]"
   },
   "chat.map.linear": {
     "en-us": "Linear",
@@ -1836,32 +1836,32 @@
     "zh-cn": "分关"
   },
   "chat.map.stages": {
-    "en-us": " | Stages: {0}",
-    "zh-cn": " | 关卡：{0}"
+    "en-us": " | Stages: [lightgreen]{0}[white]",
+    "zh-cn": " | 关卡：[lightgreen]{0}[white]"
   },
   "chat.map.checkpoints": {
-    "en-us": " | Checkpoints: {0}",
-    "zh-cn": " | 检查点：{0}"
+    "en-us": " | Checkpoints: [lightgreen]{0}[white]",
+    "zh-cn": " | 检查点：[lightgreen]{0}[white]"
   },
   "chat.map.bonuses": {
-    "en-us": " | Bonuses: {0}",
-    "zh-cn": " | 奖励关：{0}"
+    "en-us": " | Bonuses: [lightgreen]{0}[white]",
+    "zh-cn": " | 奖励关：[lightgreen]{0}[white]"
   },
   "chat.map.sr": {
-    "en-us": "SR: {0} | Completions: {1}",
-    "zh-cn": "SR：{0} | 完成次数：{1}"
+    "en-us": "SR: [lightgreen]{0}[white] | Completions: [lightgreen]{1}[white]",
+    "zh-cn": "SR：[lightgreen]{0}[white] | 完成次数：[lightgreen]{1}[white]"
   },
   "chat.map.no_sr": {
-    "en-us": "None",
-    "zh-cn": "无"
+    "en-us": "[red]None",
+    "zh-cn": "[red]无"
   },
   "chat.map.played": {
-    "en-us": "Played: {0} times | Total: {1}",
-    "zh-cn": "游玩次数：{0} | 总时长：{1}"
+    "en-us": "Played: [lightgreen]{0}[white] times | Total: [lightgreen]{1}[white]",
+    "zh-cn": "游玩次数：[lightgreen]{0}[white] | 总时长：[lightgreen]{1}[white]"
   },
   "chat.map.dates": {
-    "en-us": "Added: {0} | Last played: {1}",
-    "zh-cn": "添加于：{0} | 上次游玩：{1}"
+    "en-us": "Added: [lightgreen]{0}[white] | Last played: [lightgreen]{1}[white]",
+    "zh-cn": "添加于：[lightgreen]{0}[white] | 上次游玩：[lightgreen]{1}[white]"
   },
   "chat.map.date_unknown": {
     "en-us": "unknown",
@@ -1872,12 +1872,12 @@
     "zh-cn": "{0} | 不计分：本图不获得积分"
   },
   "chat.map.ranked_set": {
-    "en-us": "{0} is ranked again; its points are being recalculated.",
-    "zh-cn": "{0} 已恢复计分，正在重新计算积分。"
+    "en-us": "[lightgreen]{0}[white] is ranked again; its points are being recalculated.",
+    "zh-cn": "[lightgreen]{0}[white] 已恢复计分，正在重新计算积分。"
   },
   "chat.map.unranked_set": {
-    "en-us": "{0} is unranked; its points are being removed.",
-    "zh-cn": "{0} 已设为不计分，正在移除其积分。"
+    "en-us": "[lightgreen]{0}[white] is unranked; its points are being removed.",
+    "zh-cn": "[lightgreen]{0}[white] 已设为不计分，正在移除其积分。"
   },
   "chat.map.ranked_usage": {
     "en-us": "Usage: !set_ranked <1 or 0>",
@@ -1920,16 +1920,16 @@
     "zh-cn": "这个存点是在其他模式下保存的。"
   },
   "chat.style.list": {
-    "en-us": "Styles (you're on {0}); !style <name> switches:",
-    "zh-cn": "模式（当前：{0}）；用 !style <名称> 切换："
+    "en-us": "Styles (you're on [lightgreen]{0}[white]); !style <name> switches:",
+    "zh-cn": "模式（当前：[lightgreen]{0}[white]）；用 !style <名称> 切换："
   },
   "chat.style.row": {
-    "en-us": "{0}: {1}",
-    "zh-cn": "{0}：{1}"
+    "en-us": "[lightgreen]{0}[white]: {1}",
+    "zh-cn": "[lightgreen]{0}[white]：{1}"
   },
   "chat.style.row_described": {
-    "en-us": "{0}: {1} - {2}",
-    "zh-cn": "{0}：{1} - {2}"
+    "en-us": "[lightgreen]{0}[white]: {1} - {2}",
+    "zh-cn": "[lightgreen]{0}[white]：{1} - {2}"
   },
   "chat.style.shsw_combo0": {
     "en-us": "Surf HSW: your keys are W+A and S+D for this run.",
@@ -1976,8 +1976,8 @@
     "zh-cn": "#{0}：{1}"
   },
   "chat.loc.list_segmented": {
-    "en-us": " (segmented)",
-    "zh-cn": "（分段）"
+    "en-us": "[grey] (segmented)[white]",
+    "zh-cn": "[grey]（分段）[white]"
   },
   "chat.loc.list_current": {
     "en-us": " <- current",
@@ -2024,8 +2024,8 @@
     "zh-cn": "你的国家/地区已从个人资料中隐藏。"
   },
   "chat.vs_pb": {
-    "en-us": " | PB {0}",
-    "zh-cn": " | PB {0}"
+    "en-us": " | PB {0}[grey]",
+    "zh-cn": " | PB {0}[grey]"
   },
   "chat.find.none": {
     "en-us": "No player named \"{0}\" is on the server.",
@@ -2036,16 +2036,16 @@
     "zh-cn": "有多名玩家匹配“{0}”。"
   },
   "chat.spec.unavailable": {
-    "en-us": "{0} can't be spectated right now.",
-    "zh-cn": "现在无法观战 {0}。"
+    "en-us": "[lightgreen]{0}[white] can't be spectated right now.",
+    "zh-cn": "现在无法观战 [lightgreen]{0}[white]。"
   },
   "chat.specs.list": {
-    "en-us": "Spectating {0} ({1}): {2}",
-    "zh-cn": "正在观战 {0}（{1}）：{2}"
+    "en-us": "Spectating [lightgreen]{0}[white] ({1}): {2}",
+    "zh-cn": "正在观战 [lightgreen]{0}[white]（{1}）：{2}"
   },
   "chat.specs.none": {
-    "en-us": "Nobody is spectating {0}.",
-    "zh-cn": "没有人在观战 {0}。"
+    "en-us": "Nobody is spectating [lightgreen]{0}[white].",
+    "zh-cn": "没有人在观战 [lightgreen]{0}[white]。"
   },
   "chat.sounds.on": {
     "en-us": "Timer sounds are on.",

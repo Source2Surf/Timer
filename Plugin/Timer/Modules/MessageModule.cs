@@ -139,36 +139,25 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
     /// </summary>
     internal static string CheckpointLine(ChatTr tr, int checkpoint, int total, float time, float? vsSr, float? vsPb, float? speed)
     {
-        var line = ZString.Concat(ChatColor.Grey,
-                                  tr.Format(ChatTexts.Checkpoint,
-                                            InGrey(ChatColor.White, checkpoint),
-                                            InGrey(ChatColor.White, Math.Max(total, checkpoint)),
-                                            InGrey(ChatColor.Gold, Utils.FormatTime(time, true))));
+        var line = tr.Format(ChatTexts.Checkpoint, checkpoint, Math.Max(total, checkpoint), Utils.FormatTime(time, true));
 
         if (vsSr is { } sr)
         {
-            line = ZString.Concat(line, tr.Format(ChatTexts.VsSr, InGrey(Utils.SignedDelta(sr))));
+            line = ZString.Concat(line, tr.Format(ChatTexts.VsSr, Utils.SignedDelta(sr)));
         }
 
         if (vsPb is { } pb)
         {
-            line = ZString.Concat(line, tr.Format(ChatTexts.VsPb, InGrey(Utils.SignedDelta(pb))));
+            line = ZString.Concat(line, tr.Format(ChatTexts.VsPb, Utils.SignedDelta(pb)));
         }
 
         if (speed is { } s && float.IsFinite(s))
         {
-            line = ZString.Concat(line, tr.Format(ChatTexts.CheckpointSpeed, InGrey(ChatColor.Blue, (int) MathF.Round(s))));
+            line = ZString.Concat(line, tr.Format(ChatTexts.CheckpointSpeed, (int) MathF.Round(s)));
         }
 
         return line;
     }
-
-    // A coloured value in a grey line.
-    private static string InGrey<T>(string color, T value)
-        => ZString.Concat(color, value, ChatColor.Grey);
-
-    private static string InGrey(string colored)
-        => ZString.Concat(colored, ChatColor.Grey);
 
     public void OnPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, ITimerInfo timerInfo)
     {
@@ -223,9 +212,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
         var delta  = recordEvent.WrRecord is { } sr ? Improvement(sr.Time, record.Time) : null;
 
         _bridge.PrintToChatAll(_localization,
-                                             tr => ZString.Concat(ChatColor.Gold,
-                                                                  tr[ChatTexts.FinishSr],
-                                                                  ChatColor.White,
+                                             tr => ZString.Concat(tr[ChatTexts.FinishSr],
                                                                   " ",
                                                                   Finished(tr, recordEvent.PlayerName, record, style),
                                                                   delta is null ? "" : tr.Format(ChatTexts.FinishVsSr, delta)));
@@ -276,7 +263,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
     }
 
     private static string Finished(ChatTr tr, string playerName, RunRecord record, string style)
-        => tr.Format(ChatTexts.Finish, Utils.Highlight(playerName), Scope(tr, record), style, Utils.ColoredTime(record.Time));
+        => tr.Format(ChatTexts.Finish, playerName, Scope(tr, record), style, Utils.FormatTime(record.Time, true));
 
     private static string Scope(ChatTr tr, RunRecord record)
         => record.Stage <= 0 ? tr.Track(record.Track)

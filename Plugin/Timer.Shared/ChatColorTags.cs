@@ -11,12 +11,13 @@ using Sharp.Shared.Definition;
 namespace Source2Surf.Timer.Shared;
 
 /// <summary>
-///     Turns {green}-style tags, named as in <see cref="ChatColor" /> and in any case, into chat colours. Anything else
-///     in braces stays as it is, so format placeholders and {{ }} escapes still work after.
+///     Turns [green] tags, named as in <see cref="ChatColor" /> and in any case, into chat colours. Locale texts need the
+///     brackets, as LocalizerManager formats them; {green} works elsewhere. Anything else in brackets or braces stays as
+///     it is, so format placeholders and {{ }} escapes still work after.
 /// </summary>
 public static class ChatColorTags
 {
-    public const string DefaultPrefix = "{lime}Timer{white} | ";
+    public const string DefaultPrefix = "[lime]Timer[white] | ";
 
     /// <summary>
     ///     The tag names, as in <see cref="ChatColor" />, for anything showing tagged text outside chat.
@@ -36,7 +37,7 @@ public static class ChatColorTags
     public static string Apply(string text)
     {
         var span = text.AsSpan();
-        var at   = span.IndexOf('{');
+        var at   = span.IndexOfAny('[', '{');
 
         if (at < 0)
         {
@@ -48,66 +49,21 @@ public static class ChatColorTags
 
         while (at >= 0)
         {
-            var close = span[(at + 1)..].IndexOf('}');
+            var close = span[(at + 1)..].IndexOf(span[at] == '[' ? ']' : '}');
 
-            if (close < 0)
-            {
-                break;
-            }
-
-            var name = span.Slice(at + 1, close);
-
-            if (Colors.TryGetValue(name, out var code))
+            if (close >= 0 && Colors.TryGetValue(span.Slice(at + 1, close), out var code))
             {
                 colored ??= new StringBuilder(text.Length);
                 colored.Append(span[copied..at]).Append(code);
                 copied = at + close + 2;
             }
 
-            var next = span[(at + 1)..].IndexOf('{');
+            var next = span[(at + 1)..].IndexOfAny('[', '{');
             at = next < 0 ? -1 : at + 1 + next;
         }
 
         return colored is null ? text : colored.Append(span[copied..]).ToString();
     }
-
-    /// <summary>
-    ///     A value for <paramref name="template" />'s {<paramref name="index" />}: when a colour tag comes right before
-    ///     the placeholder, without the colour the value starts with, so the tag colours it.
-    /// </summary>
-    public static T Recolor<T>(string template, int index, T value)
-    {
-        if (value is not string { Length: > 0 } text || !IsColor(text[0]) || template.Length < 2)
-        {
-            return value;
-        }
-
-        for (var at = template.IndexOf('{', 1); at > 0; at = template.IndexOf('{', at + 1))
-        {
-            if (!IsColor(template[at - 1]))
-            {
-                continue;
-            }
-
-            var end    = at + 1;
-            var number = 0;
-
-            while (end < template.Length && char.IsAsciiDigit(template[end]) && number < 1000)
-            {
-                number = number * 10 + (template[end++] - '0');
-            }
-
-            if (end > at + 1 && number == index && end < template.Length && template[end] is '}' or ':' or ',')
-            {
-                return (T) (object) text[1..];
-            }
-        }
-
-        return value;
-    }
-
-    private static bool IsColor(char c)
-        => c is >= '\x01' and <= '\x10';
 
     /// <summary>
     ///     What goes before every timer chat message: timer.jsonc's chat.prefix, or <see cref="DefaultPrefix" />, coloured

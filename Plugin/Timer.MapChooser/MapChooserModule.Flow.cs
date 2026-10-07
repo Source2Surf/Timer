@@ -145,7 +145,7 @@ public sealed partial class MapChooserModule
 
         _nextMap = option.Map;
         _nominations.Clear();
-        Announce(ChooserTexts.VoteWon, Map(option.Map), vote.Counts[winner], vote.Voters);
+        Announce(ChooserTexts.VoteWon, option.Map, vote.Counts[winner], vote.Voters);
 
         if (vote.Kind == MapVoteKind.RockTheVote)
         {
@@ -190,7 +190,7 @@ public sealed partial class MapChooserModule
     {
         _changeAt = now + _config.ChangeDelay;
         Changed();
-        Announce(ChooserTexts.Changing, Map(_nextMap!), (int) _config.ChangeDelay);
+        Announce(ChooserTexts.Changing, _nextMap!, (int) _config.ChangeDelay);
     }
 
     private void ChangeLevel(float now)

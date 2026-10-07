@@ -124,7 +124,7 @@ internal partial class RecordModule
         controller.PrintToChat(failed            ? tr[ChatTexts.RecordDeleteFailed]
                                : deleted is null ? tr[ChatTexts.RecordAlreadyDeleted]
                                                    : tr.Format(ChatTexts.RecordDeleted,
-                                                               Utils.Highlight(record.PlayerName),
-                                                               Utils.ColoredTime(record.Time)));
+                                                               record.PlayerName,
+                                                               Utils.FormatTime(record.Time, true)));
     }
 }

@@ -119,12 +119,6 @@ internal static class Utils
         => ZString.Concat(ChatColor.LightGreen, value, ChatColor.White);
 
     /// <summary>
-    ///     A chat-colored (green) formatted time: <c>{green}01:05.500{white}</c>.
-    /// </summary>
-    public static string ColoredTime(float time, bool precise = true)
-        => Highlight(FormatTime(time, precise));
-
-    /// <summary>
     ///     A signed chat-colored time delta: red <c>+</c> when losing time,
     ///     green <c>-</c> when ahead, followed by |delta| and a reset to white.
     /// </summary>

@@ -64,7 +64,7 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
-        controller.PrintToChat(tr.Format(ChatTexts.SrStage, stage, Utils.ColoredTime(wr.Time), Utils.Highlight(wr.PlayerName)));
+        controller.PrintToChat(tr.Format(ChatTexts.SrStage, stage, Utils.FormatTime(wr.Time, true), wr.PlayerName));
 
         return ECommandAction.Handled;
     }
@@ -103,7 +103,7 @@ internal partial class RecordModule
         {
             var rec = records[i];
 
-            controller.PrintToChat(tr.Format(ChatTexts.TopRow, i + 1, Utils.ColoredTime(rec.Time), Utils.Highlight(rec.PlayerName)));
+            controller.PrintToChat(tr.Format(ChatTexts.TopRow, i + 1, Utils.FormatTime(rec.Time, true), rec.PlayerName));
         }
 
         return ECommandAction.Handled;
@@ -135,7 +135,7 @@ internal partial class RecordModule
             return ECommandAction.Handled;
         }
 
-        controller.PrintToChat(tr.Format(ChatTexts.SrBonus, bonus, Utils.ColoredTime(wr.Time), Utils.Highlight(wr.PlayerName)));
+        controller.PrintToChat(tr.Format(ChatTexts.SrBonus, bonus, Utils.FormatTime(wr.Time, true), wr.PlayerName));
 
         return ECommandAction.Handled;
     }
@@ -169,7 +169,7 @@ internal partial class RecordModule
         var records = _mapCache.GetRecords(style, bonus);
         var rank    = _mapCache.GetRankOfRecord(style, bonus, pb);
 
-        controller.PrintToChat(tr.Format(ChatTexts.PbBonus, bonus, Utils.ColoredTime(pb.Time), rank, records.Count));
+        controller.PrintToChat(tr.Format(ChatTexts.PbBonus, bonus, Utils.FormatTime(pb.Time, true), rank, records.Count));
 
         return ECommandAction.Handled;
     }
@@ -201,7 +201,7 @@ internal partial class RecordModule
         }
 
         var wr      = _mapCache.GetWR(style, track, stage);
-        var message = tr.Format(ChatTexts.PbStage, stage, Utils.ColoredTime(pb.Time));
+        var message = tr.Format(ChatTexts.PbStage, stage, Utils.FormatTime(pb.Time, true));
 
         if (wr is not null)
         {
@@ -251,7 +251,7 @@ internal partial class RecordModule
 
         var wr = GetWR(style, track);
 
-        controller.PrintToChat(wr is null ? tr[ChatTexts.SrNone] : tr.Format(ChatTexts.Sr, Utils.ColoredTime(wr.Time)));
+        controller.PrintToChat(wr is null ? tr[ChatTexts.SrNone] : tr.Format(ChatTexts.Sr, Utils.FormatTime(wr.Time, true)));
 
         return ECommandAction.Handled;
     }
@@ -277,7 +277,7 @@ internal partial class RecordModule
         var rank  = GetRankOfRecord(style, track, pb);
         var total = GetTotalRecordCount(style, track);
 
-        controller.PrintToChat(tr.Format(ChatTexts.Pb, Utils.ColoredTime(pb.Time), rank, total));
+        controller.PrintToChat(tr.Format(ChatTexts.Pb, Utils.FormatTime(pb.Time, true), rank, total));
 
         return ECommandAction.Handled;
     }
@@ -303,7 +303,7 @@ internal partial class RecordModule
         var rank  = GetRankOfRecord(style, track, pb);
         var total = GetTotalRecordCount(style, track);
 
-        controller.PrintToChat(tr.Format(ChatTexts.Rank, Utils.Highlight(rank), total, Utils.ColoredTime(pb.Time)));
+        controller.PrintToChat(tr.Format(ChatTexts.Rank, rank, total, Utils.FormatTime(pb.Time, true)));
 
         return ECommandAction.Handled;
     }
@@ -328,7 +328,7 @@ internal partial class RecordModule
 
         var total = GetTotalRecordCount(style, track);
 
-        controller.PrintToChat(tr.Format(ChatTexts.Top, Utils.ColoredTime(wr.Time), total));
+        controller.PrintToChat(tr.Format(ChatTexts.Top, Utils.FormatTime(wr.Time, true), total));
 
         return ECommandAction.Handled;
     }
@@ -388,9 +388,8 @@ internal partial class RecordModule
                                      return;
                                  }
 
-                                 ctrl.PrintToChat(ZString.Concat(ChatColor.Grey,
-                                                                 tr.Format(ChatTexts.CprFinal, ZString.Concat(ChatColor.Gold, Utils.FormatTime(pb.Time, true), ChatColor.Grey)),
-                                                                 tr.Format(ChatTexts.VsSr, ZString.Concat(Utils.SignedDelta(pb.Time - wr.Time), ChatColor.Grey))));
+                                 ctrl.PrintToChat(ZString.Concat(tr.Format(ChatTexts.CprFinal, Utils.FormatTime(pb.Time, true)),
+                                                                 tr.Format(ChatTexts.VsSr, Utils.SignedDelta(pb.Time - wr.Time))));
                              });
 
         return ECommandAction.Handled;
@@ -422,8 +421,8 @@ internal partial class RecordModule
 
                                  foreach (var record in records)
                                  {
-                                     var time = Utils.ColoredTime(record.Time);
-                                     var date = string.Concat(ChatColor.Grey, record.RunDate.ToString("MM-dd HH:mm"), ChatColor.White);
+                                     var time = Utils.FormatTime(record.Time, true);
+                                     var date = record.RunDate.ToString("MM-dd HH:mm");
 
                                      ctrl.PrintToChat(record.Track > 0
                                                           ? tr.Format(ChatTexts.RecentRowBonus, time, record.Track, date)

@@ -178,11 +178,11 @@ public sealed partial class MapChooserModule
 
             if (result == NominateResult.Nominated)
             {
-                Announce(ChooserTexts.NominateDone, name, Map(entry.Name));
+                Announce(ChooserTexts.NominateDone, name, entry.Name);
             }
             else
             {
-                Announce(ChooserTexts.NominateChanged, name, Map(entry.Name));
+                Announce(ChooserTexts.NominateChanged, name, entry.Name);
             }
         }
 

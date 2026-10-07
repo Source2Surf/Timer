@@ -94,5 +94,5 @@ Register these `Timer.Shared` interfaces from your own ModSharp module:
 Timer.Localization serves each player's game language from
 `locales/surftimer.json` (English, Simplified Chinese). Put your own texts in
 `sharp/locales/surftimer.custom.json` (same format, wins) and run
-`ms_locales_reload`. Chat texts take colour tags like `{green}`; one right
-before a value (`{red}{2}`) colours that value.
+`ms_locales_reload`. Chat texts carry their colours as tags like `[green]`
+(`[red]{2}` colours that value); change or drop them freely.

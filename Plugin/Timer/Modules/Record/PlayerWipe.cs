@@ -164,7 +164,7 @@ internal partial class RecordModule
         }
 
         var tr     = _localization.For(client.Slot);
-        var target = Utils.Highlight(name);
+        var target = name;
 
         controller.PrintToChat(wiped is null            ? tr.Format(ChatTexts.WipeFailed, target)
                                : wiped.Runs == 0        ? tr.Format(ChatTexts.WipeNothing, target)

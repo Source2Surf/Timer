@@ -329,7 +329,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
                     if (_bridge.TryGetController(slot, out var admin))
                     {
                         admin.PrintToChat(_localization.For(slot).Format(ranked ? ChatTexts.MapRankedSet : ChatTexts.MapUnrankedSet,
-                                                                         Utils.Highlight(mapName)));
+                                                                         mapName));
                     }
                 }).ConfigureAwait(false);
 
@@ -397,7 +397,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
             return ECommandAction.Handled;
         }
 
-        controller.PrintToChat(_localization.For(slot).Format(ChatTexts.MapTier, _bridge.CurrentMapName, Utils.Highlight(_currentMapProfileInfo.Tier[0])));
+        controller.PrintToChat(_localization.For(slot).Format(ChatTexts.MapTier, _bridge.CurrentMapName, _currentMapProfileInfo.Tier[0]));
 
         return ECommandAction.Handled;
     }
@@ -422,9 +422,9 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
                                  var totalTime               = dbPlayTime + currentSession;
 
                                  ctrl.PrintToChat(tr.Format(ChatTexts.MapPlaytime,
-                                                            Utils.Highlight(mapName),
-                                                            Utils.Highlight(Playtime(tr, totalTime)),
-                                                            Utils.Highlight(playCount + 1)));
+                                                            mapName,
+                                                            Playtime(tr, totalTime),
+                                                            playCount + 1));
                              });
 
         return ECommandAction.Handled;
@@ -466,9 +466,9 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
         // Line 1: Map name, tier, mode
         var line1 = tr.Format(ChatTexts.MapInfo,
-                              Utils.Highlight(_bridge.CurrentMapName),
-                              Utils.Highlight(profile.Tier[0]),
-                              Utils.Highlight(gameMode));
+                              _bridge.CurrentMapName,
+                              profile.Tier[0],
+                              gameMode);
         controller.PrintToChat(profile.Ranked ? line1 : tr.Format(ChatTexts.MapUnranked, line1));
 
         // Line 2: Track layout — stages, checkpoints, bonuses, linear
@@ -476,21 +476,21 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         var totalCheckpoints = _zoneModule.GetCurrentTrackCheckpointCount(0);
         var isLinear         = _zoneModule.IsCurrentTrackLinear(0);
 
-        var layout = tr.Format(ChatTexts.MapType, Utils.Highlight(tr[isLinear ? ChatTexts.MapLinear : ChatTexts.MapStaged]));
+        var layout = tr.Format(ChatTexts.MapType, tr[isLinear ? ChatTexts.MapLinear : ChatTexts.MapStaged]);
 
         if (totalStages > 0)
         {
-            layout += tr.Format(ChatTexts.MapStages, Utils.Highlight(totalStages));
+            layout += tr.Format(ChatTexts.MapStages, totalStages);
         }
 
         if (totalCheckpoints > 0)
         {
-            layout += tr.Format(ChatTexts.MapCheckpoints, Utils.Highlight(totalCheckpoints));
+            layout += tr.Format(ChatTexts.MapCheckpoints, totalCheckpoints);
         }
 
         if (profile.Bonuses > 0)
         {
-            layout += tr.Format(ChatTexts.MapBonuses, Utils.Highlight(profile.Bonuses));
+            layout += tr.Format(ChatTexts.MapBonuses, profile.Bonuses);
         }
 
         controller.PrintToChat(layout);
@@ -501,19 +501,19 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
         controller.PrintToChat(tr.Format(ChatTexts.MapSr,
                                          wr is not null
-                                             ? Utils.ColoredTime(wr.Time)
-                                             : string.Concat(ChatColor.Red, tr[ChatTexts.MapNoSr], ChatColor.White),
-                                         Utils.Highlight(total)));
+                                             ? Utils.FormatTime(wr.Time, true)
+                                             : tr[ChatTexts.MapNoSr],
+                                         total));
 
         // Line 4: Play count and total play time
         controller.PrintToChat(tr.Format(ChatTexts.MapPlayed,
-                                         Utils.Highlight(profile.PlayCount),
-                                         Utils.Highlight(Playtime(tr, profile.TotalPlayTime))));
+                                         profile.PlayCount,
+                                         Playtime(tr, profile.TotalPlayTime)));
 
         // Line 5: when it was added and last played (before this visit), as UTC dates
         controller.PrintToChat(tr.Format(ChatTexts.MapDates,
-                                         Utils.Highlight(Date(tr, profile.AddedAt)),
-                                         Utils.Highlight(Date(tr, profile.LastPlayedAt))));
+                                         Date(tr, profile.AddedAt),
+                                         Date(tr, profile.LastPlayedAt)));
 
         return ECommandAction.Handled;
     }

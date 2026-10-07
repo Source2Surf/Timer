@@ -40,14 +40,14 @@ public sealed class CheckpointMessageTests
                      Plain(MessageModule.CheckpointLine(chinese, 1, 4, Time, -0.123f, 0.045f, 1290f)));
     }
 
-    // A custom translation recolours a value with a tag right before its placeholder.
+    // The texts carry the colours, so a custom one recolours a value.
     [Fact]
     public void ATranslationRecoloursTheTime()
     {
-        var custom = new ChatTr(new Custom("chat.checkpoint", "CP {0}/{1} | {red}{2}"), default);
+        var custom = new ChatTr(new Custom("chat.checkpoint", "CP {0}/{1} | [red]{2}"), default);
         var line   = MessageModule.CheckpointLine(custom, 1, 4, Time, null, null, null);
 
-        Assert.Contains(ChatColor.Red + "16.171" + ChatColor.Grey, line, StringComparison.Ordinal);
+        Assert.Contains(ChatColor.Red + "16.171", line, StringComparison.Ordinal);
         Assert.DoesNotContain(ChatColor.Gold, line, StringComparison.Ordinal);
     }
 

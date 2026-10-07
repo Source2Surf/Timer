@@ -179,7 +179,7 @@ public sealed partial class MapChooserModule
         switch (NominateCore(client.Slot, map))
         {
             case NominateResult.AlreadyNominated:
-                Reply(client, ChooserTexts.NominateTaken, Map(map));
+                Reply(client, ChooserTexts.NominateTaken, map);
 
                 break;
             case NominateResult.Full:
@@ -191,7 +191,7 @@ public sealed partial class MapChooserModule
 
                 break;
             case NominateResult.Recent:
-                Reply(client, ChooserTexts.NominateRecent, Map(map));
+                Reply(client, ChooserTexts.NominateRecent, map);
 
                 break;
             case NominateResult.NotFound:
@@ -215,7 +215,7 @@ public sealed partial class MapChooserModule
         }
 
         Changed();
-        Reply(client, ChooserTexts.NominateRemoved, Map(map));
+        Reply(client, ChooserTexts.NominateRemoved, map);
     }
 
     private void OnNominations(IGameClient client)
@@ -227,14 +227,14 @@ public sealed partial class MapChooserModule
             return;
         }
 
-        Reply(client, ChooserTexts.Nominations, string.Join(", ", _nominations.Maps.Select(Map)));
+        Reply(client, ChooserTexts.Nominations, string.Join(", ", _nominations.Maps));
     }
 
     private void OnNextMap(IGameClient client)
     {
         if (_nextMap is { } map)
         {
-            Reply(client, ChooserTexts.Nextmap, Map(map));
+            Reply(client, ChooserTexts.Nextmap, map);
         }
         else
         {
@@ -301,7 +301,7 @@ public sealed partial class MapChooserModule
 
         _nextMap = map;
         Changed();
-        Announce(ChooserTexts.NextmapSet, Map(map));
+        Announce(ChooserTexts.NextmapSet, map);
     }
 
     private void OnExtend(IGameClient? issuer, StringCommand command)
