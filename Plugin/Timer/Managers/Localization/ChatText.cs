@@ -244,6 +244,9 @@ internal static class ChatTexts
     public static readonly ChatText WeaponSoundsOn  = new ("chat.weapon_sounds.on", "You hear other players' weapons again.");
     public static readonly ChatText WeaponSoundsOff = new ("chat.weapon_sounds.off", "Other players' weapon sounds are muted.");
 
+    public static readonly ChatText ZonesShown  = new ("chat.zones.shown", "Zones are outlined again.");
+    public static readonly ChatText ZonesHidden = new ("chat.zones.hidden", "Zone outlines are hidden.");
+
     public static readonly ChatText CountryShown  = new ("chat.country.shown", "Your profile shows your country again.");
     public static readonly ChatText CountryHidden = new ("chat.country.hidden", "Your country is hidden from your profile.");
 

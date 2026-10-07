@@ -52,6 +52,13 @@ internal interface IPlayerSettings
     void SetHearsWeaponSounds(PlayerSlot slot, bool value);
 
     /// <summary>
+    ///     The zones' outlines (!showzones). On by default.
+    /// </summary>
+    bool ShowsZones(PlayerSlot slot);
+
+    void SetShowsZones(PlayerSlot slot, bool value);
+
+    /// <summary>
     ///     !country: the profile shows where the player connects from. On by default.
     /// </summary>
     bool ShowsCountry(PlayerSlot slot);

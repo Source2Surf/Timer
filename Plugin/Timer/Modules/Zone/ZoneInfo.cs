@@ -15,11 +15,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
  
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using Sharp.Shared.GameEntities;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Shared.Models.Zone;
+using Source2Surf.Timer.Types;
 
 namespace Source2Surf.Timer.Modules.Zone;
 
@@ -50,6 +51,10 @@ internal class ZoneInfo : IZoneInfo
 
     public int Data { get; set; } = 0; // Stage number for Stage zones, checkpoint index for Checkpoint zones
 
+    // Its outline, worked out once (a prebuilt zone's comes from its model), and the bottom of it.
     [JsonIgnore]
-    public IBaseEntity[]? Beams = null; // Only populated for Start and End zone types
+    public List<Edge>? Edges { get; set; }
+
+    [JsonIgnore]
+    public List<Edge>? FlatEdges { get; set; }
 }

@@ -106,9 +106,10 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     private readonly ICommandManager      _commandManager;
     private readonly IRequestManager      _requestManager;
     private readonly IPlayerManager       _playerManager;
+    private readonly ILocalizationProvider _localization;
 
-    // The timer module depends on this one, so it is resolved after both are built.
-    private ITimerModule _timerModule = null!;
+    private ITimerModule    _timerModule = null!;
+    private IPlayerSettings _settings    = null!;
 
     private readonly ILogger<ZoneModule> _logger;
     private readonly ListenerHub<IZoneModuleListener> _listenerHub;
@@ -140,13 +141,15 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
     // ReSharper restore InconsistentNaming
 
-    public ZoneModule(InterfaceBridge     bridge,
-                      ICommandManager     commandManager,
-                      IRequestManager     requestManager,
-                      IPlayerManager      playerManager,
-                      ILogger<ZoneModule> logger)
+    public ZoneModule(InterfaceBridge       bridge,
+                      ICommandManager       commandManager,
+                      IRequestManager       requestManager,
+                      IPlayerManager        playerManager,
+                      ILocalizationProvider localization,
+                      ILogger<ZoneModule>   logger)
     {
         _bridge         = bridge;
+        _localization   = localization;
         _logger         = logger;
         _listenerHub    = new ListenerHub<IZoneModuleListener>(logger);
         _commandManager = commandManager;
@@ -198,7 +201,6 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
         if (AddPrebuiltZone(entity, targetName, EZoneType.Start) || AddPrebuiltZone(entity, targetName, EZoneType.End))
         {
-            CreateBeam(entity.Handle);
 #if DEBUG
             _logger.LogInformation("Added prebuilt zone: {name}", targetName);
 #endif
@@ -232,19 +234,6 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 #if DEBUG
         _logger.LogWarning("Removed zone {t}", info.TargetName);
 #endif
-
-        if (info.Beams is not { } beams)
-        {
-            return;
-        }
-
-        foreach (var beam in beams)
-        {
-            if (beam is { IsValidEntity: true })
-            {
-                beam.Kill();
-            }
-        }
     }
 
     public EHookAction OnEntityFireOutput(IBaseEntity entity, string output, IBaseEntity? activator, float delay)
@@ -314,8 +303,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             _currentMaxStages[i] = -1;
         }
 
-        // Abandon in-progress zone builds; the beam entities are torn down with the map,
-        // so only the references are dropped (no KillBeams on dying entities).
+        // Abandon in-progress zone builds; clients drop the guide lines with the map, so only the references go.
         for (var slot = 0; slot < _buildZoneInfo.Length; slot++)
         {
             _buildZoneInfo[slot] = null;
@@ -324,6 +312,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         Array.Fill(_zoneEditors, false);
 
         _zones.Clear();
+        ZonesChanged();
 
         for (var t = 0; t < TimerConstants.MAX_TRACK; t++)
         {
@@ -336,6 +325,9 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
     public void OnServerActivate()
     {
+        ForgetLines();
+        LoadZoneOutlines();
+
         var mapName = _bridge.CurrentMapName;
 
         Task.Run(async () =>
@@ -392,12 +384,18 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         _bridge.HookManager.PlayerRunCommand.InstallHookPre(OnPlayerRunCommandPre);
 
         _commandManager.AddAdminChatCommand("zone", ["timer:zone"], OnCommandZone);
+        _commandManager.AddClientChatCommand("showzones", OnCommandShowZones);
+        _bridge.ModSharp.InstallGameFrameHook(null, OnGameFramePost);
 
         return true;
     }
 
+    // Both depend on this module, so they're resolved after all are built.
     public void OnPostInit(ServiceProvider provider)
-        => _timerModule = provider.GetRequiredService<ITimerModule>();
+    {
+        _timerModule = provider.GetRequiredService<ITimerModule>();
+        _settings    = provider.GetRequiredService<IPlayerSettings>();
+    }
 
     public void Shutdown()
     {
@@ -405,18 +403,20 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         _bridge.EntityManager.RemoveEntityListener(this);
         _bridge.ModSharp.RemoveGameListener(this);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
+        _bridge.ModSharp.RemoveGameFrameHook(null, OnGameFramePost);
         _listenerHub.Clear();
     }
 
     public void OnClientDisconnected(PlayerSlot slot)
     {
+        DropLines(slot);
         ClearBuildZoneInfo(slot);
         _zoneEditors[slot] = false;
     }
 
     /// <summary>
     ///     Abandon a slot's in-progress zone build. Without this, the next player assigned
-    ///     the slot would inherit an active build session (and its live beam entities).
+    ///     the slot would inherit an active build session (and its guide lines).
     /// </summary>
     private void ClearBuildZoneInfo(PlayerSlot slot)
     {
@@ -425,7 +425,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             return;
         }
 
-        buildInfo.KillBeams();
+        buildInfo.Lines.Clear();
         _buildZoneInfo[slot] = null;
     }
 
@@ -496,11 +496,6 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         {
             IndexZone(info);
             RecountStages(info.Track);
-        }
-
-        if (info.ZoneType is EZoneType.Start or EZoneType.End)
-        {
-            CreateBeam(ent.Handle);
         }
     }
 
@@ -753,6 +748,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         }
 
         _zonesByTrackType[track, typeIndex].Add(info);
+        ZonesChanged();
     }
 
     private void UnindexZone(ZoneInfo info)
@@ -772,17 +768,12 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         }
 
         _zonesByTrackType[track, typeIndex].Remove(info);
+        ZonesChanged();
     }
 
-    private void CreateBeam(uint handle)
+    // The zone's outline: a manual zone's box, or a prebuilt trigger's mesh perimeter.
+    private List<Edge> GetEdges(ZoneInfo val)
     {
-        if (!_zones.TryGetValue(handle, out var val))
-        {
-            _logger.LogInformation("Failed to get value for entity handle 0x{hand:X}", handle);
-
-            return;
-        }
-
         var edgesToDraw = new List<Edge>();
 
         if (val.Prebuilt)
@@ -853,29 +844,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             edgesToDraw.Add(new Edge(b3, t3));
         }
 
-        if (edgesToDraw.Count == 0)
-            return;
-
-        var kv = new Dictionary<string, KeyValuesVariantValueItem>
-        {
-            { "rendercolor", val.ZoneType == EZoneType.Start ? "0 255 0" : "255 0 0" },
-            { "boltwidth", "3" },
-        };
-
-        val.Beams = new IBaseEntity[edgesToDraw.Count];
-
-        for (var i = 0; i < edgesToDraw.Count; i++)
-        {
-            if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is not { IsValidEntity: true } beam)
-            {
-                continue;
-            }
-
-            beam.SetAbsOrigin(edgesToDraw[i].V1);
-            beam.SetNetVar("m_vecEndPos", edgesToDraw[i].V2);
-
-            val.Beams[i] = beam;
-        }
+        return edgesToDraw;
     }
 
     private void FindZoneStartPosition()

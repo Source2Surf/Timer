@@ -1,0 +1,16 @@
+{
+    // How each zone type is outlined. Read again on each map.
+    // Types: start, end, stage, checkpoint, stoptimer, reset.
+    // The colour, as [R, G, B] from 0 to 255; a type left out isn't drawn.
+    "colors": {
+        "start": [0, 255, 0],
+        "end": [255, 0, 0]
+        // "stage": [0, 160, 255],
+        // "checkpoint": [255, 220, 0],
+        // "reset": [255, 120, 0]
+    },
+    // Types outlined along their bottom only, e.g. ["stage", "checkpoint"].
+    "flat": [],
+    // The lines' width in units.
+    "width": 2.0
+}

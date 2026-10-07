@@ -15,9 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
  
-using System;
-using System.Runtime.CompilerServices;
-using Sharp.Shared.GameEntities;
 using Sharp.Shared.Types;
 using Source2Surf.Timer.Shared.Models.Zone;
 
@@ -27,10 +24,7 @@ internal class BuildZoneInfo
 {
     public Vector[] Points { get; set; } = new Vector[2];
 
-    public IBaseModelEntity   DirectionBeam { get; set; } = null!;
-    public IBaseModelEntity[] SnapBeams     { get; set; } = new IBaseModelEntity[2];
-
-    public IBaseModelEntity?[] RenderBeams { get; set; } = new IBaseModelEntity?[12];
+    public required BuildLines Lines { get; init; }
 
     public int       Step  { get; set; }  = 0;
     public int       Track { get; init; } = 0;
@@ -38,75 +32,4 @@ internal class BuildZoneInfo
 
     // Stage or checkpoint number, 0 for other types.
     public int Number { get; init; }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void KillBeams()
-    {
-        DirectionBeam?.Kill();
-
-        foreach (var aimPosBeam in SnapBeams)
-        {
-            aimPosBeam?.Kill();
-        }
-
-        foreach (var renderBeam in RenderBeams)
-        {
-            renderBeam?.Kill();
-        }
-    }
-
-    public void RenderPreviewBeams(in Vector p1, in Vector p2)
-    {
-        if (RenderBeams[0] == null)
-        {
-            return;
-        }
-
-        Span<Vector> points =
-        [
-            p1,                     // back,  left,  bottom
-            new (p1.X, p2.Y, p1.Z), // back,  right, bottom
-            new (p2.X, p2.Y, p1.Z), // front, right, bottom
-            new (p2.X, p1.Y, p1.Z), // front, left,  bottom
-
-            new (p1.X, p1.Y, p2.Z), // back,  left,  top
-            new (p1.X, p2.Y, p2.Z), // back,  right, top
-            p2,                     // front, right, top
-            new (p2.X, p1.Y, p2.Z), // front, left,  top
-        ];
-
-        Span<(int first, int second)> edges =
-        [
-            // bottom edges
-            (0, 1),
-            (1, 2),
-            (2, 3),
-            (3, 0),
-
-            // top edges
-            (4, 5),
-            (5, 6),
-            (6, 7),
-            (7, 4),
-
-            // vertical edges
-            (0, 4),
-            (1, 5),
-            (2, 6),
-            (3, 7),
-        ];
-
-        var renderBeams = RenderBeams;
-
-        for (var i = 0; i < edges.Length; i++)
-        {
-            var (first, second) = edges[i];
-
-            if (i < renderBeams.Length)
-            {
-                renderBeams[i]!.SetAbsOrigin(points[first]);
-                renderBeams[i]!.SetNetVar("m_vecEndPos", points[second]);
-            }
-        }
-    }
 }

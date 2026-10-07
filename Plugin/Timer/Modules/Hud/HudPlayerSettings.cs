@@ -39,6 +39,12 @@ internal partial class HudModule
     public bool HearsWeaponSounds(PlayerSlot slot)
         => _players[slot] is { } p ? p.IsOn(HudOptions.WeaponSounds) : HudOptions.WeaponSounds.Initial == 0;
 
+    public bool ShowsZones(PlayerSlot slot)
+        => _players[slot] is { } p ? p.IsOn(HudOptions.Zones) : HudOptions.Zones.Initial == 0;
+
+    public void SetShowsZones(PlayerSlot slot, bool value)
+        => SetOnOff(slot, HudOptions.Zones, value);
+
     public bool ShowsCountry(PlayerSlot slot)
         => _players[slot] is { } p ? p.IsOn(HudOptions.Country) : HudOptions.Country.Initial == 0;
 
@@ -57,15 +63,18 @@ internal partial class HudModule
     public void SetPlaysSounds(PlayerSlot slot, bool value)
         => SetOnOff(slot, HudOptions.Sounds, value);
 
-    // Like a click in the menu: saved after the usual delay.
     private void SetOnOff(PlayerSlot slot, HudOption option, bool on)
+        => SetChoice(slot, option, on ? 0 : 1);
+
+    // Like a click in the menu: saved after the usual delay.
+    private void SetChoice(PlayerSlot slot, HudOption option, int choice)
     {
-        if (_players[slot] is not { } p || p.IsOn(option) == on)
+        if (_players[slot] is not { } p || p.Settings[option.Index] == choice || (uint) choice >= (uint) option.Choices.Length)
         {
             return;
         }
 
-        p.Settings[option.Index] = on ? 0 : 1;
+        p.Settings[option.Index] = choice;
         p.MenuDirty              = true;
         MarkSettingsChanged(p);
     }

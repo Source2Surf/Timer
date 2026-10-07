@@ -19,7 +19,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Sharp.Shared.GameEntities;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
@@ -74,35 +73,13 @@ internal partial class ZoneModule
 
         ClearBuildZoneInfo(slot);
 
-        var buildInfo = new BuildZoneInfo
+        _buildZoneInfo[slot] = new BuildZoneInfo
         {
             Track  = track,
             Zone   = type,
             Number = number,
+            Lines  = new BuildLines(_bridge.ModSharp, slot, ZoneLineId),
         };
-
-        var kv = new Dictionary<string, KeyValuesVariantValueItem>
-        {
-            { "rendercolor", "255 255 255" },
-            { "BoltWidth", "6" },
-        };
-
-        if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is { IsValidEntity: true } directionBeam)
-        {
-            buildInfo.DirectionBeam = directionBeam;
-        }
-
-        kv["rendercolor"] = "255 0 0";
-
-        for (var i = 0; i < buildInfo.SnapBeams.Length; i++)
-        {
-            if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is { IsValidEntity: true } snapBeam)
-            {
-                buildInfo.SnapBeams[i] = snapBeam;
-            }
-        }
-
-        _buildZoneInfo[slot] = buildInfo;
         EditVersion++;
 
         return true;
@@ -133,17 +110,6 @@ internal partial class ZoneModule
         _zones.Remove(id);
         UnindexZone(info);
         RecountStages(info.Track);
-
-        if (info.Beams is { } beams)
-        {
-            foreach (var beam in beams)
-            {
-                if (beam is { IsValidEntity: true })
-                {
-                    beam.Kill();
-                }
-            }
-        }
 
         if (_bridge.EntityManager.FindEntityByIndex(info.Index) is { IsValidEntity: true } trigger
             && trigger.Handle.GetValue() == id)

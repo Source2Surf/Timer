@@ -1999,6 +1999,14 @@
     "en-us": "Other players' weapon sounds are muted.",
     "zh-cn": "已屏蔽其他玩家的武器声音。"
   },
+  "chat.zones.shown": {
+    "en-us": "Zones are outlined again.",
+    "zh-cn": "已重新显示区域轮廓。"
+  },
+  "chat.zones.hidden": {
+    "en-us": "Zone outlines are hidden.",
+    "zh-cn": "已隐藏区域轮廓。"
+  },
   "chat.country.shown": {
     "en-us": "Your profile shows your country again.",
     "zh-cn": "你的个人资料将再次显示你的国家/地区。"

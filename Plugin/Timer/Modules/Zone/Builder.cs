@@ -16,10 +16,8 @@
  */
 
 using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Sharp.Shared.Enums;
-using Sharp.Shared.GameEntities;
 using Sharp.Shared.HookParams;
 using Sharp.Shared.Types;
 using Source2Surf.Timer.Extensions;
@@ -64,13 +62,10 @@ internal partial class ZoneModule
 
         var snapped = SnapToGrid(result.EndPosition + new Vector(0, 0, 3), snapGrid);
 
-        // TODO: find a better way to visualize the zone, beams are fucked
-
-        RenderDirectionBeam(buildInfo, eyepos, snapped);
-        RenderSnapBeams(buildInfo, snapped, snapGrid);
-
-        buildInfo.RenderPreviewBeams(buildInfo.Points[0],
-                                     buildInfo.Step == 1 ? snapped + new Vector(0, 0, 128) : buildInfo.Points[1]);
+        if (buildInfo.Lines.Due())
+        {
+            DrawGuides(buildInfo, eyepos, snapped, snapGrid);
+        }
 
         if ((arg1.KeyButtons & UserCommandButtons.Use) == 0 || (arg1.ChangedButtons & UserCommandButtons.Use) == 0)
         {
@@ -80,29 +75,6 @@ internal partial class ZoneModule
         if (buildInfo.Step == 0)
         {
             buildInfo.Points[0] = snapped;
-
-            if (buildInfo.RenderBeams[0] == null)
-            {
-                var kv = new Dictionary<string, KeyValuesVariantValueItem>
-                {
-                    { "rendercolor", "255 255 255" },
-                    { "BoltWidth", "6" },
-                };
-
-                for (var i = 0; i < buildInfo.RenderBeams.Length; i++)
-                {
-                    if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is not
-                    {
-                        IsValidEntity: true,
-                    } beam)
-                    {
-                        return new ();
-                    }
-
-                    buildInfo.RenderBeams[i] = beam;
-                }
-            }
-
             buildInfo.Step++;
             EditVersion++;
         }
@@ -120,7 +92,7 @@ internal partial class ZoneModule
                 Corner2  = buildInfo.Points[1],
             });
 
-            buildInfo.KillBeams();
+            buildInfo.Lines.Clear();
 
             _buildZoneInfo[client.Slot] = null;
             EditVersion++;
@@ -131,42 +103,19 @@ internal partial class ZoneModule
         return new ();
     }
 
-    private static void RenderSnapBeams(BuildZoneInfo buildInfo, Vector snapped, int snapGrid)
+    // The aim line, a cross on the snapped point and, once the first corner is down, the box so far.
+    private static void DrawGuides(BuildZoneInfo buildInfo, Vector eyepos, Vector snapped, int snapGrid)
     {
-        var snapBeams = buildInfo.SnapBeams;
+        var lines = buildInfo.Lines;
+        var half  = snapGrid / 2f;
 
-        // forward <-> backwards
-        snapBeams[0].SetAbsOrigin(snapped             + new Vector(1, 0, 0)  * snapGrid / 2);
-        snapBeams[0].SetNetVar("m_vecEndPos", snapped + new Vector(-1, 0, 0) * snapGrid / 2);
+        lines.Draw(BuildLines.Direction, eyepos, snapped, BuildLines.White);
+        lines.Draw(BuildLines.Snap, snapped + new Vector(half, 0, 0), snapped - new Vector(half, 0, 0), BuildLines.Red);
+        lines.Draw(BuildLines.Snap + 1, snapped - new Vector(0, half, 0), snapped + new Vector(0, half, 0), BuildLines.Red);
 
-        // left <-> right
-        snapBeams[1].SetAbsOrigin(snapped             + new Vector(0, -1, 0) * snapGrid / 2);
-        snapBeams[1].SetNetVar("m_vecEndPos", snapped + new Vector(0, 1, 0)  * snapGrid / 2);
-    }
-
-    private void RenderDirectionBeam(BuildZoneInfo buildInfo, Vector eyepos, Vector snapped)
-    {
-        if (buildInfo.DirectionBeam is not { } directionBeam)
+        if (buildInfo.Step == 1)
         {
-            var kv = new Dictionary<string, KeyValuesVariantValueItem>
-            {
-                { "rendercolor", "255 255 255" },
-                { "BoltWidth", "6" },
-            };
-
-            if (_bridge.EntityManager.SpawnEntitySync<IBaseModelEntity>("env_beam", kv) is not { IsValidEntity: true } beam)
-            {
-                return;
-            }
-
-            beam.SetAbsOrigin(eyepos);
-            beam.SetNetVar("m_vecEndPos", snapped);
-            buildInfo.DirectionBeam = beam;
-        }
-        else
-        {
-            directionBeam.SetAbsOrigin(eyepos);
-            directionBeam.SetNetVar("m_vecEndPos", snapped);
+            lines.DrawBox(buildInfo.Points[0], snapped + new Vector(0, 0, 128));
         }
     }
 

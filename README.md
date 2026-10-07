@@ -41,8 +41,9 @@ The HUD is a Panorama layout that every client has to have mounted. The server
 only drives it. The layout needs ModSharp `2.1.159` or later, which is the first
 version with the Panorama API.
 
-1. Copy `panorama/` into a workshop addon's content folder, for example
-   `content/csgo_addons/<addon>/panorama/`. Compile it with
+1. Copy `panorama/` and `particles/` (the zone outline effect) into a workshop
+   addon's content folder, for example `content/csgo_addons/<addon>/panorama/`.
+   Compile them with
    `resourcecompiler -f -i <file>` from `game/bin/win64`, or through the addon
    tools, then publish the addon.
 2. Make clients download the addon, for example with MultiAddonManager.
@@ -69,8 +70,12 @@ Commands:
 - `!footsteps` mutes other players' and replay bots' footsteps; `!stopsound` mutes
   their gunshots and weapon sounds. Your own still play. A server can turn
   footsteps off for everyone with the game's own `sv_footsteps 0`.
+- `!showzones` hides or shows the zone outlines. They're drawn for each player as
+  laser lines, with no entities, and need `particles/` in the addon;
+  `timer-zones.jsonc` sets each zone type's colour (a type without one isn't drawn),
+  which types show only their bottom, and the width.
 
-Settings (the HUD's, `!hide`, the finish sounds, `!footsteps` and `!stopsound`) are saved per player through the backend, as a few bytes
+Settings (the HUD's, `!hide`, the finish sounds, `!footsteps`, `!stopsound`, `!showzones`) are saved per player through the backend, as a few bytes
 (only what differs from the defaults).
 The old `sharp/data/surftimer/hud/<steamid64>.json` files are no longer read.
 

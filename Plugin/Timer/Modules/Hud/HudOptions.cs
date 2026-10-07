@@ -197,7 +197,10 @@ internal static class HudOptions
     public static readonly HudOption Footsteps    = new (43, "OptFootsteps", OnOff) { InMenu = false };
     public static readonly HudOption WeaponSounds = new (44, "OptWeaponSounds", OnOff) { InMenu = false };
 
-    // !country (45 is !showzones)
+    // !showzones
+    public static readonly HudOption Zones = new (45, "OptZones", OnOff) { InMenu = false };
+
+    // !country
     public static readonly HudOption Country = new (46, "OptCountry", OnOff) { InMenu = false };
 
     public static readonly HudOption[] All =
@@ -206,7 +209,7 @@ internal static class HudOptions
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
-        Hide, Sounds, Specs, SizeSpecs, SizeMenus, Footsteps, WeaponSounds, Country,
+        Hide, Sounds, Specs, SizeSpecs, SizeMenus, Footsteps, WeaponSounds, Zones, Country,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;
