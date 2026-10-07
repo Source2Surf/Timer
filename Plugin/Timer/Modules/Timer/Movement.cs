@@ -160,28 +160,7 @@ internal partial class TimerModule
         var velocity = pawn.GetAbsVelocity();
 
         var onGround = pawn.GroundEntityHandle.IsValid();
-
-        var isSurfing = false;
-
-        if (!onGround)
-        {
-            var hull = service.GetNetVar<bool>("m_bDucked") ? DuckedHull : StandingHull;
-
-            var collision = pawn.GetCollisionProperty()!;
-
-            var end = origin;
-            end.Z -= SurfTraceDepth;
-
-            var attribute = RnQueryShapeAttr.PlayerMovement(collision.CollisionAttribute.InteractsWith);
-            attribute.SetEntityToIgnore(pawn, 0);
-
-            var result = _bridge.PhysicsQueryManager.TraceShapePlayerMovement(new (hull),
-                                                                              origin,
-                                                                              end,
-                                                                              attribute);
-
-            isSurfing = result.DidHit() && Math.Abs(result.PlaneNormal.Z) < sv_standable_normal.GetFloat();
-        }
+        bool? surfing = null;
 
         var (forwardMove, sideMove) = _moves[slot];
 
@@ -191,7 +170,7 @@ internal partial class TimerModule
         {
             var counted = timerInfo.Advance(timescale);
 
-            UpdatePlayerStats(pawn, timerInfo, angles, velocity, isSurfing, forwardMove, sideMove);
+            UpdatePlayerStats(pawn, service, timerInfo, onGround, counted, origin, angles, velocity, forwardMove, sideMove, ref surfing);
 
             if (timerInfo.CurrentCheckpointInfo is { } currentCp)
             {
@@ -212,9 +191,9 @@ internal partial class TimerModule
 
         if (stageRunning)
         {
-            stageTimer.Advance(timescale);
+            var stageCounted = stageTimer.Advance(timescale);
 
-            UpdatePlayerStats(pawn, stageTimer, angles, velocity, isSurfing, forwardMove, sideMove);
+            UpdatePlayerStats(pawn, service, stageTimer, onGround, stageCounted, origin, angles, velocity, forwardMove, sideMove, ref surfing);
 
             stageTimer.LastYaw = angles.Y;
         }
@@ -270,16 +249,21 @@ internal partial class TimerModule
         }
     }
 
-    // LastForwardMove and LastLeftMove keep the last key held on each axis.
-    private static void UpdatePlayerStats(IPlayerPawn pawn,
-                                          TimerInfo   timerInfo,
-                                          Vector      angle,
-                                          Vector      velocity,
-                                          bool        isSurfing,
-                                          float       forwardMove,
-                                          float       sideMove)
+    // LastForwardMove and LastLeftMove keep the last key held on each axis. Only a sync sample needs the surf trace,
+    // done at most once a tick for both timers.
+    private void UpdatePlayerStats(IPlayerPawn      pawn,
+                                   IMovementService service,
+                                   TimerInfo        timerInfo,
+                                   bool             onGround,
+                                   bool             counted,
+                                   Vector           origin,
+                                   Vector           angle,
+                                   Vector           velocity,
+                                   float            forwardMove,
+                                   float            sideMove,
+                                   ref bool?        surfing)
     {
-        if (!pawn.GroundEntityHandle.IsValid())
+        if (!onGround)
         {
             if (IsStrafe(forwardMove, sideMove, timerInfo.LastForwardMove, timerInfo.LastLeftMove))
             {
@@ -288,7 +272,9 @@ internal partial class TimerModule
 
             var yawDiff = YawDelta(angle.Y, timerInfo.LastYaw);
 
-            if (!isSurfing && MathF.Abs(yawDiff) > 0.01f && PushSide(angle.Y, velocity, forwardMove, sideMove) is var side and not 0)
+            if (MathF.Abs(yawDiff) > 0.01f
+                && PushSide(angle.Y, velocity, forwardMove, sideMove) is var side and not 0
+                && !IsSurfing(pawn, service, origin, ref surfing))
             {
                 timerInfo.TotalMeasures++;
 
@@ -314,6 +300,35 @@ internal partial class TimerModule
             timerInfo.MaxVelocity = velocity;
         }
 
-        timerInfo.AvgVelocity += (velocity - timerInfo.AvgVelocity) / timerInfo.TimerTick;
+        // Below timescale 1 not every tick counts (the first may not); the average follows the ones that do.
+        if (counted)
+        {
+            timerInfo.AvgVelocity += (velocity - timerInfo.AvgVelocity) / timerInfo.TimerTick;
+        }
+    }
+
+    // A ramp within reach below: sync isn't measured while surfing it.
+    private bool IsSurfing(IPlayerPawn pawn, IMovementService service, Vector origin, ref bool? surfing)
+    {
+        if (surfing is { } known)
+        {
+            return known;
+        }
+
+        var hull = service.GetNetVar<bool>("m_bDucked") ? DuckedHull : StandingHull;
+
+        var collision = pawn.GetCollisionProperty()!;
+
+        var end = origin;
+        end.Z -= SurfTraceDepth;
+
+        var attribute = RnQueryShapeAttr.PlayerMovement(collision.CollisionAttribute.InteractsWith);
+        attribute.SetEntityToIgnore(pawn, 0);
+
+        var result = _bridge.PhysicsQueryManager.TraceShapePlayerMovement(new (hull), origin, end, attribute);
+
+        surfing = result.DidHit() && Math.Abs(result.PlaneNormal.Z) < sv_standable_normal.GetFloat();
+
+        return surfing.Value;
     }
 }

@@ -403,8 +403,10 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                     timerInfo.AddCheckpoint(checkpointInfo);
                 }
 
+                // Its average counts its own ticks, from here.
                 timerInfo.CurrentCheckpointInfo = new ()
                 {
+                    TimerTick     = timerInfo.TimerTick,
                     StartVelocity = velocity,
                     MaxVelocity   = velocity,
                 };
