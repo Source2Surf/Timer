@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
@@ -49,16 +50,38 @@ internal static class ChatExtension
         => new (localization, slot);
 
     /// <summary>
-    ///     A message to every player, each in their own language.
+    ///     A message to every player, each in their own language: made once per language.
     /// </summary>
     public static void PrintToChatAll(this IClientManager clients, ILocalizationProvider localization, Func<ChatTr, string> message)
     {
+        Dictionary<object, string>? byLocale = null;
+        string?                     unknown  = null; // without a provider everyone reads the same
+
         foreach (var client in clients.GetGameClients(true))
         {
-            if (!client.IsFakeClient && !client.IsHltv)
+            if (client.IsFakeClient || client.IsHltv)
             {
-                client.PrintToChat(message(localization.For(client.Slot)));
+                continue;
             }
+
+            var    slot = client.Slot;
+            string text;
+
+            if (localization.LocaleOf(slot) is not { } locale)
+            {
+                text = unknown ??= Prefix + message(localization.For(slot));
+            }
+            else
+            {
+                byLocale ??= [];
+
+                if (!byLocale.TryGetValue(locale, out text!))
+                {
+                    byLocale[locale] = text = Prefix + message(localization.For(slot));
+                }
+            }
+
+            client.Print(HudPrintChannel.Chat, text);
         }
     }
 }

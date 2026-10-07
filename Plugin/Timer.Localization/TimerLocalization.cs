@@ -108,6 +108,11 @@ public sealed class TimerLocalization : IModSharpModule, ILocalizationProvider
     public void Shutdown()
         => _texts.Clear();
 
+    public object? LocaleOf(PlayerSlot slot)
+        => _localizer?.Instance is { } manager && _shared.GetClientManager().GetGameClient(slot) is { } client
+            ? manager.For(client).Culture.Name
+            : null;
+
     public string? GetText(PlayerSlot slot, string key)
     {
         if (_localizer?.Instance is not { } manager || _shared.GetClientManager().GetGameClient(slot) is not { } client)

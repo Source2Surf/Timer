@@ -34,4 +34,11 @@ public interface ILocalizationProvider
     /// <para>Asked on the game thread as often as the HUD refreshes, so it should be a cached lookup.</para>
     /// </summary>
     string? GetText(PlayerSlot slot, string key);
+
+    /// <summary>
+    /// Which language the player reads (equal for players reading the same one, such as its culture name); null when
+    /// unknown. A message for everyone is then made once per language.
+    /// </summary>
+    object? LocaleOf(PlayerSlot slot)
+        => null;
 }

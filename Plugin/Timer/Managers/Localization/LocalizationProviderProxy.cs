@@ -46,6 +46,9 @@ internal sealed class LocalizationProviderProxy : ExternalModuleProxy<ILocalizat
     public string? GetText(PlayerSlot slot, string key)
         => Current.GetText(slot, key);
 
+    public object? LocaleOf(PlayerSlot slot)
+        => Current.LocaleOf(slot);
+
     private sealed class NoTranslations : ILocalizationProvider
     {
         public string? GetText(PlayerSlot slot, string key)
