@@ -204,7 +204,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     private HookReturnValue<long> OnPlayerDispatchAttackPre(IPlayerDispatchTraceAttackHookParams @params,
                                                             HookReturnValue<long>                ret)
     {
-        if (timer_god_mode.GetInt32() == 0)
+        // `kill` has no attacker; only attacks from another player are blocked.
+        if (timer_god_mode.GetInt32() == 0 || !@params.Info->Attacker.IsValid())
         {
             return new (EHookAction.Ignored);
         }
