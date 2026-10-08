@@ -104,6 +104,8 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         "bot_controllable 0",
         "mp_ignore_round_win_conditions 1",
         "sv_accelerate 5",
+        "sv_accelerate_use_weapon_speed 0",
+        "sv_infinite_ammo 2",
         "sv_friction 4",
         "sv_jump_precision_enable 0",
         "sv_staminajumpcost 0",
