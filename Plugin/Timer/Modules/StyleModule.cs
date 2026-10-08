@@ -115,6 +115,9 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private readonly IConVar sv_air_max_wishspeed;
     private readonly IConVar sv_airaccelerate;
 
+    private readonly IConVar timer_max_walkspeed;
+    private          int      _walkMoveSpeed = 291;
+
     // ReSharper restore InconsistentNaming
 
     // Cached last-applied style key to skip redundant Set() calls across players.
@@ -152,6 +155,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         sv_enablebunnyhopping = InitializeConVar("sv_enablebunnyhopping");
         sv_air_max_wishspeed  = InitializeConVar("sv_air_max_wishspeed");
         sv_airaccelerate      = InitializeConVar("sv_airaccelerate");
+
+        timer_max_walkspeed = _bridge.ConVarManager.CreateConVar("timer_max_walkspeed", 291, 291, 3500)!;
     }
 
     public bool Init()
@@ -169,6 +174,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnProcessMovementPre);
         _bridge.HookManager.PlayerGetMaxSpeed.InstallHookPre(OnPlayerGetMaxSpeed);
+        _bridge.ConVarManager.InstallChangeHook(timer_max_walkspeed, OnWalkSpeedChanged);
+        _walkMoveSpeed = timer_max_walkspeed.GetInt32();
         _bridge.HookManager.PlayerWalkMove.InstallForward(OnPlayerWalkMove);
         _bridge.HookManager.PlayerSpawnPost.InstallForward(OnPlayerSpawn);
 
@@ -191,6 +198,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnProcessMovementPre);
         _bridge.HookManager.PlayerGetMaxSpeed.RemoveHookPre(OnPlayerGetMaxSpeed);
         _bridge.HookManager.PlayerWalkMove.RemoveForward(OnPlayerWalkMove);
+        _bridge.ConVarManager.RemoveChangeHook(timer_max_walkspeed, OnWalkSpeedChanged);
         _bridge.HookManager.PlayerSpawnPost.RemoveForward(OnPlayerSpawn);
 
         _timerModule.UnregisterListener(this);
@@ -230,13 +238,14 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         return new (EHookAction.SkipCallReturnOverride, styleSetting.RunSpeed);
     }
 
-    // CS2's max ground speed for the knife (250 * 1.164 speed modifier ≈ 291) — keeps
-    // walk-move from being capped below what surf ramps launch players at.
-    private const int WalkMoveSpeed = 291;
+    // The default is CS2's max ground speed for the knife (250 * 1.164 speed modifier ≈ 291); walk-move
+    // is kept from being capped below what surf ramps launch players at. Cached: this runs every tick.
+    private void OnWalkSpeedChanged(IConVar conVar)
+        => _walkMoveSpeed = conVar.GetInt32();
 
-    private static void OnPlayerWalkMove(IPlayerWalkMoveForwardParams @params)
+    private void OnPlayerWalkMove(IPlayerWalkMoveForwardParams @params)
     {
-        @params.SetSpeed(WalkMoveSpeed);
+        @params.SetSpeed(_walkMoveSpeed);
     }
 
     private unsafe void OnProcessMovementPre(IPlayerProcessMoveForwardParams @params)
