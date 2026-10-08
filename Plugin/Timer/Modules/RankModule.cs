@@ -79,6 +79,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     private (int Tick, int Index, string Token, string? Name, string? Text, string Line)? _lastChat;
     private          bool      _shutDown;
     private          Guid      _refreshTimer;
+    private          Guid      _scoreTimer;
 
     public RankModule(InterfaceBridge       bridge,
                       IRequestManager       request,
@@ -116,6 +117,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
         _commandManager.AddClientChatCommand("ptop", OnCommandTop);
 
         _refreshTimer = _bridge.ModSharp.PushTimer(Refresh, RefreshInterval, GameTimerFlags.Repeatable);
+        _scoreTimer   = _bridge.ModSharp.PushTimer(ApplyScores, 2, GameTimerFlags.Repeatable);
 
         return true;
     }
@@ -125,6 +127,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
         // Refreshes already scheduled still fire after a reload.
         _shutDown = true;
         _bridge.ModSharp.StopTimer(_refreshTimer);
+        _bridge.ModSharp.StopTimer(_scoreTimer);
         _bridge.HookManager.PostEventAbstract.RemoveHookPre(OnPostEventPre);
         _bridge.HookManager.PlayerSpawnPost.RemoveForward(OnPlayerSpawnPost);
         _recordModule.UnregisterListener(this);
@@ -284,6 +287,15 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
         _appliedTags[@params.Controller.PlayerSlot] = null;
         ApplyClanTag(@params.Controller.PlayerSlot);
         ApplyScore(@params.Controller.PlayerSlot);
+    }
+
+    // The game resets scores on deaths and team changes, which no spawn follows.
+    private void ApplyScores()
+    {
+        foreach (var client in _bridge.ClientManager.GetGameClients(true))
+        {
+            ApplyScore(client.Slot);
+        }
     }
 
     // The scoreboard lists players by score, so points put the best first, and replay bots (the only bots let in)
