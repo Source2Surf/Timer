@@ -37,6 +37,7 @@ internal unsafe partial class MiscModule
         _commandManager.AddClientChatCommand("knife", OnCommandGiveWeapon);
         _commandManager.AddClientChatCommand("spec",  OnCommandSpec);
         _commandManager.AddClientChatCommand("specs", OnCommandSpecs);
+        _commandManager.AddClientChatCommand("fov",   OnCommandFov);
     }
 
     private ECommandAction OnCommandGiveWeapon(PlayerSlot slot, StringCommand command)

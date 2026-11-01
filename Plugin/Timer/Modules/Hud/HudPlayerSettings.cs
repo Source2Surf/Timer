@@ -51,6 +51,12 @@ internal partial class HudModule
     public void SetShowsCountry(PlayerSlot slot, bool value)
         => SetOnOff(slot, HudOptions.Country, value);
 
+    public int Fov(PlayerSlot slot)
+        => _players[slot] is { } p ? p.Settings[HudOptions.Fov.Index] : HudOptions.Fov.Initial;
+
+    public void SetFov(PlayerSlot slot, int value)
+        => SetChoice(slot, HudOptions.Fov, value);
+
     public void SetHearsFootsteps(PlayerSlot slot, bool value)
         => SetOnOff(slot, HudOptions.Footsteps, value);
 

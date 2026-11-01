@@ -65,6 +65,14 @@ internal interface IPlayerSettings
 
     void SetShowsCountry(PlayerSlot slot, bool value);
 
+    /// <summary>
+    ///     !fov: the player's field of view, any whole number from <see cref="Hud.HudOptions.MinFov" /> to
+    ///     <see cref="Hud.HudOptions.MaxFov" />; 0 (the default) leaves the game's.
+    /// </summary>
+    int Fov(PlayerSlot slot);
+
+    void SetFov(PlayerSlot slot, int value);
+
     event Action<PlayerSlot>? Changed;
 
     /// <summary>

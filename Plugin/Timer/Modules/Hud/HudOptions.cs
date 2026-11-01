@@ -206,13 +206,24 @@ internal static class HudOptions
     // !country
     public static readonly HudOption Country = new (46, "OptCountry", OnOff) { InMenu = false };
 
+    // !fov: the choice is the FOV itself, 0 for the game's default. Up to MaxFov, so it fits the saved byte.
+    public const int DefaultFov = 90;
+    public const int MinFov     = 60;
+    public const int MaxFov     = 130;
+
+    public static readonly HudOption Fov =
+        new (84, "OptFov", Enumerable.Range(0, MaxFov + 1).Select(n => new HudChoice(n.ToString(CultureInfo.InvariantCulture))).ToArray())
+        {
+            InMenu = false,
+        };
+
     public static readonly HudOption[] All =
     [
         Run, SizeRun, CSpeed, SizeCSpeed, Info, SizeInfo, Splits, SizeSplits, Keys, SizeKeys,
         Zone, Mode, Speed, Start, Sync, Jumps, Strafes, Compare, Live,
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
-        Hide, Sounds, Specs, SizeSpecs, SizeMenus, SizeLocs, Footsteps, WeaponSounds, Zones, Country,
+        Hide, Sounds, Specs, SizeSpecs, SizeMenus, SizeLocs, Footsteps, WeaponSounds, Zones, Country, Fov,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;

@@ -251,6 +251,10 @@ internal static class ChatTexts
     public static readonly ChatText CountryShown  = new ("chat.country.shown", "Your profile shows your country again.");
     public static readonly ChatText CountryHidden = new ("chat.country.hidden", "Your country is hidden from your profile.");
 
+    public static readonly ChatText FovSet   = new ("chat.fov.set", "Your FOV is now [lightgreen]{0}[white].");
+    public static readonly ChatText FovReset = new ("chat.fov.reset", "Your FOV is back to the default.");
+    public static readonly ChatText FovUsage = new ("chat.fov.usage", "Usage: !fov <{0}-{1}>, or !fov to reset it.");
+
     // ---- spectating
     public static readonly ChatText FindNone        = new ("chat.find.none", "No player named \"{0}\" is on the server.");
     public static readonly ChatText FindMany        = new ("chat.find.many", "More than one player matches \"{0}\".");

@@ -432,6 +432,21 @@ public sealed class PlayerSettingsCodecTests
         => Assert.Empty(PlayerSettingsCodec.Encode(new HudPlayer(new PlayerSlot(1), 0)));
 
     [Fact]
+    public void TheFovIsSavedAsItsValue()
+    {
+        var p = new HudPlayer(new PlayerSlot(1), 0);
+        p.Settings[HudOptions.Fov.Index] = HudOptions.MaxFov;
+
+        var loaded = new HudPlayer(new PlayerSlot(1), 0);
+        PlayerSettingsCodec.Decode(PlayerSettingsCodec.Encode(p), loaded);
+        Assert.Equal(HudOptions.MaxFov, loaded.Settings[HudOptions.Fov.Index]);
+
+        // Beyond the range reads as the default.
+        PlayerSettingsCodec.Decode([PlayerSettingsCodec.Version, 1, HudOptions.Fov.Key, HudOptions.MaxFov + 1, 0, 0], loaded);
+        Assert.Equal(0, loaded.Settings[HudOptions.Fov.Index]);
+    }
+
+    [Fact]
     public void ItStaysSmall()
     {
         // Every option off its default, the lines reordered, every panel placed.

@@ -25,9 +25,11 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Managers;
+using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Patch;
 using Source2Surf.Timer.Native;
 using Source2Surf.Timer.Shared.Interfaces;
+using Source2Surf.Timer.Shared.Interfaces.Listeners;
 using Source2Surf.Timer.Shared.Interfaces.Modules;
 using Source2Surf.Timer.Shared.Models.Zone;
 
@@ -37,7 +39,7 @@ internal interface IMiscModule
 {
 }
 
-internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
+internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener, IPlayerManagerListener
 {
     private readonly InterfaceBridge     _bridge;
     private readonly ICommandManager     _commandManager;
@@ -47,6 +49,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     private readonly IStyleModule        _styleModule;
     private readonly ITimerModule          _timerModule;
     private readonly ILocalizationProvider _localization;
+    private readonly IPlayerManager        _playerManager;
+    private readonly IPlayerSettings       _settings;
     private readonly ILogger<MiscModule>   _logger;
 
     // ReSharper disable InconsistentNaming
@@ -81,6 +85,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
                       IStyleModule        styleModule,
                       ITimerModule          timerModule,
                       ILocalizationProvider localization,
+                      IPlayerManager        playerManager,
+                      IPlayerSettings       settings,
                       ILogger<MiscModule>   logger)
     {
         _bridge            = bridge;
@@ -91,6 +97,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         _styleModule       = styleModule;
         _timerModule       = timerModule;
         _localization      = localization;
+        _playerManager     = playerManager;
+        _settings          = settings;
         _logger            = logger;
 
         CBaseEntity_m_vecVelocity_offset = bridge.SchemaManager.GetNetVarOffset("CBaseEntity", "m_vecVelocity");
@@ -124,6 +132,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         InstallSpecFix();
 
         _bridge.ModSharp.InstallGameListener(this);
+        _playerManager.RegisterListener(this);
+        _settings.Changed += ApplyFov;
 
         _bridge.HookManager.PlayerSpawnPost.InstallForward(OnPlayerSpawnPost);
         _bridge.HookManager.TerminateRound.InstallHookPre(OnTerminateRoundPre);
@@ -147,6 +157,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
     public void Shutdown()
     {
         _bridge.ModSharp.RemoveGameListener(this);
+        _playerManager.UnregisterListener(this);
+        _settings.Changed -= ApplyFov;
         _bridge.HookManager.PlayerSpawnPost.RemoveForward(OnPlayerSpawnPost);
         _bridge.HookManager.TerminateRound.RemoveHookPre(OnTerminateRoundPre);
         _bridge.HookManager.PlayerDispatchTraceAttack.RemoveHookPre(OnPlayerDispatchAttackPre);
@@ -186,6 +198,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener
         {
             SetRadioBlocked(pawn, true);
         }
+
+        ApplyFov(@params.Controller.PlayerSlot);
     }
 
 #region Hooks & Forwards

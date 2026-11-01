@@ -2023,6 +2023,18 @@
     "en-us": "Your country is hidden from your profile.",
     "zh-cn": "你的国家/地区已从个人资料中隐藏。"
   },
+  "chat.fov.set": {
+    "en-us": "Your FOV is now [lightgreen]{0}[white].",
+    "zh-cn": "你的视野 (FOV) 已设为 [lightgreen]{0}[white]。"
+  },
+  "chat.fov.reset": {
+    "en-us": "Your FOV is back to the default.",
+    "zh-cn": "你的视野 (FOV) 已恢复默认。"
+  },
+  "chat.fov.usage": {
+    "en-us": "Usage: !fov <{0}-{1}>, or !fov to reset it.",
+    "zh-cn": "用法：!fov <{0}-{1}>，或输入 !fov 恢复默认。"
+  },
   "chat.vs_pb": {
     "en-us": " | PB {0}[grey]",
     "zh-cn": " | PB {0}[grey]"

@@ -75,7 +75,7 @@ Failed uploads are retried. Slower runs are kept per `timer_replay_slower_runs`;
 - **Timer:** `!r`, `!b<n>`, `!s <n>`, `!end`, `!stop`, `!pause`, `!nc`, `!style`
 - **Records:** `!wr [map]`, `!pb`, `!rank`, `!cpr`, `!recent`, `!profile [name|SteamID]`, `!ptop`, `!replay`
 - **Practice:** `saveloc`, `loc`, `prevloc`, `nextloc`, `clearloc` (bindable)
-- **HUD and misc:** `!hud`, `!showkeys`, `!ssj`, `!mapinfo`, `!spec`, `!specs`, `!hide`, `!footsteps`, `!stopsound`, `!sounds`, `!showzones`, `!country`
+- **HUD and misc:** `!hud`, `!showkeys`, `!ssj`, `!mapinfo`, `!spec`, `!specs`, `!hide`, `!footsteps`, `!stopsound`, `!sounds`, `!showzones`, `!country`, `!fov <60-130>` (`!fov` resets)
 - **Map chooser:** `!rtv`, `!nominate`, `!nextmap`, `!timeleft`
 - **Admin:** `!zone` (`timer:zone`), `!set_tier` / `!set_ranked` (`timer:tier`), `!wipeplayer` (`timer:records`)
 
