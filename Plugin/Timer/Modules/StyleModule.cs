@@ -115,8 +115,11 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private readonly IConVar sv_air_max_wishspeed;
     private readonly IConVar sv_airaccelerate;
 
-    private readonly IConVar timer_max_walkspeed;
-    private          int      _walkMoveSpeed = 291;
+    // Walk-move's max speed, kept at the ceiling the engine clamps velocities to, so it never shortens a speed a surf
+    // ramp or a booster gave the player: CS2 takes the part above max speed off in halves each tick, which turned a
+    // 2400 u/s booster into 1475 before the ramp could redirect it.
+    private readonly IConVar sv_maxvelocity;
+    private          int      _walkMoveSpeed = 3500;
 
     // ReSharper restore InconsistentNaming
 
@@ -156,7 +159,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         sv_air_max_wishspeed  = InitializeConVar("sv_air_max_wishspeed");
         sv_airaccelerate      = InitializeConVar("sv_airaccelerate");
 
-        timer_max_walkspeed = _bridge.ConVarManager.CreateConVar("timer_max_walkspeed", 291, 291, 3500)!;
+        sv_maxvelocity = InitializeConVar("sv_maxvelocity");
     }
 
     public bool Init()
@@ -174,8 +177,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnProcessMovementPre);
         _bridge.HookManager.PlayerGetMaxSpeed.InstallHookPre(OnPlayerGetMaxSpeed);
-        _bridge.ConVarManager.InstallChangeHook(timer_max_walkspeed, OnWalkSpeedChanged);
-        _walkMoveSpeed = timer_max_walkspeed.GetInt32();
+        _bridge.ConVarManager.InstallChangeHook(sv_maxvelocity, OnWalkSpeedChanged);
+        _walkMoveSpeed = Math.Max(1, (int) sv_maxvelocity.GetFloat());
         _bridge.HookManager.PlayerWalkMove.InstallForward(OnPlayerWalkMove);
         _bridge.HookManager.PlayerSpawnPost.InstallForward(OnPlayerSpawn);
 
@@ -198,7 +201,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnProcessMovementPre);
         _bridge.HookManager.PlayerGetMaxSpeed.RemoveHookPre(OnPlayerGetMaxSpeed);
         _bridge.HookManager.PlayerWalkMove.RemoveForward(OnPlayerWalkMove);
-        _bridge.ConVarManager.RemoveChangeHook(timer_max_walkspeed, OnWalkSpeedChanged);
+        _bridge.ConVarManager.RemoveChangeHook(sv_maxvelocity, OnWalkSpeedChanged);
         _bridge.HookManager.PlayerSpawnPost.RemoveForward(OnPlayerSpawn);
 
         _timerModule.UnregisterListener(this);
@@ -238,10 +241,9 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         return new (EHookAction.SkipCallReturnOverride, styleSetting.RunSpeed);
     }
 
-    // The default is CS2's max ground speed for the knife (250 * 1.164 speed modifier ≈ 291); walk-move
-    // is kept from being capped below what surf ramps launch players at. Cached: this runs every tick.
+    // Cached: this runs every tick.
     private void OnWalkSpeedChanged(IConVar conVar)
-        => _walkMoveSpeed = conVar.GetInt32();
+        => _walkMoveSpeed = Math.Max(1, (int) conVar.GetFloat());
 
     private void OnPlayerWalkMove(IPlayerWalkMoveForwardParams @params)
     {
