@@ -1,0 +1,20 @@
+{
+    "zones": {
+        "0": {
+            "exit_speed_limit": 0,
+            "teleport_origin": [
+                806,
+                2564,
+                15888
+            ]
+        },
+        "1": {
+            "exit_speed_limit": 0,
+            "teleport_origin": [
+                400,
+                2824,
+                16192
+            ]
+        }
+    }
+}
