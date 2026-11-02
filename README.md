@@ -61,7 +61,7 @@ private network, or enable per-server API keys (`backend.api_key`). Upgrading an
 
 Per-map overrides go in `sharp/data/surftimer/map_configs/<map>.json`: `cmds`,
 `max_velocity`, and per track `enter_speed_limit`, `exit_speed_limit`,
-`max_jumps`, `require_checkpoints`. Cvars start with `timer_`.
+`teleport_origin`, `max_jumps`, `require_checkpoints`. Cvars start with `timer_`.
 
 ### Replay storage (optional)
 

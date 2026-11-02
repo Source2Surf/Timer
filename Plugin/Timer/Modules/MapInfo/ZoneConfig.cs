@@ -46,6 +46,14 @@ internal record ZoneConfig
     public bool? RequireCheckpoints { get; set; } = null;
 
     /// <summary>
+    /// Where !r and a failed run put the player back in this track's start zone, as [x, y, z]. null = the map's own
+    /// info_teleport_destination inside the zone, else the floor under its center, which lands players in a booster or
+    /// inside geometry on maps whose only destination sits there.
+    /// </summary>
+    [JsonPropertyName("teleport_origin")]
+    public float[]? TeleportOrigin { get; set; } = null;
+
+    /// <summary>
     /// Optional overrides for stage zones on this track.
     /// When set, stage zone enter/exit speed limits use these values instead of the track defaults.
     /// </summary>

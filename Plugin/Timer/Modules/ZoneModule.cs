@@ -106,6 +106,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     private readonly ICommandManager      _commandManager;
     private readonly IRequestManager      _requestManager;
     private readonly IPlayerManager       _playerManager;
+    private readonly IMapInfoModule       _mapInfoModule;
     private readonly ILocalizationProvider _localization;
 
     private ITimerModule    _timerModule = null!;
@@ -146,6 +147,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                       IRequestManager       requestManager,
                       IPlayerManager        playerManager,
                       ILocalizationProvider localization,
+                      IMapInfoModule        mapInfoModule,
                       ILogger<ZoneModule>   logger)
     {
         _bridge         = bridge;
@@ -155,6 +157,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         _commandManager = commandManager;
         _requestManager = requestManager;
         _playerManager  = playerManager;
+        _mapInfoModule  = mapInfoModule;
         _buildZoneInfo  = new BuildZoneInfo?[PlayerSlot.MaxPlayerCount];
 
         for (var t = 0; t < TimerConstants.MAX_TRACK; t++)
@@ -537,6 +540,13 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     // traced on first use.
     private Vector GetTeleportPosition(ZoneInfo info, IPlayerPawn pawn)
     {
+        // A map config beats the map's own destination: some maps put their only one inside a booster.
+        if (info.ZoneType == EZoneType.Start
+            && _mapInfoModule.GetZoneTeleportOrigin(info.Track) is { } configured)
+        {
+            return configured;
+        }
+
         if (info.TeleportOrigin is { } teleport)
         {
             return teleport;

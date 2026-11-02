@@ -24,6 +24,11 @@
             // Default: 375 (surf), 290 (bhop).
             "exit_speed_limit": null,
 
+            // Where !r and a failed run put the player back in this track's start zone, as [x, y, z].
+            // Default: the map's own info_teleport_destination inside the zone, else the floor under its center.
+            // Some maps put that destination inside a booster, which drops players into it.
+            "teleport_origin": null,
+
             // Maximum number of pre-jumps allowed in the start zone. -1 = no limit.
             // Default: the style's, or else the game mode's (1).
             "max_jumps": null,

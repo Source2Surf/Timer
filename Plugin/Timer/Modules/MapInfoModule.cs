@@ -53,6 +53,8 @@ internal interface IMapInfoModule
 
     float? GetZoneExitSpeedOverride(int track);
 
+    Vector? GetZoneTeleportOrigin(int track);
+
     float GetGameModeExitSpeedLimit();
 
     float GetStageEnterSpeedLimit(int track);
@@ -675,6 +677,18 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
 
     public float GetGameModeExitSpeedLimit()
         => _currentGameModeConfig.ExitSpeedLimit;
+
+    public Vector? GetZoneTeleportOrigin(int track)
+    {
+        if (_currentMapConfig != null
+            && _currentMapConfig.ZoneConfigs.TryGetValue(track, out var zone)
+            && zone.TeleportOrigin is { Length: >= 3 } o)
+        {
+            return new Vector(o[0], o[1], o[2]);
+        }
+
+        return null;
+    }
 
     public float GetStageEnterSpeedLimit(int track)
     {

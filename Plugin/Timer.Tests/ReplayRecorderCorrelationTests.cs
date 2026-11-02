@@ -526,6 +526,8 @@ public sealed class ReplayRecorderCorrelationTests
 
         public float? GetZoneExitSpeedOverride(int track) => null;
 
+        public Sharp.Shared.Types.Vector? GetZoneTeleportOrigin(int track) => null;
+
         public float GetGameModeExitSpeedLimit() => 0;
 
         public float GetStageEnterSpeedLimit(int track) => 0;
