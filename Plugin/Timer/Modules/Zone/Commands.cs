@@ -27,7 +27,7 @@ namespace Source2Surf.Timer.Modules;
 
 internal partial class ZoneModule
 {
-    // !zone opens the zone editor; !zone cancel; !zone <type> [number]; !zone b<track> <type> [number].
+    // !zone opens the zone editor; !zone cancel; !zone all; !zone <type> [number]; !zone b<track> <type> [number].
     private ECommandAction OnCommandZone(PlayerSlot slot, StringCommand command)
     {
         if (_bridge.ClientManager.GetGameClient(slot) is not { } client
@@ -50,6 +50,12 @@ internal partial class ZoneModule
             CancelZoneBuild(slot);
 
             return ECommandAction.Handled;
+        }
+
+        // Every track's outlines while editing, or only the player's again.
+        if (command.GetArg(1).Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            return ToggleAllTrackLines(slot);
         }
 
         var args = new string[command.ArgCount];

@@ -11,6 +11,7 @@ using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Modules.Zone;
+using Source2Surf.Timer.Shared.Interfaces.Modules;
 using Source2Surf.Timer.Shared.Models.Zone;
 using Source2Surf.Timer.Types;
 using Source2Surf.Timer.Utilities;
@@ -18,8 +19,10 @@ using Source2Surf.Timer.Utilities;
 namespace Source2Surf.Timer.Modules;
 
 // Zones are outlined for each player with our laser line effect, no entities, as timer-zones.jsonc says; !showzones
-// turns it off for them. A zone edge is one line, shared: it's created and destroyed for every
-// player who gains or drops it with one message each, and each look goes once to all who share it; a budget a tick.
+// turns it off for them. Only the zones of the track the player is on (!r, !b<n>), or of the one they spectate, are
+// outlined: another track's zones do nothing for them. A zone editor can have every track's with !zone all. A zone edge
+// is one line, shared: it's created and destroyed for every player who gains or drops it with one message each, and
+// each look goes once to all who share it; a budget a tick.
 internal partial class ZoneModule
 {
     // CP0/CP1 the ends, CP16 the colour (0-255), CP17.X the radius.
@@ -36,6 +39,7 @@ internal partial class ZoneModule
     private sealed class LineState
     {
         public int Version = -1; // of the zones last drawn; -1 = draw again, -2 = hidden
+        public int Track;        // the player's track they were drawn for
     }
 
     private readonly LineState?[] _lines  = new LineState?[PlayerSlot.MaxPlayerCount];
@@ -85,15 +89,63 @@ internal partial class ZoneModule
         _shared.Drop(slot);
     }
 
-    // The client is only looked up for a player whose lines are behind.
+    // Outlines every track's zones.
+    private const int AllTracks = -1;
+
+    // By slot: zone editors who asked for every track's outlines (!zone all).
+    private readonly bool[] _allTrackLines = new bool[PlayerSlot.MaxPlayerCount];
+
+    private IReplayModule _replay = null!;
+
+    // Whose track a player's outlines follow: their own, or the player or replay bot they spectate.
+    private int OutlinedTrack(PlayerSlot slot)
+    {
+        if (_allTrackLines[slot] && _zoneEditors[slot])
+        {
+            return AllTracks;
+        }
+
+        if (_bridge.EntityManager.FindPlayerControllerBySlot(slot) is { } controller
+            && _bridge.GetObservedSlot(controller) is { } observed
+            && observed != slot)
+        {
+            if (_timerModule.GetTimerInfo(observed) is { } watched)
+            {
+                return watched.Track;
+            }
+
+            // A bot between replays has none (-1): the spectator's own then.
+            if (_replay.GetReplayBotData(observed) is { Track: >= 0 } bot)
+            {
+                return bot.Track;
+            }
+        }
+
+        return _timerModule.GetTimerInfo(slot)?.Track ?? 0;
+    }
+
+    private ECommandAction ToggleAllTrackLines(PlayerSlot slot)
+    {
+        if (_bridge.TryGetController(slot, out var controller))
+        {
+            var all = _allTrackLines[slot] = !_allTrackLines[slot];
+            controller.PrintToChat(_localization.For(slot)[all ? ChatTexts.ZonesAllTracks : ChatTexts.ZonesOwnTrack]);
+        }
+
+        return ECommandAction.Handled;
+    }
+
+    // The track each player's outlines follow is looked at every tick; the client only for one whose lines are behind.
     private void OnGameFramePost(bool simulating, bool firstTick, bool lastTick)
     {
         for (var players = _linePlayers; players != 0; players &= players - 1)
         {
             var slot  = (PlayerSlot) System.Numerics.BitOperations.TrailingZeroCount(players);
             var shown = _settings.ShowsZones(slot);
+            var track = shown ? OutlinedTrack(slot) : 0;
 
-            if (_lines[slot] is { } settled && settled.Version == (shown ? _linesVersion : -2))
+            if (_lines[slot] is { } settled && settled.Version == (shown ? _linesVersion : -2)
+                && (!shown || settled.Track == track))
             {
                 continue;
             }
@@ -104,14 +156,14 @@ internal partial class ZoneModule
                 continue;
             }
 
-            Redraw(slot, _lines[slot] ??= new LineState(), shown);
+            Redraw(slot, _lines[slot] ??= new LineState(), shown, track);
         }
 
         SendLines();
     }
 
     // Marks the lines the player's outlines have now, and unmarks the ones they had.
-    private void Redraw(PlayerSlot slot, LineState state, bool shown)
+    private void Redraw(PlayerSlot slot, LineState state, bool shown, int track)
     {
         var mark = _shared.Begin();
 
@@ -119,7 +171,7 @@ internal partial class ZoneModule
         {
             foreach (var (id, zone) in _zones)
             {
-                if (_outlines.For(zone.ZoneType) is not { } outline)
+                if ((track != AllTracks && zone.Track != track) || _outlines.For(zone.ZoneType) is not { } outline)
                 {
                     continue;
                 }
@@ -134,6 +186,7 @@ internal partial class ZoneModule
         _shared.End(slot, mark);
 
         state.Version = shown ? _linesVersion : -2;
+        state.Track   = track;
     }
 
     private void SendLines()

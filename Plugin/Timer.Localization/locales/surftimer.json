@@ -2015,6 +2015,14 @@
     "en-us": "Zone outlines are hidden.",
     "zh-cn": "已隐藏区域轮廓。"
   },
+  "chat.zones.all_tracks": {
+    "en-us": "While you edit zones, every track's are outlined.",
+    "zh-cn": "编辑区域期间显示所有赛道的区域轮廓。"
+  },
+  "chat.zones.own_track": {
+    "en-us": "Only your track's zones are outlined again.",
+    "zh-cn": "已恢复为只显示当前赛道的区域轮廓。"
+  },
   "chat.country.shown": {
     "en-us": "Your profile shows your country again.",
     "zh-cn": "你的个人资料将再次显示你的国家/地区。"

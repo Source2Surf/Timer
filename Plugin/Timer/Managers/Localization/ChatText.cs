@@ -247,6 +247,8 @@ internal static class ChatTexts
 
     public static readonly ChatText ZonesShown  = new ("chat.zones.shown", "Zones are outlined again.");
     public static readonly ChatText ZonesHidden = new ("chat.zones.hidden", "Zone outlines are hidden.");
+    public static readonly ChatText ZonesAllTracks = new ("chat.zones.all_tracks", "While you edit zones, every track's are outlined.");
+    public static readonly ChatText ZonesOwnTrack  = new ("chat.zones.own_track", "Only your track's zones are outlined again.");
 
     public static readonly ChatText CountryShown  = new ("chat.country.shown", "Your profile shows your country again.");
     public static readonly ChatText CountryHidden = new ("chat.country.hidden", "Your country is hidden from your profile.");

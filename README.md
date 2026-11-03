@@ -72,12 +72,14 @@ Failed uploads are retried. Slower runs are kept per `timer_replay_slower_runs`;
 
 ## Commands
 
-- **Timer:** `!r`, `!b<n>`, `!s <n>`, `!end`, `!stop`, `!pause`, `!nc`, `!style`
+- **Timer:** `!r` / `!main`, `!b<n>`, `!s <n>`, `!end`, `!stop`, `!pause`, `!nc`, `!style`. `!r` and `!b<n>` also pick
+  the player's track: only its zones do anything for them and are outlined (a spectator sees the watched player's or
+  replay bot's track).
 - **Records:** `!wr [map]`, `!pb`, `!rank`, `!cpr`, `!recent`, `!profile [name|SteamID]`, `!ptop`, `!replay`
 - **Practice:** `saveloc`, `loc`, `prevloc`, `nextloc`, `clearloc` (bindable)
 - **HUD and misc:** `!hud`, `!showkeys`, `!ssj`, `!mapinfo`, `!spec`, `!specs`, `!hide`, `!footsteps`, `!stopsound`, `!sounds`, `!showzones`, `!country`, `!fov <60-130>` (`!fov` resets)
 - **Map chooser:** `!rtv`, `!nominate`, `!nextmap`, `!timeleft`
-- **Admin:** `!zone` (`timer:zone`), `!set_tier` / `!set_ranked` (`timer:tier`), `!wipeplayer` (`timer:records`)
+- **Admin:** `!zone` (`timer:zone`; `!zone all` outlines every track's zones while editing), `!set_tier` / `!set_ranked` (`timer:tier`), `!wipeplayer` (`timer:records`)
 
 Admin permissions come from ModSharp's AdminManager (`timer:*` grants all).
 

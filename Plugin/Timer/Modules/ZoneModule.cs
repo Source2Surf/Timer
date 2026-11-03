@@ -33,6 +33,7 @@ using Source2Surf.Timer.Modules.Zone;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
+using Source2Surf.Timer.Shared.Interfaces.Modules;
 using Source2Surf.Timer.Shared.Models.Zone;
 using Source2Surf.Timer.Types;
 using Source2Surf.Timer.Utilities;
@@ -393,11 +394,12 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         return true;
     }
 
-    // Both depend on this module, so they're resolved after all are built.
+    // These depend on this module, so they're resolved after all are built.
     public void OnPostInit(ServiceProvider provider)
     {
         _timerModule = provider.GetRequiredService<ITimerModule>();
         _settings    = provider.GetRequiredService<IPlayerSettings>();
+        _replay      = provider.GetRequiredService<IReplayModule>();
     }
 
     public void Shutdown()
@@ -415,6 +417,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         DropLines(slot);
         ClearBuildZoneInfo(slot);
         _zoneEditors[slot] = false;
+        _allTrackLines[slot] = false;
     }
 
     /// <summary>
