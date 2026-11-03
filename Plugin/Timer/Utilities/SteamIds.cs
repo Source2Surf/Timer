@@ -35,7 +35,8 @@ internal static class SteamIds
 
         if (ulong.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var id64))
         {
-            return Account(id64 - IndividualBase, id64 > IndividualBase, out steamId);
+            // Checked arithmetic: subtract only above the base, or a small number throws.
+            return id64 > IndividualBase && Account(id64 - IndividualBase, true, out steamId);
         }
 
         if (text.StartsWith("STEAM_", StringComparison.OrdinalIgnoreCase))

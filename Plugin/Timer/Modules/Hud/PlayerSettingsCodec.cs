@@ -164,8 +164,9 @@ internal static class PlayerSettingsCodec
             {
                 p.Positions[(int) target] = new HudPosition
                 {
-                    X = Math.Clamp((int) (sbyte) x, -50, 50),
-                    Y = Math.Clamp((int) (sbyte) y, -50, 50),
+                    // Encode wrote them as sbytes: a negative offset is a byte above 127, which a checked cast rejects.
+                    X = Math.Clamp((int) unchecked((sbyte) x), -50, 50),
+                    Y = Math.Clamp((int) unchecked((sbyte) y), -50, 50),
                 };
             }
         }
