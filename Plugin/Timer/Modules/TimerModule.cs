@@ -138,6 +138,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     private const int ZoneStartSuppressTicks = 4;
 
     private readonly IZoneModule _zoneModule;
+    private readonly IMovementFixModule _movementFix;
 
     private readonly IConVar sv_standable_normal;
 
@@ -146,6 +147,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                        IZoneModule          zoneModule,
                        IMapInfoModule       mapInfoModule,
                        IStyleModule         styleModule,
+                       IMovementFixModule   movementFix,
                        IEventHookManager    eventHook,
                        ICommandManager      commandManager,
                        ILocalizationProvider localization,
@@ -156,6 +158,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _zoneModule     = zoneModule;
         _mapInfoModule  = mapInfoModule;
         _styleModule    = styleModule;
+        _movementFix    = movementFix;
         _eventHook      = eventHook;
         _commandManager = commandManager;
         _localization   = localization;
@@ -647,6 +650,9 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             return;
         }
 
+        // A restart: the bhop platforms they set off are all back at rest.
+        _movementFix.ClearBhopBlocks(slot);
+
         if (_timerInfo[slot] is { } timerInfo)
         {
             timerInfo.StopTimer();
@@ -876,6 +882,9 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         var client = arg.Client;
 
         var pawn = arg.Pawn;
+
+        // Back at the start, as on a restart.
+        _movementFix.ClearBhopBlocks(client.Slot);
 
         if (_timerInfo[client.Slot] is { } timerInfo)
         {

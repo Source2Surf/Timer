@@ -52,6 +52,9 @@ internal sealed class SavedLoc
 
     public StageTimerStateSnapshot? StageTimer { get; init; }
 
+    /// <summary>How far into its movement each bhop platform the player had set off was; null when none was kept still.</summary>
+    public BhopBlockSnapshot? BhopBlocks { get; init; }
+
     /// <summary>
     ///     Where the replay recording stood when a segmented loc was saved mid-run; teleporting back rewinds the replay
     ///     to it. Null when there is nothing to keep in step: not segmented, no run going, or not recorded.

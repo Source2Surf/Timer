@@ -30,6 +30,14 @@ namespace Source2Surf.Timer.Modules;
 
 internal interface IMovementFixModule
 {
+    // The bhop platforms the player has set moving, for a saveloc; null when none is kept still.
+    BhopBlockSnapshot? CaptureBhopBlocks(PlayerSlot slot);
+
+    // Each platform as far into its movement as when captured, and the rest at rest.
+    void RestoreBhopBlocks(PlayerSlot slot, BhopBlockSnapshot? snapshot);
+
+    // A restart: every platform at rest for the player.
+    void ClearBhopBlocks(PlayerSlot slot);
 }
 
 // Fixes for stock CS2 movement bugs, one file per fix under MovementFix/.

@@ -58,6 +58,7 @@ internal sealed partial class PracticeManager : IModule,
     private readonly ICommandManager            _commandManager;
     private readonly ILocalizationProvider      _localization;
     private readonly ILogger<PracticeManager>   _logger;
+    private readonly IMovementFixModule         _movementFix;
 
     // Resolved in OnPostInit: the recorder takes IPracticeModule in its constructor.
     private IReplayRewind _replayRewind = null!;
@@ -75,7 +76,8 @@ internal sealed partial class PracticeManager : IModule,
                            IPlayerManager           playerManager,
                            ICommandManager          commandManager,
                            ILocalizationProvider    localization,
-                           ILogger<PracticeManager> logger)
+                           ILogger<PracticeManager> logger,
+                           IMovementFixModule       movementFix)
     {
         _bridge         = bridge;
         _timerModule    = timerModule;
@@ -84,6 +86,7 @@ internal sealed partial class PracticeManager : IModule,
         _commandManager = commandManager;
         _localization   = localization;
         _logger         = logger;
+        _movementFix    = movementFix;
     }
 
     public void OnPostInit(ServiceProvider provider)
@@ -159,6 +162,7 @@ internal sealed partial class PracticeManager : IModule,
             Physics    = CapturePhysics(pawn),
             Timer      = timerSnapshot,
             StageTimer = stageTimerSnapshot,
+            BhopBlocks = _movementFix.CaptureBhopBlocks(slot),
             Replay     = segmented && midRun ? _replayRewind.GetReplayMark(slot) : null,
         };
 
@@ -273,6 +277,8 @@ internal sealed partial class PracticeManager : IModule,
         }
 
         _timerModule.SuppressZoneStarts(slot);
+
+        _movementFix.RestoreBhopBlocks(slot, loc.BhopBlocks);
 
         ApplyPhysics(pawn, loc.Physics);
 

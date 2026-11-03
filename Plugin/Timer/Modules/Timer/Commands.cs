@@ -149,6 +149,9 @@ internal partial class TimerModule
 
         StopTimer(slot);
 
+        // A restart from the stage: the bhop platforms they set off are all back at rest.
+        _movementFix.ClearBhopBlocks(slot);
+
         // Stage 1 = start zone
         if (stage == 1)
         {
