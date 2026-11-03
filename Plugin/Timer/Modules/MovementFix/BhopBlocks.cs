@@ -58,6 +58,7 @@ internal unsafe partial class MovementFixModule
 
     private static readonly Dictionary<uint, BhopBlock> _bhopBlocks    = [];
     private static readonly List<uint>                  _pendingBlocks = [];
+    private static readonly HashSet<uint>               _inspected     = [];
     private static          bool                        _blocksActive;
     private static          bool                        _blocksQueued;
 
@@ -110,12 +111,18 @@ internal unsafe partial class MovementFixModule
     }
 
     public void OnEntityDeleted(IBaseEntity entity)
-        => _bhopBlocks.Remove(entity.Handle.GetValue());
+    {
+        var handle = entity.Handle.GetValue();
+
+        _bhopBlocks.Remove(handle);
+        _inspected.Remove(handle);
+    }
 
     private static void ResetBhopBlocks()
     {
         _bhopBlocks.Clear();
         _pendingBlocks.Clear();
+        _inspected.Clear();
         _blocksActive = false;
         _blocksQueued = false;
         Array.Fill(_lastGround, uint.MaxValue);
@@ -136,10 +143,18 @@ internal unsafe partial class MovementFixModule
 
         foreach (var handle in _pendingBlocks)
         {
-            if (_entityManager.FindEntityByHandle(new CEntityHandle<IBaseEntity>(handle)) is { IsValidEntity: true } block)
+            if (_entityManager.FindEntityByHandle(new CEntityHandle<IBaseEntity>(handle)) is not { IsValidEntity: true } block)
             {
-                verdicts[(int) TrackBhopBlock(block)]++;
+                continue;
             }
+
+            // A spawn event and the activation both queue the same block.
+            if (!_inspected.Add(handle))
+            {
+                continue;
+            }
+
+            verdicts[(int) TrackBhopBlock(block)]++;
         }
 
         _pendingBlocks.Clear();
@@ -195,20 +210,38 @@ internal unsafe partial class MovementFixModule
         return teleport != 0 ? BlockVerdict.Dropping : BlockVerdict.Rising;
     }
 
-    // The trigger_teleport the block would drop into.
+    // The trigger_teleport the block would drop the player into. A map leaves one big trigger over the level's fall
+    // area instead of one under each block (bhop_aztec: x -16..416, y -16..496, z 0..59 for the whole first level), and
+    // a trace from the block starts inside its own brush, which reports no trigger at all: the swept boxes are
+    // compared instead.
     private static uint FindTeleportBetween(Vector start, Vector end, Vector mins, Vector maxs)
     {
-        var low  = new Vector(MathF.Min(end.X - start.X, 0.0f), MathF.Min(end.Y - start.Y, 0.0f), end.Z - start.Z);
-        var high = new Vector(MathF.Max(end.X - start.X, 0.0f), MathF.Max(end.Y - start.Y, 0.0f), 0.0f);
-        var ray  = new TraceShapeRay(new TraceShapeHull { Mins = low + mins, Maxs = high + maxs });
-        var hits = stackalloc nint[MaxTriggerHits];
-        var count = CollectTriggers(&ray, start, hits);
+        var low = new Vector(MathF.Min(start.X, end.X) + mins.X,
+                             MathF.Min(start.Y, end.Y) + mins.Y,
+                             MathF.Min(start.Z, end.Z) + mins.Z);
 
-        for (var i = 0; i < count; i++)
+        var high = new Vector(MathF.Max(start.X, end.X) + maxs.X,
+                              MathF.Max(start.Y, end.Y) + maxs.Y,
+                              MathF.Max(start.Z, end.Z) + maxs.Z);
+
+        IBaseEntity? entity = null;
+
+        while ((entity = _entityManager.FindEntityByClassname(entity, "trigger_teleport")) is not null)
         {
-            if (DesignerName(hits[i]).SequenceEqual("trigger_teleport"u8))
+            if (!entity.IsValidEntity || entity.GetCollisionProperty() is not { } collision)
             {
-                return GetRefHandle(hits[i]);
+                continue;
+            }
+
+            var origin      = entity.GetAbsOrigin();
+            var triggerLow  = origin + collision.Mins;
+            var triggerHigh = origin + collision.Maxs;
+
+            if (low.X <= triggerHigh.X && high.X >= triggerLow.X
+                && low.Y <= triggerHigh.Y && high.Y >= triggerLow.Y
+                && low.Z <= triggerHigh.Z && high.Z >= triggerLow.Z)
+            {
+                return entity.Handle.GetValue();
             }
         }
 
