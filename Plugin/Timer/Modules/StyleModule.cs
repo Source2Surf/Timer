@@ -86,7 +86,7 @@ internal interface IStyleModule
     event Action<PlayerSlot>? StyleMenuRequested;
 }
 
-internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener, ITimerModuleListener, IZoneModuleListener
+internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener, ITimerModuleListener
 {
     private readonly InterfaceBridge _bridge;
 
@@ -96,7 +96,6 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     private readonly IEventHookManager     _eventHook;
     private readonly ILocalizationProvider _localization;
 
-    private readonly IZoneModule          _zoneModule;
     private          ITimerModule         _timerModule = null!;
     private readonly IMapInfoModule       _mapInfoModule;
     private readonly IRequestManager      _request;
@@ -129,9 +128,12 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     // By slot: the keys force_hsw 2 or a_or_d_only settled on this run, -1 until then.
     private readonly int[] _keyCombo = Enumerable.Repeat(-1, PlayerSlot.MaxPlayerCount).ToArray();
 
+    // By slot: the sv_autobunnyhopping last replicated to the client, so its prediction jumps when the server does;
+    // -1 resends it.
+    private readonly sbyte[] _replicatedAutoBhop = Enumerable.Repeat((sbyte) -1, PlayerSlot.MaxPlayerCount).ToArray();
+
     public StyleModule(InterfaceBridge       bridge,
                        ICommandManager       commandManager,
-                       IZoneModule           zoneModule,
                        IMapInfoModule        mapInfoModule,
                        IRequestManager       request,
                        ILocalizationProvider localization,
@@ -142,7 +144,6 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         _eventHook      = eventHook;
         _localization   = localization;
         _commandManager = commandManager;
-        _zoneModule     = zoneModule;
         _mapInfoModule  = mapInfoModule;
         _request        = request;
         _logger      = logger;
@@ -205,14 +206,12 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         _bridge.HookManager.PlayerSpawnPost.RemoveForward(OnPlayerSpawn);
 
         _timerModule.UnregisterListener(this);
-        _zoneModule.UnregisterListener(this);
     }
 
     public void OnPostInit(ServiceProvider provider)
     {
         _timerModule = provider.GetRequiredService<ITimerModule>();
         _timerModule.RegisterListener(this);
-        _zoneModule.RegisterListener(this);
         LoadStyleConfig();
     }
 
@@ -276,11 +275,13 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         var style   = GetStyleOrDefault(mainTimer.Style);
 
         var inStartZone = mainTimer.InZone == EZoneType.Start;
+        var autoBhop    = !inStartZone && style.AutoBhop;
 
         // The movement cvars are global, set before each player's movement. Only the ones that differ from the last
         // player's are written: each write is a native call with the engine's change callbacks.
         SetIfChanged(sv_airaccelerate, style.CustomAirAccelerate ? style.AirAccelerate : _mapInfoModule.GetDefaultAirAccelerate());
-        SetIfChanged(sv_autobunnyhopping, !inStartZone && style.AutoBhop);
+        SetIfChanged(sv_autobunnyhopping, autoBhop);
+        ReplicateAutoBhop(client, autoBhop);
         SetIfChanged(sv_accelerate, style.Accelerate);
         SetIfChanged(sv_friction, style.Friction);
         SetIfChanged(sv_air_max_wishspeed, style.WishSpeed ?? _mapInfoModule.GetGameModeWishSpeed());
@@ -341,6 +342,18 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         if (cvar.GetBool() != value)
         {
             cvar.Set(value);
+        }
+    }
+
+    // The client's copy follows what this tick's movement used, whatever changed it: a zone, a track, a style, a respawn.
+    private void ReplicateAutoBhop(IGameClient client, bool autoBhop)
+    {
+        var value = (sbyte) (autoBhop ? 1 : 0);
+
+        if (_replicatedAutoBhop[client.Slot] != value)
+        {
+            _replicatedAutoBhop[client.Slot] = value;
+            sv_autobunnyhopping.ReplicateToClient(client, autoBhop.ToString(CultureInfo.InvariantCulture));
         }
     }
 
@@ -546,61 +559,13 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         var slot = controller.PlayerSlot;
         _keyCombo[slot] = -1;
 
-        if (_bridge.ClientManager.GetGameClient(slot) is not { } client)
-        {
-            return;
-        }
-
         var style = GetStyleOrDefault(info.Style);
-
-        sv_autobunnyhopping.ReplicateToClient(client, style.AutoBhop.ToString());
 
         // Normal styles leave a map's gravity and speed alone.
         if (style.Gravity != 1f || style.Speed * style.TimerScale != 1f)
         {
             ApplyStylePhysics(controller, pawn, style);
         }
-    }
-
-    public void OnZoneStartTouch(IZoneInfo zoneInfo, IPlayerController controller, IPlayerPawn pawn)
-    {
-        if (zoneInfo.ZoneType != EZoneType.Start)
-        {
-            return;
-        }
-
-        var slot = controller.PlayerSlot;
-
-        if (_bridge.ClientManager.GetGameClient(slot) is not { } client || client.IsFakeClient)
-        {
-            return;
-        }
-
-        sv_autobunnyhopping.ReplicateToClient(client, false.ToString());
-    }
-
-    public void OnZoneEndTouch(IZoneInfo zoneInfo, IPlayerController controller, IPlayerPawn pawn)
-    {
-        if (zoneInfo.ZoneType != EZoneType.Start)
-        {
-            return;
-        }
-
-        var slot = controller.PlayerSlot;
-
-        if (_bridge.ClientManager.GetGameClient(slot) is not { } client || client.IsFakeClient)
-        {
-            return;
-        }
-
-        if (_timerModule.GetTimerInfo(slot) is not { } timerInfo)
-        {
-            return;
-        }
-
-        var style = GetStyleOrDefault(timerInfo.Style);
-
-        sv_autobunnyhopping.ReplicateToClient(client, style.AutoBhop.ToString());
     }
 
     private IConVar InitializeConVar(string name)
@@ -881,7 +846,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         var style = GetStyleOrDefault(styleIndex);
 
         sv_accelerate.ReplicateToClient(client, style.Accelerate.ToString(CultureInfo.InvariantCulture));
-        sv_autobunnyhopping.ReplicateToClient(client, style.AutoBhop.ToString(CultureInfo.InvariantCulture));
+        // Resent by the next movement tick, from the zone the player is in.
+        _replicatedAutoBhop[client.Slot] = -1;
         sv_friction.ReplicateToClient(client, style.Friction.ToString(CultureInfo.InvariantCulture));
 
         sv_enablebunnyhopping.ReplicateToClient(client,

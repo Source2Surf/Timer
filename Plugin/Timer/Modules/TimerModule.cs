@@ -446,41 +446,48 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             return;
         }
 
-        if (info.ZoneType == EZoneType.StopTimer)
+        // Another track's zone isn't this run's, as in StartTouch and EndTouch: an EndTouch skips it, so marking it here
+        // left a player who crossed a bonus start zone "in the start zone" for the whole run, without autobhop.
+        if (info.Track == timerInfo.Track)
         {
-            // should never happen but just in case
-            if (info.Track == timerInfo.Track && timerInfo.IsTimerRunning())
+            if (info.ZoneType == EZoneType.StopTimer && timerInfo.IsTimerRunning())
             {
+                // should never happen but just in case
                 timerInfo.StopTimer();
             }
 
-            if (info.Track == stageTimer.Track && stageTimer.IsTimerRunning())
+            timerInfo.UpdateInZone(info.ZoneType);
+        }
+
+        if (info.Track == stageTimer.Track)
+        {
+            if (info.ZoneType == EZoneType.StopTimer && stageTimer.IsTimerRunning())
             {
                 stageTimer.StopTimer();
             }
-        }
 
-        timerInfo.UpdateInZone(info.ZoneType);
-        stageTimer.UpdateInZone(info.ZoneType);
+            stageTimer.UpdateInZone(info.ZoneType);
+        }
     }
 
     public void OnZoneEndTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
     {
         if (_timerInfo[controller.PlayerSlot] is not { } timerInfo
             || _stageTimerInfo[controller.PlayerSlot] is not { } stageTimer
-            || !pawn.IsAlive
-            || controller.IsFakeClient)
+            || controller.IsFakeClient
+            || info.Track != timerInfo.Track)
         {
             return;
         }
 
-        if (info.Track != timerInfo.Track)
-        {
-            return;
-        }
-
+        // Also for a dead pawn: one that died in the start zone and respawns away from it is out of it.
         timerInfo.UpdateInZone(EZoneType.Invalid);
         stageTimer.UpdateInZone(EZoneType.Invalid);
+
+        if (!pawn.IsAlive)
+        {
+            return;
+        }
 
         // Both cases below start a timer. After a practice teleport this EndTouch comes from
         // the zone the player was teleported out of, so starting would throw away the restored
