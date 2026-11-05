@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>MapZoneScanner</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The plugin's own rules, so the scan matches what it zones. -->
+        <Compile Include="../../Plugin/Timer/Modules/Zone/ZoneMatcher.cs" Link="ZoneMatcher.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="ValveResourceFormat" Version="20.1.7467" />
+    </ItemGroup>
+
+</Project>

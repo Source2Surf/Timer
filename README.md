@@ -70,6 +70,19 @@ PUT/GET/DELETE; `tools/ReplayStorageServer` is a reference one (port 5080).
 Failed uploads are retried. Slower runs are kept per `timer_replay_slower_runs`;
 `timer_replay_keep_all_runs 1` keeps every run's replay for good.
 
+### Maps without zones
+
+The Timer zones a map by the names of its `trigger_multiple`s (`ZoneMatcher`).
+`tools/MapZoneScanner` reads the workshop maps' vpks and lists those whose own
+triggers give no start or end, with the names that look like zones but don't match:
+
+```sh
+dotnet run -c Release --project tools/MapZoneScanner -- {CS2}/game/bin/linuxsteamrt64/steamapps/workshop/content/730 [prefix]
+```
+
+The prefix (default `bhop`) picks the maps by name. A map's skybox and prefab
+maps count as part of it; zones drawn with `!zone` are in the database, not seen.
+
 ## Commands
 
 - **Timer:** `!r` / `!main`, `!b<n>`, `!s <n>`, `!end`, `!stop`, `!pause`, `!nc`, `!style`. `!r` and `!b<n>` also pick
