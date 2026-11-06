@@ -52,11 +52,28 @@ internal unsafe partial class MovementFixModule
     private static CTraceFilterVirtualTableDescriptor* _triggerFilterVtable;
 
     private static void CreateTriggerFilterVtable()
-    {
-        _triggerFilterVtable = (CTraceFilterVirtualTableDescriptor*) NativeMemory.Alloc((nuint) sizeof(CTraceFilterVirtualTableDescriptor));
+        => _triggerFilterVtable = CreateTraceFilterVtable(&TriggerFilterShouldHitEntity);
 
-        _triggerFilterVtable->Deconstructor   = &TriggerFilterDestructor;
-        _triggerFilterVtable->ShouldHitEntity = &TriggerFilterShouldHitEntity;
+    // The game calls ShouldHitEntity through the filter's vtable, after its virtual destructor: two slots under the
+    // Itanium ABI (Linux), one under MSVC, so it's the third slot on Linux and the second on Windows.
+    // CTraceFilterVirtualTableDescriptor is the Windows layout. Before ModSharp 2.1.222 put m_bIterateEntities where
+    // Linux reads it, the game never called a filter of ours there.
+    private const int TraceFilterVtableSlots = 3;
+
+    private static CTraceFilterVirtualTableDescriptor* CreateTraceFilterVtable(delegate* unmanaged<CTraceFilter*, nint, bool> shouldHitEntity)
+    {
+        var slots      = (nint*) NativeMemory.AllocZeroed(TraceFilterVtableSlots, (nuint) sizeof(nint));
+        var hitSlot    = OperatingSystem.IsLinux() ? 2 : 1;
+        var destructor = (nint) (delegate* unmanaged<nint, void>) &TriggerFilterDestructor;
+
+        for (var i = 0; i < hitSlot; i++)
+        {
+            slots[i] = destructor;
+        }
+
+        slots[hitSlot] = (nint) shouldHitEntity;
+
+        return (CTraceFilterVirtualTableDescriptor*) slots;
     }
 
     private static void FreeTriggerFilterVtable()
