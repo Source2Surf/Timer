@@ -25,8 +25,8 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Managers;
-using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Patch;
+using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Native;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
@@ -188,6 +188,8 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener, 
         var pawn = @params.Pawn;
 
         // ApplyUnclampedEncoder(pawn);
+
+        pawn.RenderColor = pawn.RenderColor with { A = 254 };
 
         if (timer_remove_weapons_on_spawn.GetBool())
         {

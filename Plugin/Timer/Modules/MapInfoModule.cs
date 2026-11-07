@@ -19,12 +19,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Sharp.Shared.Definition;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Listeners;
 using Sharp.Shared.Objects;
@@ -33,9 +31,9 @@ using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Modules.MapInfo;
-using Source2Surf.Timer.Utilities;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Models;
+using Source2Surf.Timer.Utilities;
 
 namespace Source2Surf.Timer.Modules;
 
@@ -121,6 +119,7 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         "sv_legacy_jump 1",
         "bot_auto_vacate 0",
         "ms_override_team_limit 1",
+        "ms_transmit_block_dead_player_pawn 1",
     ];
 
     // After every config: MiscModule skips the GameCommencing round restart, and warmup then starts without it, leaving
@@ -165,6 +164,8 @@ internal class MapInfoModule : IModule, IMapInfoModule, IGameListener
         {
             Directory.CreateDirectory(_configPath);
         }
+
+        bridge.ConVarManager.FindConVar("sv_infinite_ammo", true)?.Flags &= ~ConVarFlags.Cheat;
     }
 
     public bool Init()
