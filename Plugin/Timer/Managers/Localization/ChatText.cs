@@ -257,6 +257,10 @@ internal static class ChatTexts
     public static readonly ChatText FovReset = new ("chat.fov.reset", "Your FOV is back to the default.");
     public static readonly ChatText FovUsage = new ("chat.fov.usage", "Usage: !fov <{0}-{1}>, or !fov to reset it.");
 
+    public static readonly ChatText NightVisionOn    = new ("chat.nightvision.on", "Night vision is on, at brightness [lightgreen]{0}[white].");
+    public static readonly ChatText NightVisionOff   = new ("chat.nightvision.off", "Night vision is off.");
+    public static readonly ChatText NightVisionUsage = new ("chat.nightvision.usage", "Usage: !nv to switch it, !nv <{0}-{1}> for its brightness, or !nv 0 to turn it off.");
+
     // ---- spectating
     public static readonly ChatText FindNone        = new ("chat.find.none", "No player named \"{0}\" is on the server.");
     public static readonly ChatText FindMany        = new ("chat.find.many", "More than one player matches \"{0}\".");

@@ -90,7 +90,7 @@ maps count as part of it; zones drawn with `!zone` are in the database, not seen
   replay bot's track).
 - **Records:** `!wr [map]`, `!pb`, `!rank`, `!cpr`, `!recent`, `!profile [name|SteamID]`, `!ptop`, `!replay`
 - **Practice:** `saveloc`, `loc`, `prevloc`, `nextloc`, `clearloc` (bindable)
-- **HUD and misc:** `!hud`, `!showkeys`, `!ssj`, `!mapinfo`, `!spec`, `!specs`, `!hide`, `!footsteps`, `!stopsound`, `!sounds`, `!showzones`, `!country`, `!fov <60-130>` (`!fov` resets)
+- **HUD and misc:** `!hud`, `!showkeys`, `!ssj`, `!mapinfo`, `!spec`, `!specs`, `!hide`, `!footsteps`, `!stopsound`, `!sounds`, `!showzones`, `!country`, `!fov <60-130>` (`!fov` resets), `!nv` (night vision; `!nv <1-10>` sets its brightness, `!nv 0` turns it off)
 - **Map chooser:** `!rtv`, `!nominate`, `!nextmap`, `!timeleft`
 - **Admin:** `!zone` (`timer:zone`; `!zone all` outlines every track's zones while editing), `!set_tier` / `!set_ranked` (`timer:tier`), `!wipeplayer` (`timer:records`)
 

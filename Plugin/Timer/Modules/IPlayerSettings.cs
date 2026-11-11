@@ -73,6 +73,21 @@ internal interface IPlayerSettings
 
     void SetFov(PlayerSlot slot, int value);
 
+    /// <summary>
+    ///     !nv: night vision. Off by default; its brightness stays while it's off.
+    /// </summary>
+    bool UsesNightVision(PlayerSlot slot);
+
+    void SetUsesNightVision(PlayerSlot slot, bool value);
+
+    /// <summary>
+    ///     !nv &lt;n&gt;: the exposure night vision holds the map at, in tenths, from
+    ///     <see cref="Hud.HudOptions.MinNightVision" /> to <see cref="Hud.HudOptions.MaxNightVision" />.
+    /// </summary>
+    int NightVisionBrightness(PlayerSlot slot);
+
+    void SetNightVisionBrightness(PlayerSlot slot, int value);
+
     event Action<PlayerSlot>? Changed;
 
     /// <summary>

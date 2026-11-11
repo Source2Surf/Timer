@@ -2043,6 +2043,18 @@
     "en-us": "Usage: !fov <{0}-{1}>, or !fov to reset it.",
     "zh-cn": "用法：!fov <{0}-{1}>，或输入 !fov 恢复默认。"
   },
+  "chat.nightvision.on": {
+    "en-us": "Night vision is on, at brightness [lightgreen]{0}[white].",
+    "zh-cn": "夜视已开启，亮度 [lightgreen]{0}[white]。"
+  },
+  "chat.nightvision.off": {
+    "en-us": "Night vision is off.",
+    "zh-cn": "夜视已关闭。"
+  },
+  "chat.nightvision.usage": {
+    "en-us": "Usage: !nv to switch it, !nv <{0}-{1}> for its brightness, or !nv 0 to turn it off.",
+    "zh-cn": "用法：!nv 开关夜视，!nv <{0}-{1}> 设置亮度，!nv 0 关闭夜视。"
+  },
   "chat.vs_pb": {
     "en-us": " | PB {0}[grey]",
     "zh-cn": " | PB {0}[grey]"

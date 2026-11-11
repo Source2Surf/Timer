@@ -57,6 +57,18 @@ internal partial class HudModule
     public void SetFov(PlayerSlot slot, int value)
         => SetChoice(slot, HudOptions.Fov, value);
 
+    public bool UsesNightVision(PlayerSlot slot)
+        => _players[slot] is { } p ? p.IsOn(HudOptions.NightVision) : HudOptions.NightVision.Initial == 0;
+
+    public void SetUsesNightVision(PlayerSlot slot, bool value)
+        => SetOnOff(slot, HudOptions.NightVision, value);
+
+    public int NightVisionBrightness(PlayerSlot slot)
+        => _players[slot] is { } p ? p.Settings[HudOptions.NightVisionBrightness.Index] : HudOptions.NightVisionBrightness.Initial;
+
+    public void SetNightVisionBrightness(PlayerSlot slot, int value)
+        => SetChoice(slot, HudOptions.NightVisionBrightness, value);
+
     public void SetHearsFootsteps(PlayerSlot slot, bool value)
         => SetOnOff(slot, HudOptions.Footsteps, value);
 

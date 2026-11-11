@@ -217,6 +217,23 @@ internal static class HudOptions
             InMenu = false,
         };
 
+    // !nv: night vision, saved apart from its brightness so turning it off keeps that. The brightness is the exposure
+    // it holds the map at, in tenths so it fits the saved byte: 30 is 3.0.
+    public const int MinNightVision     = 10;
+    public const int MaxNightVision     = 100;
+    public const int DefaultNightVision = 30;
+
+    public static readonly HudOption NightVision = new (85, "OptNightVision", OnOff, initial: 1) { InMenu = false };
+
+    public static readonly HudOption NightVisionBrightness =
+        new (86,
+             "OptNightVisionBrightness",
+             Enumerable.Range(0, MaxNightVision + 1).Select(n => new HudChoice(n.ToString(CultureInfo.InvariantCulture))).ToArray(),
+             initial: DefaultNightVision)
+        {
+            InMenu = false,
+        };
+
     public static readonly HudOption[] All =
     [
         Run, SizeRun, CSpeed, SizeCSpeed, Info, SizeInfo, Splits, SizeSplits, Keys, SizeKeys,
@@ -224,6 +241,7 @@ internal static class HudOptions
         SpeedColor, SpeedAxes, SplitRows, SplitFade, KeyMouse, KeyJumpDuck,
         Ssj, SizeSsj, SsjJump, SsjRepeat, SsjFirst, SsjSpeedDiff, SsjHeight, SsjGain, SsjSync, SsjStrafes, SsjEfficiency,
         Hide, Sounds, Specs, SizeSpecs, SizeMenus, SizeLocs, Footsteps, WeaponSounds, Zones, Country, Fov,
+        NightVision, NightVisionBrightness,
     ];
 
     public static readonly IReadOnlyDictionary<string, HudOption> ById;
