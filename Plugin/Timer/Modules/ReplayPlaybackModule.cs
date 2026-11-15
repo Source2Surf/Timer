@@ -365,9 +365,12 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
         if (!_expectingBot)
         {
-            _bridge.ClientManager.KickClient(client,
-                                             "no",
-                                             NetworkDisconnectionReason.Kicked);
+            _bridge.ModSharp.InvokeFrameAction(() =>
+            {
+                _bridge.ClientManager.KickClient(client,
+                                                 "no",
+                                                 NetworkDisconnectionReason.Kicked);
+            });
 
             return;
         }
@@ -378,9 +381,12 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
         {
             _logger.LogError("Failed to find bot!!!!");
 
-            _bridge.ClientManager.KickClient(client,
-                                             "no",
-                                             NetworkDisconnectionReason.Kicked);
+            _bridge.ModSharp.InvokeFrameAction(() =>
+            {
+                _bridge.ClientManager.KickClient(client,
+                                                 "no",
+                                                 NetworkDisconnectionReason.Kicked);
+            });
 
             return;
         }
@@ -391,9 +397,12 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
         {
             _logger.LogWarning("No free replay bot config slot; kicking unexpected bot");
 
-            _bridge.ClientManager.KickClient(client,
-                                             "no",
-                                             NetworkDisconnectionReason.Kicked);
+            _bridge.ModSharp.InvokeFrameAction(() =>
+            {
+                _bridge.ClientManager.KickClient(client,
+                                                 "no",
+                                                 NetworkDisconnectionReason.Kicked);
+            });
 
             return;
         }
