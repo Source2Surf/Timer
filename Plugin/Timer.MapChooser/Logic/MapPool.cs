@@ -30,13 +30,15 @@ internal sealed record PoolMap(string Name, ulong WorkshopId, ulong MapId, byte 
 internal static class MapPool
 {
     /// <summary>
-    ///     The maps to choose from: the server's workshop maps, then the extra local ones, minus the excluded, in name
-    ///     order. A workshop map takes its tier from its workshop item's row, or else from the row of the same name.
+    ///     The maps to choose from: the server's workshop maps, then the extra local ones, minus the excluded and, when
+    ///     <paramref name="tiers" /> has any, those of other tiers (0 is a map without one), in name order. A workshop
+    ///     map takes its tier from its workshop item's row, or else from the row of the same name.
     /// </summary>
     public static List<PoolMap> Build(IEnumerable<(ulong Id, string Name)> hosted,
                                       IEnumerable<string>                  extra,
                                       IReadOnlyList<MapProfile>            profiles,
-                                      IEnumerable<string>                  exclude)
+                                      IEnumerable<string>                  exclude,
+                                      IEnumerable<int>                     tiers)
     {
         var byWorkshop = new Dictionary<ulong, MapProfile>();
         var byName     = new Dictionary<string, MapProfile>(StringComparer.OrdinalIgnoreCase);
@@ -76,6 +78,10 @@ internal static class MapPool
             maps.TryAdd(name, new PoolMap(name, 0, profile?.MapId ?? 0, profile?.Tier[0] ?? 0, false));
         }
 
-        return maps.Values.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var kept = tiers.ToHashSet();
+
+        return maps.Values.Where(x => kept.Count == 0 || kept.Contains(x.Tier))
+                   .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                   .ToList();
     }
 }

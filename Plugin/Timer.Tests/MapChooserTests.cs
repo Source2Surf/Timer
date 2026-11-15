@@ -46,13 +46,35 @@ public sealed class MapChooserTests
         var pool = MapPool.Build([(111, "surf_c"), (222, "surf_b"), (333, "SURF_A"), (444, "surf_skip")],
                                  ["surf_local", "surf_c"],
                                  profiles,
-                                 ["surf_skip"]);
+                                 ["surf_skip"],
+                                 []);
 
         Assert.Equal(["SURF_A", "surf_b", "surf_c", "surf_local"], pool.Select(x => x.Name));
         Assert.Equal(new PoolMap("SURF_A", 333, 1, 3, true), pool[0]);
         Assert.Equal(new PoolMap("surf_b", 222, 2, 4, true), pool[1]);
         Assert.Equal(new PoolMap("surf_c", 111, 0, 0, true), pool[2]);
         Assert.Equal(new PoolMap("surf_local", 0, 5, 2, false), pool[3]);
+    }
+
+    // An easy server's [1, 2] leaves out harder maps and those nobody has set a tier for, local ones too; 0 takes those.
+    [Fact]
+    public void PoolKeepsOnlyItsTiers()
+    {
+        var profiles = new[]
+        {
+            Profile("surf_t1", 1, 1, 111),
+            Profile("surf_t2", 2, 2),
+            Profile("surf_t3", 3, 3, 333),
+            Profile("surf_local_t2", 4, 2),
+            Profile("surf_local_t5", 5, 5),
+        };
+
+        (ulong, string)[] hosted = [(111, "surf_t1"), (222, "surf_t2"), (333, "surf_t3"), (444, "surf_new")];
+        string[]          extra  = ["surf_local_t2", "surf_local_t5"];
+
+        Assert.Equal(["surf_local_t2", "surf_t1", "surf_t2"], MapPool.Build(hosted, extra, profiles, [], [1, 2]).Select(x => x.Name));
+        Assert.Equal(["surf_local_t2", "surf_new", "surf_t2"], MapPool.Build(hosted, extra, profiles, [], [0, 2]).Select(x => x.Name));
+        Assert.Equal(6, MapPool.Build(hosted, extra, profiles, [], []).Count);
     }
 
     [Fact]
@@ -201,6 +223,7 @@ public sealed class MapChooserTests
             Assert.True(File.Exists(path));
             Assert.Equal(30, written.TimeLimit);
             Assert.Equal(5, written.VoteMaps);
+            Assert.Empty(written.Tiers);
             Assert.Equal("autobuy", written.KeyUp);
             Assert.Equal(Sharp.Shared.Enums.UserCommandButtons.LookAtWeapon, written.SelectButton);
             Assert.Equal("lookatweapon", written.SelectCommand);
@@ -212,6 +235,7 @@ public sealed class MapChooserTests
                                         "vote_maps": 50,
                                         "vote_before_end": 9999,
                                         "extra_maps": ["surf_x"],
+                                        "tiers": [1, 2],
                                         "key_select": "nope",
                                     }
                                     """);
@@ -221,6 +245,7 @@ public sealed class MapChooserTests
             Assert.Equal(8, config.VoteMaps);
             Assert.Equal(120, config.VoteBeforeEnd);
             Assert.Equal(["surf_x"], config.ExtraMaps);
+            Assert.Equal([1, 2], config.Tiers);
             Assert.Equal(Sharp.Shared.Enums.UserCommandButtons.LookAtWeapon, config.SelectButton);
         }
         finally

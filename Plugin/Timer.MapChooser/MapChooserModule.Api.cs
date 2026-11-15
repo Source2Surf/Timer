@@ -101,7 +101,7 @@ public sealed partial class MapChooserModule
             entries.Add(new NominateEntry(map.Name, map.Tier, best, StateOf(map.Name, mine)));
         }
 
-        return new NominateMenu(menu.Search, menu.Tier, menu.UnfinishedOnly, entries);
+        return new NominateMenu(menu.Search, menu.Tier, menu.UnfinishedOnly, entries, _poolTiers);
     }
 
     public void SetNominateFilter(PlayerSlot slot, int tier, bool unfinishedOnly)

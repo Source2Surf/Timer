@@ -84,4 +84,5 @@ public sealed record NominateEntry(string Map, byte Tier, float? PersonalBest, N
 ///     The nominate menu a player has open: the maps matching their filter, in name order.
 /// </summary>
 /// <param name="Tier">The tier shown, or 0 for all.</param>
-public sealed record NominateMenu(string? Search, int Tier, bool UnfinishedOnly, IReadOnlyList<NominateEntry> Entries);
+/// <param name="Tiers">The tiers there are maps of, lowest first, to pick from. A map without a tier shows under all.</param>
+public sealed record NominateMenu(string? Search, int Tier, bool UnfinishedOnly, IReadOnlyList<NominateEntry> Entries, IReadOnlyList<byte> Tiers);

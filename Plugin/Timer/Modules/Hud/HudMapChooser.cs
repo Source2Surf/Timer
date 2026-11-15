@@ -274,6 +274,8 @@ internal partial class HudModule
 
         for (var tier = 0; tier < TierChipIds.Length; tier++)
         {
+            // All, the tiers there are maps of, and the one shown even with none (!nominate <tier>).
+            w.Class(TierChipIds[tier], "Hidden", tier != 0 && tier != menu.Tier && !menu.Tiers.Contains((byte) tier));
             w.Text(TierLabelIds[tier], "text", tier == 0 ? tr[HudTexts.NomAll] : tr.Format(HudTexts.TierN, tier));
             w.Class(TierChipIds[tier], "on", menu.Tier == tier);
             w.Class(TierLabelIds[tier], "on", menu.Tier == tier);

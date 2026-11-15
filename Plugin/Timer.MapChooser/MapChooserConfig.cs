@@ -53,6 +53,9 @@ internal sealed class MapChooserConfig
                                         // Local maps to offer besides the server's workshop maps, and maps never to offer.
                                         "extra_maps": [],
                                         "exclude": [],
+                                        // Only maps of these tiers, e.g. [1, 2] on an easy server; 0 takes the maps without a tier yet.
+                                        // Empty offers every map.
+                                        "tiers": [],
                                         // Keys for the vote: commands to move up and down, and a button to vote.
                                         "key_up": "autobuy",
                                         "key_down": "rebuy",
@@ -72,6 +75,7 @@ internal sealed class MapChooserConfig
     public int          RecentMaps    { get; set; } = 5;
     public List<string> ExtraMaps     { get; set; } = [];
     public List<string> Exclude       { get; set; } = [];
+    public List<int>    Tiers         { get; set; } = [];
     public string       KeyUp         { get; set; } = "autobuy";
     public string       KeyDown       { get; set; } = "rebuy";
     public string       KeySelect     { get; set; } = "LookAtWeapon";

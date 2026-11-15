@@ -78,6 +78,8 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
 
     private List<PoolMap>               _pool       = [];
     private Dictionary<string, PoolMap> _poolByName = new (StringComparer.OrdinalIgnoreCase);
+    private byte[]                      _poolTiers  = []; // the tiers it has maps of, for the nominate menu
+    private IReadOnlyList<MapProfile>?  _profiles;        // the tiers last read, null until they are
     private int                         _poolEpoch;
     private int                         _poolVersion;
     private int                         _voteFailedVersion = -1; // the pool an end-of-map vote found nothing in
@@ -245,7 +247,8 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     }
 
     /// <summary>
-    ///     Builds the pool from the server's maps at once, then again with their tiers once the timer has them.
+    ///     Builds the pool from the server's maps at once with the tiers last read, then again once the timer has them
+    ///     afresh. Kept to some tiers, it waits for the first read: until then every map looks like it has none.
     /// </summary>
     private void RefreshPool()
     {
@@ -253,7 +256,10 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
         var hosted = _modSharp.ListWorkshopMaps();
         var extra  = _config.ExtraMaps.Where(_modSharp.IsMapValid).ToList();
 
-        SetPool(MapPool.Build(hosted, extra, [], _config.Exclude));
+        if (_profiles is not null || _config.Tiers.Count == 0)
+        {
+            SetPool(MapPool.Build(hosted, extra, _profiles ?? [], _config.Exclude, _config.Tiers));
+        }
 
         if (_requests?.Instance is not { } requests)
         {
@@ -265,12 +271,13 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
             try
             {
                 var profiles = await requests.GetMapProfilesAsync();
-                var pool     = MapPool.Build(hosted, extra, profiles, _config.Exclude);
+                var pool     = MapPool.Build(hosted, extra, profiles, _config.Exclude, _config.Tiers);
 
                 _modSharp.InvokeFrameAction(() =>
                 {
                     if (epoch == _poolEpoch)
                     {
+                        _profiles = profiles;
                         SetPool(pool);
                     }
                 });
@@ -286,12 +293,24 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     {
         _pool       = pool;
         _poolByName = pool.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+        _poolTiers  = pool.Where(x => x.Tier > 0).Select(x => x.Tier).Distinct().Order().ToArray();
         _poolVersion++;
         Changed();
 
-        if (pool.Count == 0 && _emptyWarnedEpoch != _poolEpoch)
+        if (pool.Count > 0 || _emptyWarnedEpoch == _poolEpoch)
         {
-            _emptyWarnedEpoch = _poolEpoch;
+            return;
+        }
+
+        _emptyWarnedEpoch = _poolEpoch;
+
+        if (_config.Tiers.Count > 0)
+        {
+            _logger.LogWarning("No maps to choose from: none of the server's maps has one of the tiers {tiers} in {path} "
+                               + "(0 takes the maps without a tier)", string.Join(", ", _config.Tiers), _configPath);
+        }
+        else
+        {
             _logger.LogWarning("No maps to choose from: the server hosts no workshop maps (+host_workshop_collection) "
                                + "and extra_maps in {path} has none installed", _configPath);
         }
