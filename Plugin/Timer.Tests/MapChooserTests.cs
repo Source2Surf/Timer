@@ -77,6 +77,27 @@ public sealed class MapChooserTests
         Assert.Equal(6, MapPool.Build(hosted, extra, profiles, [], []).Count);
     }
 
+    // The map CS2 boots a server on from the collection can be of a tier the server doesn't offer: that one is left.
+    [Fact]
+    public void OutOfRangeTierFlagsOnlyHostedMapsOfOtherTiers()
+    {
+        var profiles = new[]
+        {
+            Profile("bhop_easy_old", 1, 1, 111), // renamed on the workshop: matched by its item
+            Profile("bhop_hard", 2, 5),
+        };
+
+        (ulong, string)[] hosted = [(111, "bhop_easy"), (222, "bhop_hard"), (333, "bhop_new")];
+
+        Assert.Equal((byte) 1, MapPool.OutOfRangeTier("BHOP_EASY", hosted, profiles, [3, 4, 5]));
+        Assert.Null(MapPool.OutOfRangeTier("bhop_hard", hosted, profiles, [3, 4, 5]));
+        Assert.Equal((byte) 5, MapPool.OutOfRangeTier("bhop_hard", hosted, profiles, [1, 2, 3]));
+        Assert.Equal((byte) 0, MapPool.OutOfRangeTier("bhop_new", hosted, profiles, [1, 2, 3]));
+        Assert.Null(MapPool.OutOfRangeTier("bhop_new", hosted, profiles, [0, 1]));
+        Assert.Null(MapPool.OutOfRangeTier("de_mirage", hosted, profiles, [3, 4, 5])); // the stock map it starts on
+        Assert.Null(MapPool.OutOfRangeTier("bhop_hard", hosted, profiles, []));        // every tier offered
+    }
+
     [Fact]
     public void NominationsKeepOnePerPlayerInOrder()
     {

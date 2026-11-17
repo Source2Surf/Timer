@@ -186,6 +186,34 @@ public sealed partial class MapChooserModule
         return candidates.Count == 0 ? null : candidates[_random.Next(candidates.Count)].Name;
     }
 
+    /// <summary>
+    ///     A server kept to some tiers leaves a workshop map of another tier for a random map of its own while nobody is
+    ///     on it: the map CS2 starts on from the collection, whatever map the server was told to boot on. A map someone
+    ///     is playing, an admin's choice say, is left to the vote.
+    /// </summary>
+    private void LeaveOffTierMap(IEnumerable<(ulong Id, string Name)> hosted, IReadOnlyList<MapProfile> profiles)
+    {
+        if (_nextMap is not null || _vote is not null || !float.IsNaN(_changeAt) || Players() > 0)
+        {
+            return;
+        }
+
+        if (MapPool.OutOfRangeTier(_currentMap, hosted, profiles, _config.Tiers) is not { } tier
+            || RandomCandidate() is not { } next)
+        {
+            return;
+        }
+
+        _logger.LogInformation("{map} is tier {tier}, not one of this server's tiers ({tiers}), and nobody is on it: changing to {next}",
+                               _currentMap,
+                               tier,
+                               string.Join(", ", _config.Tiers),
+                               next);
+
+        _nextMap = next;
+        ScheduleChange(Now);
+    }
+
     private void ScheduleChange(float now)
     {
         _changeAt = now + _config.ChangeDelay;

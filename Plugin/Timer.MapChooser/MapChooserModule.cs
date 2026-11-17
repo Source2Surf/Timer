@@ -279,6 +279,7 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
                     {
                         _profiles = profiles;
                         SetPool(pool);
+                        LeaveOffTierMap(hosted, profiles);
                     }
                 });
             }

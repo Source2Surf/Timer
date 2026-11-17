@@ -84,4 +84,36 @@ internal static class MapPool
                    .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
                    .ToList();
     }
+
+    /// <summary>
+    ///     The tier of <paramref name="map" /> when it is one of the server's workshop maps and <paramref name="tiers" />
+    ///     keeps that tier out of the pool, found as <see cref="Build" /> finds it (0: none yet); null when every tier is
+    ///     offered, the map's is, or the map isn't one of the server's workshop maps (the stock map it boots on).
+    /// </summary>
+    public static byte? OutOfRangeTier(string                               map,
+                                       IEnumerable<(ulong Id, string Name)> hosted,
+                                       IReadOnlyList<MapProfile>            profiles,
+                                       IReadOnlyCollection<int>             tiers)
+    {
+        if (tiers.Count == 0)
+        {
+            return null;
+        }
+
+        foreach (var (id, name) in hosted)
+        {
+            if (!name.Equals(map, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var profile = profiles.FirstOrDefault(x => x.WorkshopId != 0 && x.WorkshopId == id)
+                          ?? profiles.FirstOrDefault(x => x.MapName.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var tier = profile?.Tier[0] ?? 0;
+
+            return tiers.Contains(tier) ? null : tier;
+        }
+
+        return null;
+    }
 }

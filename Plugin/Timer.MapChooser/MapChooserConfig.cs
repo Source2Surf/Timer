@@ -54,7 +54,8 @@ internal sealed class MapChooserConfig
                                         "extra_maps": [],
                                         "exclude": [],
                                         // Only maps of these tiers, e.g. [1, 2] on an easy server; 0 takes the maps without a tier yet.
-                                        // Empty offers every map.
+                                        // Empty offers every map. With some, a workshop map of another tier is left for one of these
+                                        // while nobody is on it (the map CS2 boots on from the collection, say).
                                         "tiers": [],
                                         // Keys for the vote: commands to move up and down, and a button to vote.
                                         "key_up": "autobuy",

@@ -58,7 +58,7 @@ private network, or enable per-server API keys (`backend.api_key`). Upgrading an
 | `timer-ranks.jsonc` | Rank titles, chat tags, scoreboard. |
 | `timer-sounds.jsonc` | Finish sounds: random picks, rank sounds, your own `.vsndevts`. |
 | `timer-replay.jsonc` | Replay bots; `"type": 1` is the central bot `!replay` uses. |
-| `timer-mapchooser.jsonc` | Map chooser, written when missing: map time, votes, rock the vote, and `tiers`, the tiers a server offers (`[1, 2]` on an easy one; empty for every map). |
+| `timer-mapchooser.jsonc` | Map chooser, written when missing: map time, votes, rock the vote, and `tiers`, the tiers a server offers (`[1, 2]` on an easy one; empty for every map). A server kept to some tiers leaves a workshop map of another tier for one of its own while nobody is on it, as the map CS2 boots on from the collection can be. |
 
 Per-map overrides go in `sharp/data/surftimer/map_configs/<map>.json`: `cmds`,
 `max_velocity`, and per track `enter_speed_limit`, `exit_speed_limit`,
