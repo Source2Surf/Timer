@@ -84,6 +84,8 @@ public sealed partial class MapChooserModule
 
     private bool StartVote(MapVoteKind kind, float now)
     {
+        RefreshPoolIfHostedChanged();
+
         var extend = kind == MapVoteKind.EndOfMap && _clock.Extends < _config.MaxExtends ? _config.ExtendMinutes : 0;
 
         var nominated = _nominations.Maps.Select(x => _poolByName.GetValueOrDefault(x)).OfType<PoolMap>();
@@ -166,6 +168,7 @@ public sealed partial class MapChooserModule
             return;
         }
 
+        RefreshPoolIfHostedChanged();
         _nextMap ??= _nominations.Maps.FirstOrDefault() ?? RandomCandidate();
 
         if (_nextMap is null)

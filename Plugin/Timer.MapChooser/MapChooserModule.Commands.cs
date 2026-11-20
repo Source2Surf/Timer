@@ -124,6 +124,8 @@ public sealed partial class MapChooserModule
 
     private void OnNominate(IGameClient client, StringCommand command)
     {
+        RefreshPoolIfHostedChanged();
+
         var arg = command.ArgString.Trim();
 
         if (arg.Length == 0)

@@ -84,6 +84,7 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     private int                         _poolVersion;
     private int                         _voteFailedVersion = -1; // the pool an end-of-map vote found nothing in
     private int                         _emptyWarnedEpoch  = -1;
+    private int                         _hostedCount;     // the workshop maps the pool was built from
     private string                      _currentMap = string.Empty;
     private bool                        _mapRunning;
     private MapVote?                    _vote;
@@ -250,10 +251,11 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
     ///     Builds the pool from the server's maps at once with the tiers last read, then again once the timer has them
     ///     afresh. Kept to some tiers, it waits for the first read: until then every map looks like it has none.
     /// </summary>
-    private void RefreshPool()
+    private void RefreshPool(List<(ulong PublishFileId, string Name)>? hosted = null)
     {
-        var epoch  = ++_poolEpoch;
-        var hosted = _modSharp.ListWorkshopMaps();
+        var epoch = ++_poolEpoch;
+        hosted ??= _modSharp.ListWorkshopMaps();
+        _hostedCount = hosted.Count;
         var extra  = _config.ExtraMaps.Where(_modSharp.IsMapValid).ToList();
 
         if (_profiles is not null || _config.Tiers.Count == 0)
@@ -288,6 +290,21 @@ public sealed partial class MapChooserModule : IModSharpModule, IMapChooser, IGa
                 _logger.LogError(e, "Failed to read the map tiers");
             }
         });
+    }
+
+    /// <summary>
+    ///     Builds the pool again when the server hosts another number of workshop maps than it was built from. A map
+    ///     the server starts on before its collection is in (<c>+host_workshop_map</c> beside a large
+    ///     <c>+host_workshop_collection</c>) sees only itself, and would offer nothing else until the map changed.
+    /// </summary>
+    private void RefreshPoolIfHostedChanged()
+    {
+        var hosted = _modSharp.ListWorkshopMaps();
+
+        if (hosted.Count != _hostedCount)
+        {
+            RefreshPool(hosted);
+        }
     }
 
     private void SetPool(List<PoolMap> pool)
