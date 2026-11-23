@@ -157,7 +157,16 @@ internal class TimerInfo : ITimerInfo
     public void ChangeTrack(int track)
     {
         StopTimer();
-        Track = Math.Max(track, 0);
+
+        track = Math.Max(track, 0);
+
+        // 只在换线路时清: 同线路重开时人可能本来就站在起点区里, 传送过去不会再触发 StartTouch
+        if (track != Track)
+        {
+            InZone = EZoneType.Invalid;
+        }
+
+        Track = track;
     }
 
     public EZoneType InZone { get => _state.InZone; private set => _state.InZone = value; }

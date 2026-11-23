@@ -1695,6 +1695,10 @@
     "en-us": "This map has no start for stage [lightgreen]{0}[white].",
     "zh-cn": "本图没有关卡 [lightgreen]{0}[white] 的起点。"
   },
+  "chat.timer.track_no_start": {
+    "en-us": "This map has no start zone for [lightgreen]{0}[white].",
+    "zh-cn": "本图没有[lightgreen]{0}[white]的起点区。"
+  },
   "chat.timer.unverified": {
     "en-us": "Your Steam account has not been verified yet. The server may not be connected to Steam. Please wait and try again.",
     "zh-cn": "你的 Steam 账号尚未通过验证，服务器可能没有连接到 Steam。请稍后再试。"

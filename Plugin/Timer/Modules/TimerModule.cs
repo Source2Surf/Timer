@@ -697,6 +697,13 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             return;
         }
 
+        if (_timerInfo[slot] is { } current && current.Track != track && !_zoneModule.HasZone(track, EZoneType.Start))
+        {
+            PrintTrackNoStart(controller, track);
+
+            return;
+        }
+
         // A restart: the bhop platforms they set off are all back at rest.
         _movementFix.ClearBhopBlocks(slot);
 
@@ -735,6 +742,17 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         {
             _noclipped[slot] = false;
         }
+        else
+        {
+            PrintTrackNoStart(controller, track);
+        }
+    }
+
+    private void PrintTrackNoStart(IPlayerController controller, int track)
+    {
+        var tr = _localization.For(controller.PlayerSlot);
+
+        controller.PrintToChat(tr.Format(ChatTexts.TrackNoStart, tr.Track(track)));
     }
 
     private void NotifyPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, TimerInfo timerInfo)
