@@ -88,6 +88,8 @@ internal interface IStyleModule
 
 internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener, ITimerModuleListener
 {
+    private const ConVarFlags StrippedFlags = ConVarFlags.Replicated | ConVarFlags.Notify;
+
     private readonly InterfaceBridge _bridge;
 
     private readonly string _styleConfigPath;
@@ -122,6 +124,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
     // ReSharper restore InconsistentNaming
 
+    private readonly List<(IConVar ConVar, ConVarFlags Flags)> _strippedFlags;
+
     // Cached last-applied style key to skip redundant Set() calls across players.
     // Combines style index + inStartZone flag into a single value.
     // Only when the composite key changes do we call Set() on all ConVars.
@@ -152,6 +156,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         var configDir = Path.Combine(bridge.SharpPath, "configs");
         Directory.CreateDirectory(configDir);
         _styleConfigPath = Path.Combine(configDir, "timer-styles.jsonc");
+
+        _strippedFlags = [];
 
         sv_autobunnyhopping   = InitializeConVar("sv_autobunnyhopping");
         sv_accelerate         = InitializeConVar("sv_accelerate");
@@ -190,12 +196,10 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     {
         _commandManager.ClearStyleCommands();
 
-        sv_autobunnyhopping.Flags   |= ConVarFlags.Replicated;
-        sv_accelerate.Flags         |= ConVarFlags.Replicated;
-        sv_friction.Flags           |= ConVarFlags.Replicated;
-        sv_enablebunnyhopping.Flags |= ConVarFlags.Replicated;
-        sv_air_max_wishspeed.Flags  |= ConVarFlags.Replicated;
-        sv_airaccelerate.Flags      |= ConVarFlags.Replicated;
+        foreach (var (conVar, flags) in _strippedFlags)
+        {
+            conVar.Flags |= flags;
+        }
 
         _bridge.ModSharp.RemoveGameListener(this);
 
@@ -574,7 +578,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         var conVar = _bridge.ConVarManager.FindConVar(name)
                      ?? throw new NullReferenceException($"Failed to find {name}");
 
-        conVar.Flags &= ~ConVarFlags.Replicated;
+        _strippedFlags.Add((conVar, conVar.Flags & StrippedFlags));
+        conVar.Flags &= ~StrippedFlags;
 
         return conVar;
     }
