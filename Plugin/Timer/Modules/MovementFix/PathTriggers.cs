@@ -84,13 +84,18 @@ internal unsafe partial class MovementFixModule
             return;
         }
 
-        CollectPathTriggers(slot, param.Service.GetAbsPtr(), start, end);
+        CollectPathTriggers(slot, pawn, start, end);
     }
 
     // With the hull the step ended with.
-    private static void CollectPathTriggers(int slot, nint service, Vector start, Vector end)
+    private static void CollectPathTriggers(int slot, nint pawn, Vector start, Vector end)
     {
-        var hull  = CreatePlayerHull(service);
+        var hull = new TraceShapeRay(new TraceShapeHull
+        {
+            Mins = new (-16, -16, 0),
+            Maxs = new (16, 16, TriggerHullHeight(pawn)),
+        });
+
         var hits  = stackalloc nint[MaxTriggerHits];
         var count = CollectTriggers(&hull, start, end, hits);
 

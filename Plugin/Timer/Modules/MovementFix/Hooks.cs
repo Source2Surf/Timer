@@ -75,6 +75,7 @@ internal unsafe partial class MovementFixModule
     private static int CBaseEntity_m_hGroundEntity_offset;
     private static int CBaseEntity_m_flWaterLevel_offset;
     private static int CBaseEntity_m_vecBaseVelocity_offset;
+    private static int CBaseEntity_m_fFlags_offset;
     private static int CCollisionProperty_m_collisionAttribute_offset;
     private static int VPhysicsCollisionAttribute_t_m_nInteractsWith_offset;
     private static int VPhysicsCollisionAttribute_t_m_nHierarchyId_offset;
@@ -106,6 +107,7 @@ internal unsafe partial class MovementFixModule
         CBaseEntity_m_hGroundEntity_offset         = schema.GetNetVarOffset("CBaseEntity", "m_hGroundEntity");
         CBaseEntity_m_flWaterLevel_offset          = schema.GetNetVarOffset("CBaseEntity", "m_flWaterLevel");
         CBaseEntity_m_vecBaseVelocity_offset       = schema.GetNetVarOffset("CBaseEntity", "m_vecBaseVelocity");
+        CBaseEntity_m_fFlags_offset                = schema.GetNetVarOffset("CBaseEntity", "m_fFlags");
 
         CCollisionProperty_m_collisionAttribute_offset
             = schema.GetNetVarOffset("CCollisionProperty", "m_collisionAttribute");
@@ -548,6 +550,10 @@ internal unsafe partial class MovementFixModule
             Mins = new (-16, -16, 0),
             Maxs = new (16, 16, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset) ? 54 : 72),
         });
+
+    // 引擎给触发器选碰撞盒看 m_fFlags 的 FL_DUCKING, 不看 m_bDucked (sub_180C78430 @ server.dll 20261120, 0x180c7843e)
+    private static float TriggerHullHeight(nint pawn)
+        => (*(EntityFlags*) (pawn + CBaseEntity_m_fFlags_offset) & EntityFlags.Ducking) != 0 ? 54 : 72;
 
     // The game's CTraceFilterPlayerMovementCS, ignoring the player.
     private static bool InitPlayerMovementFilter(CTraceFilter* filter, nint pawn)

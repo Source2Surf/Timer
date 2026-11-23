@@ -321,8 +321,7 @@ internal unsafe partial class MovementFixModule
     // The triggers the game touches itself where the player ends the tick.
     private static int CollectGameTouches(nint pawn, nint* hits)
     {
-        var service = *(nint*) (pawn + CBasePlayerPawn_m_pMovementServices_offset);
-        var height  = service != nint.Zero && *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset) ? 54.0f : 72.0f;
+        var height = TriggerHullHeight(pawn);
 
         var hull = new TraceShapeRay(new TraceShapeHull
         {
