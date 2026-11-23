@@ -108,7 +108,7 @@ public sealed class RemoteRunSubmissionMapperTests
         Assert.Equal(12_345_678L, request.TimeMicros);
         Assert.Equal(17, request.Jumps);
         Assert.Equal(31, request.Strafes);
-        Assert.Equal(87.5f, request.Sync);
+        Assert.Equal(0.875f, request.Sync);
         Assert.Equal(1, request.ContractVersion);
         Assert.Equal(7, request.RulesetVersion);
         Assert.Equal(new DateTimeOffset(finishedAtUtc).ToUnixTimeMilliseconds(), request.FinishedAtUnixTimeMilliseconds);
@@ -116,7 +116,7 @@ public sealed class RemoteRunSubmissionMapperTests
         Assert.Equal(2, request.Checkpoints.Length);
         Assert.Equal((uint)1, request.Checkpoints[0].Index);
         Assert.Equal(4_000_000L, request.Checkpoints[0].TimeMicros);
-        Assert.Equal(82f, request.Checkpoints[0].Sync);
+        Assert.Equal(0.82f, request.Checkpoints[0].Sync);
         Assert.Equal(100f, request.Motion.StartX);
         Assert.Equal(200f, request.Motion.AverageY);
         Assert.Equal(300f, request.Motion.MaxZ);
@@ -278,7 +278,7 @@ public sealed class RemoteRunSubmissionMapperTests
             Time = 12.345678f,
             Jumps = 17,
             Strafes = 31,
-            Sync = 87.5f,
+            Sync = 0.875f,
             VelocityStartX = 100f,
             VelocityAvgY = 200f,
             VelocityMaxZ = 300f,
@@ -288,13 +288,13 @@ public sealed class RemoteRunSubmissionMapperTests
         {
             CheckpointIndex = 1,
             Time = 4f,
-            Sync = 82f,
+            Sync = 0.82f,
         });
         record.Checkpoints.Add(new RecordRequest.CheckpointRecord
         {
             CheckpointIndex = 2,
             Time = 8f,
-            Sync = 85f,
+            Sync = 0.85f,
         });
         return record;
     }

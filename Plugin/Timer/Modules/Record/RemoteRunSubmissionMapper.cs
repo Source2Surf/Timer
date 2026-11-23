@@ -442,9 +442,9 @@ internal static class RemoteRunSubmissionMapper
     private static void ValidateSync(float value, string fieldName)
     {
         ValidateFinite(value, fieldName);
-        if (value is < 0 or > 100)
+        if (value is < 0 or > 1)
         {
-            throw new ArgumentOutOfRangeException(fieldName, "Sync must be between zero and 100.");
+            throw new ArgumentOutOfRangeException(fieldName, "Sync must be between zero and one.");
         }
     }
 
