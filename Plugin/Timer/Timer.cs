@@ -16,9 +16,9 @@
  */
 
 using System;
-using System.Reflection;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
@@ -34,9 +34,7 @@ using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.MapChooser;
 using Source2Surf.Timer.Managers.Movement;
 using Source2Surf.Timer.Managers.Permission;
-using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Managers.Replay;
-using Source2Surf.Timer.Managers.Request;
 using Source2Surf.Timer.Modules;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -121,7 +119,7 @@ public class Timer : IModSharpModule
     }
 
     public string DisplayName   => "SurfTimer";
-    public string DisplayAuthor => "github.com/Nukoooo";
+    public string DisplayAuthor => "Nukoooo, Kxnrl";
 
     public bool Init()
     {

@@ -10,8 +10,8 @@
 
 	<ItemGroup>
 		<PackageReference Include="ModSharp.Sharp.Shared" Version="*" />
-		<PackageReference Include="MySqlConnector" Version="2.6.2" />
-		<PackageReference Include="Npgsql" Version="10.0.3" />
+		<PackageReference Include="MySqlConnector" Version="3.0.0" />
+		<PackageReference Include="Npgsql" Version="10.0.4" />
 		<PackageReference Include="SqlSugarCoreNoDrive" Version="5.1.4.221" />
 	</ItemGroup>
 
