@@ -475,6 +475,7 @@ internal static class HudTexts
     public static readonly HudText ZnEditHint       = new ("zn.edit_hint", "X, Y and Z move it along the map's axes; left turns it anticlockwise as seen from above. Each change is saved.");
     public static readonly HudText ZnCantTurn       = new ("zn.cant_turn", "This server can't turn zones.");
     public static readonly HudText ZnEditFailed     = new ("zn.edit_failed", "Couldn't change {0}.");
+    public static readonly HudText ZnNotLoaded      = new ("zn.not_loaded", "The zones added in game haven't all loaded on this map, so they can't be changed until the next map.");
 
     // ---- map chooser
     public static readonly HudText VoteEndOfMap  = new ("hud.vote.title", "Vote for the next map");

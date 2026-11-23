@@ -1599,6 +1599,10 @@
     "en-us": "Couldn't change {0}.",
     "zh-cn": "无法修改{0}。"
   },
+  "zn.not_loaded": {
+    "en-us": "The zones added in game haven't all loaded on this map, so they can't be changed until the next map.",
+    "zh-cn": "本图游戏内添加的区域没有全部加载，换图之前无法修改。"
+  },
   "chat.track.main": {
     "en-us": "Main",
     "zh-cn": "主线"

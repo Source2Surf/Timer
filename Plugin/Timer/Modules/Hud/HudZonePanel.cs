@@ -628,7 +628,7 @@ internal partial class HudModule
 
         if (!_zoneModule.StartZoneBuild(p.Slot, z.Track, z.Type, number))
         {
-            z.Note  = p.Tr[HudTexts.ZnStartFailed];
+            z.Note  = p.Tr[_zoneModule.CanEditCustomZones ? HudTexts.ZnStartFailed : HudTexts.ZnNotLoaded];
             z.Warn  = true;
             z.Dirty = true;
 

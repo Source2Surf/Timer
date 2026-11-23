@@ -41,11 +41,17 @@ internal partial class ZoneModule
     // Saves run one after another, so the last change made is the one stored.
     private Task _saving = Task.CompletedTask;
 
+    // 开图代次: 上一张图晚到的区域加载结果丢掉
+    private int  _zoneLoadGeneration;
+    private bool _customZonesLoaded;
+
     public event Action<PlayerSlot>? EditorRequested;
 
     public int EditVersion { get; private set; }
 
     public bool CanTurnZones => _canTurn;
+
+    public bool CanEditCustomZones => _customZonesLoaded;
 
     public bool IsZoneEditor(PlayerSlot slot)
         => _zoneEditors[slot];
@@ -118,6 +124,7 @@ internal partial class ZoneModule
     private bool Reshape(PlayerSlot slot, uint id, Vector delta, float degrees)
     {
         if (!_zoneEditors[slot]
+            || !_customZonesLoaded
             || !_zones.TryGetValue(id, out var info)
             || info.Prebuilt
             || _bridge.EntityManager.FindEntityByIndex(info.Index) is not { IsValidEntity: true } trigger
@@ -174,6 +181,7 @@ internal partial class ZoneModule
     public bool StartZoneBuild(PlayerSlot slot, int track, EZoneType type, int number)
     {
         if (!_zoneEditors[slot]
+            || !_customZonesLoaded
             || !ZoneEdit.IsValid(track, type, number)
             || _bridge.ClientManager.GetGameClient(slot)?.GetPlayerController()?.GetPlayerPawn() is not
             {
@@ -213,7 +221,7 @@ internal partial class ZoneModule
     // Only zones added in game; the map's own zones stay.
     public bool DeleteZone(PlayerSlot slot, uint id)
     {
-        if (!_zoneEditors[slot] || !_zones.TryGetValue(id, out var info) || info.Prebuilt)
+        if (!_zoneEditors[slot] || !_customZonesLoaded || !_zones.TryGetValue(id, out var info) || info.Prebuilt)
         {
             return false;
         }

@@ -100,6 +100,9 @@ internal interface IZoneModule
     // Whether this server's zones can turn (the SetSolid hook is in); they can always move.
     bool CanTurnZones { get; }
 
+    // 自建区域按整图覆盖保存: 本图的还没加载齐(在加载, 或有一条没建出来)时不放开编辑, 免得保存冲掉没挂上的区域
+    bool CanEditCustomZones { get; }
+
     // The zone added in game that the player edits, 0 for none.
     uint GetEditTarget(PlayerSlot slot);
 
@@ -353,6 +356,9 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         Array.Fill(_zoneEditors, false);
         Array.Clear(_editTargets);
 
+        _zoneLoadGeneration++;
+        _customZonesLoaded = false;
+
         _zones.Clear();
         ZonesChanged();
 
@@ -370,7 +376,10 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         ForgetLines();
         LoadZoneOutlines();
 
-        var mapName = _bridge.CurrentMapName;
+        var mapName    = _bridge.CurrentMapName;
+        var generation = ++_zoneLoadGeneration;
+
+        _customZonesLoaded = false;
 
         Task.Run(async () =>
                  {
@@ -383,6 +392,13 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
                          await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                          {
+                             if (generation != _zoneLoadGeneration)
+                             {
+                                 return;
+                             }
+
+                             var complete = true;
+
                              foreach (var zoneData in zones)
                              {
                                  var zoneInfo = ZoneMapper.ToZoneInfo(zoneData);
@@ -393,6 +409,8 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                                  }
                                  catch (Exception e)
                                  {
+                                     complete = false;
+
                                      // One broken zone must not abort loading the rest.
                                      _logger.LogError(e,
                                                       "Failed to create zone (track={Track}, type={Type}); skipping it.",
@@ -400,6 +418,9 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                                                       zoneInfo.ZoneType);
                                  }
                              }
+
+                             _customZonesLoaded = complete;
+                             EditVersion++;
                          }).ConfigureAwait(false);
                      }
                      catch (Exception e)
