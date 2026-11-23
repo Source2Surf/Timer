@@ -287,7 +287,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             case EZoneType.End:
             {
                 if (MissedBeforeEnd(_zoneModule.IsCurrentTrackLinear(timerInfo.Track) ? 0 : _zoneModule.GetTotalStages(timerInfo.Track),
-                                    stageTimer.IsTimerRunning() ? stageTimer.Stage : 0,
+                                    timerInfo.IsTimerRunning() || stageTimer.IsTimerRunning() ? stageTimer.Stage : 0,
                                     _mapInfoModule.RequiresCheckpoints(timerInfo.Track) ? _zoneModule.GetLastCheckpoint(timerInfo.Track) : 0,
                                     timerInfo.IsTimerRunning() ? timerInfo.Checkpoint : -1) is { } missed)
                 {
@@ -329,7 +329,8 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             }
             case EZoneType.Stage:
             {
-                if (!stageTimer.IsTimerRunning())
+                // 主表在跑时阶段表可能没在跑(出关卡起点被压住没开), 阶段号照样要推进, 跳关照样要判
+                if (!stageTimer.IsTimerRunning() && !timerInfo.IsTimerRunning())
                 {
                     return;
                 }
@@ -339,7 +340,11 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                 // Re-entering the current stage (e.g. teleported back after failing) — restart stage timer
                 if (newStageIndex == stageTimer.Stage)
                 {
-                    stageTimer.StopTimer();
+                    if (stageTimer.IsTimerRunning())
+                    {
+                        stageTimer.StopTimer();
+                    }
+
                     return;
                 }
 
@@ -354,11 +359,15 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                     return;
                 }
 
-                stageTimer.EndVelocity = velocity;
+                if (stageTimer.IsTimerRunning())
+                {
+                    stageTimer.EndVelocity = velocity;
 
-                NotifyPlayerStageTimerFinish(controller, pawn, stageTimer);
+                    NotifyPlayerStageTimerFinish(controller, pawn, stageTimer);
 
-                stageTimer.StopTimer();
+                    stageTimer.StopTimer();
+                }
+
                 stageTimer.Stage = newStageIndex;
 
                 // Clamp speed on entering stage start: only applies when main timer isn't running (practicing a stage),
