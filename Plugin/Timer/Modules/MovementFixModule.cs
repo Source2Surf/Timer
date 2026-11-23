@@ -24,7 +24,9 @@ using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Managers;
+using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Shared.Interfaces;
+using Source2Surf.Timer.Shared.Interfaces.Listeners;
 
 namespace Source2Surf.Timer.Modules;
 
@@ -41,11 +43,12 @@ internal interface IMovementFixModule
 }
 
 // Fixes for stock CS2 movement bugs, one file per fix under MovementFix/.
-internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, IGameListener, IEntityListener
+internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, IGameListener, IEntityListener, IPlayerManagerListener
 {
     private readonly InterfaceBridge            _bridge;
     private readonly IInlineHookManager         _inlineHookManager;
     private readonly IEventHookManager          _eventHook;
+    private readonly IPlayerManager             _playerManager;
     private readonly ILogger<MovementFixModule> _logger;
 
     private static IMovementExtension _movementExtension = null!;
@@ -97,6 +100,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     public MovementFixModule(InterfaceBridge            bridge,
                              IInlineHookManager         inlineHookManager,
                              IEventHookManager          eventHook,
+                             IPlayerManager             playerManager,
                              ILogger<MovementFixModule> logger,
                              IMovementExtension         movementExtension,
                              IMapInfoModule             mapInfo)
@@ -104,6 +108,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge            = bridge;
         _inlineHookManager = inlineHookManager;
         _eventHook         = eventHook;
+        _playerManager     = playerManager;
         _logger            = logger;
         _movementExtension = movementExtension;
         _mapInfo           = mapInfo;
@@ -189,6 +194,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _bridge.HookManager.PlayerProcessMovePost.InstallForward(OnPathTriggersMovePost);
         _bridge.ModSharp.InstallGameListener(this);
         _bridge.EntityManager.InstallEntityListener(this);
+        _playerManager.RegisterListener(this);
         _eventHook.ListenEvent("player_jump", OnBhopBlockJump);
 
         return true;
@@ -198,6 +204,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     {
         _bridge.ModSharp.RemoveGameListener(this);
         _bridge.EntityManager.RemoveEntityListener(this);
+        _playerManager.UnregisterListener(this);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
         _bridge.HookManager.PlayerPostThink.RemoveForward(OnPlayerPostThink);
         _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnPathTriggersMovePre);
@@ -264,19 +271,34 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _stepSize                  = sv_stepsize?.GetFloat() ?? 18.0f;
     }
 
+    public void OnClientDisconnected(PlayerSlot slot)
+    {
+        ResetPlayerState(slot);
+        ClearBhopBlocks(slot);
+    }
+
     private static void ResetPlayerState()
     {
-        Array.Fill(_moveTick, 0);
-        Array.Fill(_isFakeClient, false);
-        Array.Fill(_moved, false);
-        Array.Fill(_collided, false);
-        Array.Fill(_speedLossTick, int.MinValue);
-        Array.Fill(_teleportTick, int.MinValue);
-        Array.Fill(_landTick, int.MinValue);
-        Array.Fill(_touchingCount, 0);
-        Array.Fill(_stepTraced, false);
-        Array.Fill(_pathTriggerCount, 0);
+        for (var slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
+        {
+            ResetPlayerState(slot);
+        }
+
         ResetBhopBlocks();
+    }
+
+    private static void ResetPlayerState(int slot)
+    {
+        _moveTick[slot]         = 0;
+        _isFakeClient[slot]     = false;
+        _moved[slot]            = false;
+        _collided[slot]         = false;
+        _speedLossTick[slot]    = int.MinValue;
+        _teleportTick[slot]     = int.MinValue;
+        _landTick[slot]         = int.MinValue;
+        _touchingCount[slot]    = 0;
+        _stepTraced[slot]       = false;
+        _pathTriggerCount[slot] = 0;
     }
 
     private static HookReturnValue<EmptyHookReturn> OnPlayerRunCommandPre(IPlayerRunCommandHookParams      @params,
