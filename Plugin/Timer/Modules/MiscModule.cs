@@ -220,8 +220,10 @@ internal unsafe partial class MiscModule : IModule, IMiscModule, IGameListener, 
     private HookReturnValue<long> OnPlayerDispatchAttackPre(IPlayerDispatchTraceAttackHookParams @params,
                                                             HookReturnValue<long>                ret)
     {
-        // `kill` has no attacker; only attacks from another player are blocked.
-        if (timer_god_mode.GetInt32() == 0 || !@params.Info->Attacker.IsValid())
+        // Slays and console `kill` / `explode` have the player as attacker; only slays carry ForceDeath.
+        if (timer_god_mode.GetInt32() == 0
+            || !@params.Info->Attacker.IsValid()
+            || @params.TakeDamageFlags.HasFlag(TakeDamageFlags.ForceDeath))
         {
             return new (EHookAction.Ignored);
         }
