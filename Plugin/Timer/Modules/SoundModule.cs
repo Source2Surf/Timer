@@ -121,7 +121,7 @@ internal class SoundModule : IModule, ISoundModule, IRecordModuleListener, IGame
 
                 break;
             case >= EAttemptResult.NewPersonalRecord:
-                var first         = recordEvent.PbRecord is null;
+                var first         = recordEvent.PbRecord is null && recordEvent.PersonalBestKnown;
                 var (rank, total) = Rank(recordEvent.SavedRecord, first);
                 var (sounds, all) = _config.ForBest(recordEvent.RecordType == EAttemptResult.NewServerRecord, first, rank, total);
 

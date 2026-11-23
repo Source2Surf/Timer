@@ -321,7 +321,10 @@ internal sealed class RecordSaver
                                                           acknowledged.SavedRecord,
                                                           currentWrRecord,
                                                           currentPbRecord,
-                                                          attemptId);
+                                                          attemptId)
+            {
+                PersonalBestKnown = currentClient is not null && _playerCache.IsLoaded(currentClient.Slot),
+            };
 
             // ReplayRecorderModule correlates a late acknowledgement by this map id and attempt
             // id. A remote outage longer than its fallback TTL can still lose the replay artifact;
@@ -455,7 +458,10 @@ internal sealed class RecordSaver
                                                           acknowledged.SavedRecord,
                                                           currentWrRecord,
                                                           currentPbRecord,
-                                                          attemptId);
+                                                          attemptId)
+            {
+                PersonalBestKnown = currentClient is not null && _playerCache.IsLoaded(currentClient.Slot),
+            };
             NotifyRecordSavedListeners(recordEvent);
 
             if (currentClient is not null)

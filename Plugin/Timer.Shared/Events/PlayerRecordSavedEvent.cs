@@ -19,4 +19,7 @@ public sealed record PlayerRecordSavedEvent(SteamID        SteamId,
     public int   Stage         => SavedRecord.Stage;
     public float Time          => SavedRecord.Time;
     public bool  IsStageRecord => SavedRecord.Stage > 0;
+
+    // 完成时玩家的 PB 已经加载出来; 为 false 时 PbRecord 为 null 不代表没有 PB
+    public bool PersonalBestKnown { get; init; } = true;
 }

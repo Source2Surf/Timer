@@ -28,15 +28,22 @@ internal sealed class PlayerRecordCache
 {
     private readonly Dictionary<int, Dictionary<(int style, int track), RunRecord>> _records = [];
     private readonly Dictionary<int, Dictionary<(int style, int track, int stage), RunRecord>> _stageRecords = [];
+    private readonly bool[] _loaded;
     private readonly ILogger _logger;
 
     public PlayerRecordCache(ILogger logger)
     {
+        _loaded = new bool[PlayerSlot.MaxPlayerCount];
         _logger = logger;
     }
 
+    public bool IsLoaded(PlayerSlot slot)
+        => _loaded[slot];
+
     public void Populate(PlayerSlot slot, IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords)
     {
+        _loaded[slot] = true;
+
         foreach (var record in records)
         {
             SetRecord(slot, record.Style, record.Track, record);
@@ -131,12 +138,14 @@ internal sealed class PlayerRecordCache
     {
         _records.Remove(slot);
         _stageRecords.Remove(slot);
+        _loaded[slot] = false;
     }
 
     public void ClearAll()
     {
         _records.Clear();
         _stageRecords.Clear();
+        Array.Clear(_loaded);
     }
 
     private Dictionary<(int style, int track), RunRecord> GetOrAddSlotRecords(int slot)

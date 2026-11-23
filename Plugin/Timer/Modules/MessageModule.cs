@@ -225,7 +225,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
         var record        = recordEvent.SavedRecord;
         var style         = _styleModule.GetStyleSetting(record.Style).Name;
         var delta         = recordEvent.PbRecord is { } pb ? Utils.SignedDelta(record.Time, pb.Time) : null;
-        var (rank, total) = recordEvent.IsStageRecord ? (0, 0) : GetRank(record, recordEvent.PbRecord is null);
+        var (rank, total) = recordEvent.IsStageRecord ? (0, 0) : GetRank(record, recordEvent.PbRecord is null && recordEvent.PersonalBestKnown);
 
         string Message(ChatTr tr)
             => ZString.Concat(Finished(tr, recordEvent.PlayerName, record, style),

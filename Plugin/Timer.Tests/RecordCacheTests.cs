@@ -48,6 +48,25 @@ public sealed class RecordCacheTests
     }
 
     [Fact]
+    public void NoPersonalBestIsOnlyKnownOnceLoaded()
+    {
+        var cache = new PlayerRecordCache(NullLogger.Instance);
+
+        cache.SetRecord(Slot, 0, 0, new RunRecord { Id = 10, Time = 80 });
+        Assert.False(cache.IsLoaded(Slot));
+
+        cache.Populate(Slot, [], []);
+        Assert.True(cache.IsLoaded(Slot));
+
+        cache.Clear(Slot);
+        Assert.False(cache.IsLoaded(Slot));
+
+        cache.Populate(Slot, [], []);
+        cache.ClearAll();
+        Assert.False(cache.IsLoaded(Slot));
+    }
+
+    [Fact]
     public void RecordSortUsesRunIdToBreakEqualTimes()
     {
         var earlier = new RunRecord { Id = 10, Time = 80 };
