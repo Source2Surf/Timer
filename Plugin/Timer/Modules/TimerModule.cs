@@ -550,6 +550,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                 }
 
                 timerInfo.StartTimer(info.Track, velocity);
+                timerInfo.LastYaw = pawn.GetEyeAngles().Y;
                 NotifyPlayerTimerStart(controller, pawn, timerInfo);
 
                 if (_zoneModule.CurrentTrackHasCheckpoints(timerInfo.Track))
@@ -571,6 +572,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                 }
 
                 stageTimer.StartTimer(info.Track, velocity, 1);
+                stageTimer.LastYaw = timerInfo.LastYaw;
                 NotifyPlayerStageTimerStart(controller, pawn, stageTimer);
 
                 break;
@@ -607,6 +609,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                 }
 
                 stageTimer.StartTimer(info.Track, velocity, info.Data);
+                stageTimer.LastYaw = pawn.GetEyeAngles().Y;
                 NotifyPlayerStageTimerStart(controller, pawn, stageTimer);
 
                 break;
