@@ -56,16 +56,16 @@ public sealed class RecordCacheTests
     }
 
     [Fact]
-    public void ARunRanksWhereItsOwnCopyOnTheBoardIs()
+    public void ANewRunTyingABoardEntryRanksAfterIt()
     {
         var cache = new MapRecordCache(NullLogger.Instance);
         var load  = cache.BeginLoad();
 
-        // The board's copy read back slightly below the timer's 5733 ticks (89.578125 s).
-        cache.RefreshTrack(0, 0, [new RunRecord { Id = 1, SteamId = 1, Time = 89.5781f }], load);
+        cache.RefreshTrack(0, 0, [new RunRecord { Id = 1, SteamId = 1, Time = 5733 / 64f }], load);
 
-        Assert.Equal(1, cache.GetRankForTime(0, 0, 5733 / 64f));
-        Assert.Equal(1, cache.GetRankForTime(0, 0, 89.5781f));
+        Assert.Equal(2, cache.GetRankForTime(0, 0, 5733 / 64f));
+        // 按 tick 比: 末几位读回来偏小的 89.5781 跟 5733 tick 是同一个时间
+        Assert.Equal(2, cache.GetRankForTime(0, 0, 89.5781f));
         Assert.Equal(2, cache.GetRankForTime(0, 0, 5734 / 64f)); // a tick slower
         Assert.Equal(1, cache.GetRankForTime(0, 0, 5732 / 64f)); // a tick faster
     }

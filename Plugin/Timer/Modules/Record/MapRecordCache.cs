@@ -231,7 +231,7 @@ internal sealed class MapRecordCache
         {
             var mid = (int)(((uint) low + (uint) high) >> 1);
 
-            if (TicksOf(records[mid].Time) < ticks)
+            if (TicksOf(records[mid].Time) <= ticks)
             {
                 low = mid + 1;
             }
