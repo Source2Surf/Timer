@@ -97,7 +97,7 @@ internal interface IZoneModule
     // Takes the player to any zone, the map's own included. Stops their run, so the zone can't start, split or finish it.
     bool TeleportToZone(PlayerSlot slot, uint id);
 
-    // Whether this server's zones can turn (the SetSolid hook is in); they can always move.
+    // Whether this server's zones can turn and be resized (the trigger shape calls are found); they can always move.
     bool CanTurnZones { get; }
 
     // 自建区域按整图覆盖保存: 本图的还没加载齐(在加载, 或有一条没建出来)时不放开编辑, 免得保存冲掉没挂上的区域
@@ -122,6 +122,10 @@ internal interface IZoneModule
 
     // Turns a zone added in game about its centre, anticlockwise from above, and saves it.
     bool TurnZone(PlayerSlot slot, uint id, float degrees);
+
+    // Moves point 1 or 2 of a zone added in game along one of its box's own axes (0 X, 1 Y, 2 Z), the other point's
+    // side staying, and saves it. Needs what turning does (CanTurnZones).
+    bool ResizeZone(PlayerSlot slot, uint id, int point, int axis, float by);
 }
 
 // TODO:
@@ -580,17 +584,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     {
         var targetName = $"surftimer_{info.Track}_{info.ZoneType}_{info.Data}".ToLowerInvariant();
 
-        var infoCorner1 = info.Corner1;
-        var infoCorner2 = info.Corner2;
-
-        var mins = new Vector();
-        var maxs = new Vector();
-
-        for (var i = 0; i < 3; i++)
-        {
-            maxs[i] = Math.Abs(infoCorner1[i] - infoCorner2[i]) / 2.0f;
-            mins[i] = -maxs[i];
-        }
+        var (mins, maxs) = TriggerBounds(info);
 
         var origin = TriggerOrigin(info);
 
@@ -635,9 +629,24 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         }
     }
 
-    // Where a placed zone's trigger is: the middle of its box, as its mins and maxs are half the box either way.
+    // Where a placed zone's trigger is: the middle of its box, which reaches out to both corners.
     private static Vector TriggerOrigin(ZoneInfo info)
         => (info.Corner1 + info.Corner2) / 2.0f;
+
+    // A placed zone's trigger box about its origin, before its turn.
+    private static (Vector Mins, Vector Maxs) TriggerBounds(ZoneInfo info)
+    {
+        var mins = new Vector();
+        var maxs = new Vector();
+
+        for (var i = 0; i < 3; i++)
+        {
+            maxs[i] = Math.Abs(info.Corner1[i] - info.Corner2[i]) / 2.0f;
+            mins[i] = -maxs[i];
+        }
+
+        return (mins, maxs);
+    }
 
     public bool TeleportToZone(IPlayerPawn pawn, int track, EZoneType type)
     {

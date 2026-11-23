@@ -366,6 +366,11 @@ internal partial class HudModule
             w.Text("ZnTurnStepValue", "value", tr.Format(HudTexts.ZnDegrees, ZoneEdit.TurnSteps[z.TurnStep]));
             w.Class("ZnTurnStepPrev", "disabled", z.TurnStep == 0);
             w.Class("ZnTurnStepNext", "disabled", z.TurnStep >= ZoneEdit.TurnSteps.Length - 1);
+            w.Text("ZnAxisValue", "value", Axes[z.SizeAxis]);
+            w.Text("ZnSize1mLabel", "text", tr.Format(HudTexts.ZnPoint, 1, "−"));
+            w.Text("ZnSize1pLabel", "text", tr.Format(HudTexts.ZnPoint, 1, "+"));
+            w.Text("ZnSize2mLabel", "text", tr.Format(HudTexts.ZnPoint, 2, "−"));
+            w.Text("ZnSize2pLabel", "text", tr.Format(HudTexts.ZnPoint, 2, "+"));
             w.Text("ZnPlaceLabel", "text", tr[HudTexts.ZnDone]);
 
             if (note is null && !_zoneModule.CanTurnZones)
@@ -482,6 +487,14 @@ internal partial class HudModule
                 ReshapeZone(p, new Vector(), buttonId == "ZnTurnLeft" ? ZoneEdit.TurnSteps[z.TurnStep] : -ZoneEdit.TurnSteps[z.TurnStep]);
 
                 break;
+            case "ZnAxisPrev" or "ZnAxisNext":
+                z.SizeAxis = (z.SizeAxis + (buttonId == "ZnAxisNext" ? 1 : Axes.Length - 1)) % Axes.Length;
+
+                break;
+            case "ZnSize1m" or "ZnSize1p" or "ZnSize2m" or "ZnSize2p":
+                ResizeZone(p, buttonId[^2] - '0', z.SizeAxis, buttonId[^1] == 'p' ? ZoneEdit.MoveSteps[z.MoveStep] : -ZoneEdit.MoveSteps[z.MoveStep]);
+
+                break;
             default:
                 if (TryParseIndex(buttonId, "ZnType", out var type) && type < ZoneTypes.Length)
                 {
@@ -558,6 +571,9 @@ internal partial class HudModule
         z.Warn = !ok;
     }
 
+    // The axes points 1 and 2 move along, as the panel names them.
+    private static readonly string[] Axes = ["X", "Y", "Z"];
+
     // ZnMove + X/Y/Z + m(inus)/p(lus): that many units along the map's axis.
     private static Vector Nudge(string buttonId, float step)
     {
@@ -591,6 +607,30 @@ internal partial class HudModule
         }
 
         var ok = degrees != 0f ? _zoneModule.TurnZone(p.Slot, id, degrees) : _zoneModule.MoveZone(p.Slot, id, delta);
+        z.Note = ok ? null : p.Tr.Format(HudTexts.ZnEditFailed, EntryName(p, id));
+        z.Warn = !ok;
+    }
+
+    // Moves point 1 or 2 of the zone being edited along the axis picked; the panel stays open on it.
+    private void ResizeZone(HudPlayer p, int point, int axis, float by)
+    {
+        var z  = p.Zones;
+        var id = _zoneModule.GetEditTarget(p.Slot);
+
+        if (id == 0)
+        {
+            return;
+        }
+
+        if (!_zoneModule.CanTurnZones)
+        {
+            z.Note = p.Tr[HudTexts.ZnCantTurn];
+            z.Warn = true;
+
+            return;
+        }
+
+        var ok = _zoneModule.ResizeZone(p.Slot, id, point, axis, by);
         z.Note = ok ? null : p.Tr.Format(HudTexts.ZnEditFailed, EntryName(p, id));
         z.Warn = !ok;
     }

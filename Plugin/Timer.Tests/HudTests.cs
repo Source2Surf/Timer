@@ -720,7 +720,9 @@ public sealed class HudLayoutContractTests
                                     "ZnStep", "ZnPromptDo", "ZnPromptKey", "LZnTall", "LZnHelp",
                                     "ZnEditBox", "ZnEditName", "ZnEditPlace", "ZnMoveStepPrev", "ZnMoveStepValue", "ZnMoveStepNext",
                                     "ZnMoveXm", "ZnMoveXp", "ZnMoveYm", "ZnMoveYp", "ZnMoveZm", "ZnMoveZp",
-                                    "ZnTurnStepPrev", "ZnTurnStepValue", "ZnTurnStepNext", "ZnTurnLeft", "ZnTurnRight"]);
+                                    "ZnTurnStepPrev", "ZnTurnStepValue", "ZnTurnStepNext", "ZnTurnLeft", "ZnTurnRight",
+                                    "ZnAxisPrev", "ZnAxisValue", "ZnAxisNext", "ZnSize1m", "ZnSize1p", "ZnSize2m", "ZnSize2p",
+                                    "ZnSize1mLabel", "ZnSize1pLabel", "ZnSize2mLabel", "ZnSize2pLabel"]);
 
         foreach (var id in ids)
         {

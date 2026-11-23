@@ -1010,7 +1010,7 @@
 
 		<!-- Zone panel (admins), opened by !zone. Cursor mode, in the replay menu's spot. It steps aside while a zone is
 		     placed (the prompt above takes over) and comes back when it's done. 8 zones a page; a row past the end is blank. A zone's name teleports there.
-		     Edit on a zone added in game swaps the add section for the edit one: X/Y/Z move it, left and right turn it. -->
+		     Edit on a zone added in game swaps the add section for the edit one: X/Y/Z move it, left and right turn it, points 1 and 2 resize it. -->
 		<Panel id="ZnMenu" class="Menu ZnMenu Closed">
 			<Panel class="MenuHeader RMenuHeader">
 				<Label id="LZnTitle" class="MenuTitle" text="{s:text}" />
@@ -1165,6 +1165,22 @@
 				<Panel class="NomChips ZnChips ZnNudges">
 					<Button id="ZnTurnLeft" class="NomChip"><Label id="ZnTurnLeftLabel" class="NomChipLabel" text="{s:text}" /></Button>
 					<Button id="ZnTurnRight" class="NomChip"><Label id="ZnTurnRightLabel" class="NomChipLabel" text="{s:text}" /></Button>
+				</Panel>
+				<!-- bhoptimer's zone adjuster: the axis of the zone's own box, then point 1 or 2 (the corners it was placed
+				     from) moved along it by the step above; the other point's side stays. -->
+				<Panel class="MenuRow static">
+					<Label id="LZnResize" class="MenuName" text="{s:text}" />
+					<Panel class="Stepper RmStepper">
+						<Button id="ZnAxisPrev" class="Step"><Label text="‹" /></Button>
+						<Label id="ZnAxisValue" class="MenuValue RmValue" text="{s:value}" />
+						<Button id="ZnAxisNext" class="Step"><Label text="›" /></Button>
+					</Panel>
+				</Panel>
+				<Panel class="NomChips ZnChips ZnNudges">
+					<Button id="ZnSize1m" class="NomChip"><Label id="ZnSize1mLabel" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnSize1p" class="NomChip"><Label id="ZnSize1pLabel" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnSize2m" class="NomChip"><Label id="ZnSize2mLabel" class="NomChipLabel" text="{s:text}" /></Button>
+					<Button id="ZnSize2p" class="NomChip"><Label id="ZnSize2pLabel" class="NomChipLabel" text="{s:text}" /></Button>
 				</Panel>
 			</Panel>
 			<Label id="ZnNote" class="NomNote" text="{s:text}" />

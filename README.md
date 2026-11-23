@@ -108,7 +108,7 @@ The prefixes (default `surf,bhop`) pick the maps by name.
 - **Practice:** `saveloc`, `loc`, `prevloc`, `nextloc`, `clearloc` (bindable)
 - **HUD and misc:** `!hud`, `!showkeys`, `!ssj`, `!mapinfo`, `!spec`, `!specs`, `!hide`, `!footsteps`, `!stopsound`, `!sounds`, `!showzones`, `!country`, `!fov <60-130>` (`!fov` resets), `!nv` (night vision; `!nv <1-10>` sets its brightness, `!nv 0` turns it off)
 - **Map chooser:** `!rtv`, `!nominate`, `!nextmap`, `!timeleft`
-- **Admin:** `!zone` (`timer:zone`; `!zone all` outlines every track's zones while editing; a zone added in game moves and turns from the panel's Edit, or with `!zone edit` (the zone you stand in), `!zone move <x> <y> <z>`, `!zone rotate <degrees>` (anticlockwise from above) and `!zone done`), `!set_tier` / `!set_ranked` (`timer:tier`), `!wipeplayer` (`timer:records`)
+- **Admin:** `!zone` (`timer:zone`; `!zone all` outlines every track's zones while editing; a zone added in game moves, turns and resizes from the panel's Edit, or with `!zone edit` (the zone you stand in), `!zone move <x> <y> <z>`, `!zone rotate <degrees>` (anticlockwise from above), `!zone resize <1|2> <x|y|z> <units>` (its first or second corner along the zone's own axis, as bhoptimer's zone adjuster) and `!zone done`), `!set_tier` / `!set_ranked` (`timer:tier`), `!wipeplayer` (`timer:records`)
 
 Admin permissions come from ModSharp's AdminManager (`timer:*` grants all).
 

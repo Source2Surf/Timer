@@ -161,6 +161,7 @@ internal sealed class HudZones
     public bool            PromptRecheck;           // flipped each time the prompt shows, so its key cap looks the key up again
     public int             MoveStep = ZoneEdit.DefaultMoveStep; // indices into ZoneEdit.MoveSteps and TurnSteps
     public int             TurnStep = ZoneEdit.DefaultTurnStep;
+    public int             SizeAxis;                // the box's axis points 1 and 2 move along: 0 X, 1 Y, 2 Z
 }
 
 /// <summary>

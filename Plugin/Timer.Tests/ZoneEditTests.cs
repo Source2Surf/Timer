@@ -163,4 +163,93 @@ public sealed class ZoneEditTests
         Assert.Equal(ok, ZoneEdit.TryParseTurn(input.Split(' '), out var turn));
         Assert.Equal(degrees, turn);
     }
+
+    // bhoptimer's adjuster on an unturned box: the point's coordinate moves, the other point stays.
+    [Fact]
+    public void ResizingMovesOnlyThatPoint()
+    {
+        var corner1 = new Vector(0, 0, 0);
+        var corner2 = new Vector(100, 40, 128);
+
+        var (c1, c2) = ZoneEdit.Resize(corner1, corner2, 0f, 1, 0, -16)!.Value;
+        Assert.Equal((-16f, 0f, 0f), (c1.X, c1.Y, c1.Z));
+        Assert.Equal((100f, 40f, 128f), (c2.X, c2.Y, c2.Z));
+
+        (c1, c2) = ZoneEdit.Resize(corner1, corner2, 0f, 2, 2, 32)!.Value;
+        Assert.Equal((0f, 0f, 0f), (c1.X, c1.Y, c1.Z));
+        Assert.Equal((100f, 40f, 160f), (c2.X, c2.Y, c2.Z));
+    }
+
+    // Turned, the point moves along the box's own axis and the other point's side stays where it is on the map.
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(2, 1)]
+    [InlineData(1, 2)]
+    public void ResizingATurnedBoxKeepsTheOtherSide(int point, int axis)
+    {
+        var corner1 = new Vector(1000, 2000, 0);
+        var corner2 = new Vector(1200, 2040, 64);
+        const float yaw = 30f;
+
+        var (c1, c2) = ZoneEdit.Resize(corner1, corner2, yaw, point, axis, 24)!.Value;
+
+        var before = ZoneEdit.Corners(corner1, corner2, yaw);
+        var after  = ZoneEdit.Corners(c1, c2, yaw);
+
+        // The corners on the other point's side, before and after, by the same index: unmoved.
+        var stays = point == 1 ? corner2 : corner1;
+        var kept  = 0;
+
+        for (var i = 0; i < 8; i++)
+        {
+            var local = ZoneEdit.Turn(before[i], (corner1 + corner2) / 2f, -yaw);
+
+            if (MathF.Abs(local[axis] - stays[axis]) > 0.01f)
+            {
+                continue;
+            }
+
+            kept++;
+            Assert.Equal(before[i].X, after[i].X, 2);
+            Assert.Equal(before[i].Y, after[i].Y, 2);
+            Assert.Equal(before[i].Z, after[i].Z, 2);
+        }
+
+        Assert.Equal(4, kept);
+
+        // And on that axis the moved point is 24 further on: the box is as long as from it to the other point.
+        var moved = (point == 1 ? corner1 : corner2)[axis] + 24;
+        Assert.Equal(MathF.Abs(moved - stays[axis]), MathF.Abs(c2[axis] - c1[axis]), 2);
+    }
+
+    [Fact]
+    public void ResizingRefusesABoxThinnerThanAUnit()
+    {
+        var corner1 = new Vector(0, 0, 0);
+        var corner2 = new Vector(16, 16, 16);
+
+        Assert.Null(ZoneEdit.Resize(corner1, corner2, 0f, 2, 0, -16));
+        Assert.Null(ZoneEdit.Resize(corner1, corner2, 0f, 3, 0, 8));
+        Assert.Null(ZoneEdit.Resize(corner1, corner2, 0f, 1, 3, 8));
+        Assert.NotNull(ZoneEdit.Resize(corner1, corner2, 0f, 2, 0, -15));
+    }
+
+    [Theory]
+    [InlineData("1 x 16", true, 1, 0, 16f)]
+    [InlineData("2 Z -8", true, 2, 2, -8f)]
+    [InlineData("2 y 0.5", true, 2, 1, 0.5f)]
+    [InlineData("3 x 16", false, 0, 0, 0f)]
+    [InlineData("1 w 16", false, 0, 0, 0f)]
+    [InlineData("1 xy 16", false, 0, 0, 0f)]
+    [InlineData("1 x", false, 0, 0, 0f)]
+    [InlineData("1 x NaN", false, 0, 0, 0f)]
+    public void ParsesResizes(string input, bool ok, int point, int axis, float by)
+    {
+        Assert.Equal(ok, ZoneEdit.TryParseResize(input.Split(' '), out var p, out var a, out var b));
+
+        if (ok)
+        {
+            Assert.Equal((point, axis, by), (p, a, b));
+        }
+    }
 }

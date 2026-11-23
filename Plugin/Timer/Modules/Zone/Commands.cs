@@ -140,12 +140,16 @@ internal partial class ZoneModule
                 done = MoveZone(slot, id, delta);
 
                 break;
-            case "rotate" when !_canTurn:
+            case "rotate" or "resize" when !_canTurn:
                 controller.PrintToChat(tr[ChatTexts.ZoneCantTurn]);
 
                 return ECommandAction.Handled;
             case "rotate" when ZoneEdit.TryParseTurn(args, out var degrees):
                 done = TurnZone(slot, id, degrees);
+
+                break;
+            case "resize" when ZoneEdit.TryParseResize(args, out var point, out var axis, out var by):
+                done = ResizeZone(slot, id, point, axis, by);
 
                 break;
             default:

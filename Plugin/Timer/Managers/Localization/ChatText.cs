@@ -264,8 +264,8 @@ internal static class ChatTexts
     public static readonly ChatText ZoneEditPlaced  = new ("chat.zone.edit.placed", "[lightgreen]{0}[white] ({1}) is centred at [lightgreen]{2}[white], turned [lightgreen]{3}°[white].");
     public static readonly ChatText ZoneEditFailed  = new ("chat.zone.edit.failed", "Couldn't change {0}.");
     public static readonly ChatText ZoneEditDone    = new ("chat.zone.edit.done", "Stopped editing zones.");
-    public static readonly ChatText ZoneCantTurn    = new ("chat.zone.cant_turn", "Zones can't be turned on this server.");
-    public static readonly ChatText ZoneEditUsage   = new ("chat.zone.edit.usage", "[lightgreen]!zone move <x> <y> <z>[white] moves the zone by so many units, [lightgreen]!zone rotate <degrees>[white] turns it anticlockwise as seen from above.");
+    public static readonly ChatText ZoneCantTurn    = new ("chat.zone.cant_turn", "Zones can't be turned or resized on this server.");
+    public static readonly ChatText ZoneEditUsage   = new ("chat.zone.edit.usage", "[lightgreen]!zone move <x> <y> <z>[white] moves the zone by so many units, [lightgreen]!zone rotate <degrees>[white] turns it anticlockwise as seen from above, [lightgreen]!zone resize <1|2> <x|y|z> <units>[white] moves its first or second corner along the zone's own axis.");
 
     public static readonly ChatText CountryShown  = new ("chat.country.shown", "Your profile shows your country again.");
     public static readonly ChatText CountryHidden = new ("chat.country.hidden", "Your country is hidden from your profile.");

@@ -1560,8 +1560,8 @@
     "zh-cn": "中心 {0} · 旋转 {1}°"
   },
   "zn.move_by": {
-    "en-us": "Move by",
-    "zh-cn": "移动步长"
+    "en-us": "Move or resize by",
+    "zh-cn": "移动/缩放步长"
   },
   "zn.turn_by": {
     "en-us": "Turn by",
@@ -1583,17 +1583,25 @@
     "en-us": "Turn right",
     "zh-cn": "右转"
   },
+  "zn.resize": {
+    "en-us": "Resize along",
+    "zh-cn": "缩放轴"
+  },
+  "zn.point": {
+    "en-us": "Point {0} {1}",
+    "zh-cn": "点 {0} {1}"
+  },
   "zn.done": {
     "en-us": "Done",
     "zh-cn": "完成"
   },
   "zn.edit_hint": {
-    "en-us": "X, Y and Z move it along the map's axes; left turns it anticlockwise as seen from above. Each change is saved.",
-    "zh-cn": "X、Y、Z 沿地图坐标轴移动；左转为俯视逆时针。每次改动都会保存。"
+    "en-us": "X, Y and Z move it along the map's axes; left turns it anticlockwise as seen from above; Point 1 and 2 move its first and second corner along the axis picked. Each change is saved.",
+    "zh-cn": "X、Y、Z 沿地图坐标轴移动；左转为俯视逆时针；点 1、点 2 沿所选轴移动第一、第二个角点。每次改动都会保存。"
   },
   "zn.cant_turn": {
-    "en-us": "This server can't turn zones.",
-    "zh-cn": "本服务器无法旋转区域。"
+    "en-us": "This server can't turn or resize zones.",
+    "zh-cn": "本服务器无法旋转或缩放区域。"
   },
   "zn.edit_failed": {
     "en-us": "Couldn't change {0}.",
@@ -2132,12 +2140,12 @@
     "zh-cn": "已结束区域编辑。"
   },
   "chat.zone.cant_turn": {
-    "en-us": "Zones can't be turned on this server.",
-    "zh-cn": "本服务器无法旋转区域。"
+    "en-us": "Zones can't be turned or resized on this server.",
+    "zh-cn": "本服务器无法旋转或缩放区域。"
   },
   "chat.zone.edit.usage": {
-    "en-us": "[lightgreen]!zone move <x> <y> <z>[white] moves the zone by so many units, [lightgreen]!zone rotate <degrees>[white] turns it anticlockwise as seen from above.",
-    "zh-cn": "[lightgreen]!zone move <x> <y> <z>[white] 按单位移动区域，[lightgreen]!zone rotate <角度>[white] 俯视逆时针旋转。"
+    "en-us": "[lightgreen]!zone move <x> <y> <z>[white] moves the zone by so many units, [lightgreen]!zone rotate <degrees>[white] turns it anticlockwise as seen from above, [lightgreen]!zone resize <1|2> <x|y|z> <units>[white] moves its first or second corner along the zone's own axis.",
+    "zh-cn": "[lightgreen]!zone move <x> <y> <z>[white] 按单位移动区域，[lightgreen]!zone rotate <角度>[white] 俯视逆时针旋转，[lightgreen]!zone resize <1|2> <x|y|z> <单位>[white] 沿区域自身的轴移动第一个或第二个角点。"
   },
   "chat.country.shown": {
     "en-us": "Your profile shows your country again.",

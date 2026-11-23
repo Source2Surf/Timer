@@ -97,6 +97,38 @@ internal static class ZoneEdit
             && local.Z >= MathF.Min(corner1.Z, corner2.Z) && local.Z <= MathF.Max(corner1.Z, corner2.Z);
     }
 
+    // Thinner than this on an axis, a box is no zone.
+    public const float MinSize = 1f;
+
+    // The box with point 1 or 2 (its first or second corner) moved by so many units along one of the box's own axes
+    // (0 X, 1 Y, 2 Z), as bhoptimer's zone adjuster does; the other point's side stays where it is on the map, turned
+    // or not. The corners stay as the zone keeps them, before the turn about their centre. Null for a point or an axis
+    // that isn't one, and when the box would be thinner than MinSize on that axis.
+    public static (Vector Corner1, Vector Corner2)? Resize(Vector corner1, Vector corner2, float yaw, int point, int axis, float by)
+    {
+        if (point is not (1 or 2) || axis is < 0 or > 2 || !float.IsFinite(by))
+        {
+            return null;
+        }
+
+        var moved = point == 1 ? corner1 : corner2;
+        var other = point == 1 ? corner2 : corner1;
+        moved[axis] += by;
+
+        if (MathF.Abs(moved[axis] - other[axis]) < MinSize)
+        {
+            return null;
+        }
+
+        // The centre goes half the way, along the axis as the turn lays it on the map; the corners go with it.
+        var center = (corner1 + corner2) / 2f;
+        var half   = new Vector();
+        half[axis] = by / 2f;
+        var shift = Turn(center + half, center, yaw) - (center + half);
+
+        return point == 1 ? (moved + shift, other + shift) : (other + shift, moved + shift);
+    }
+
     // !zone's verbs for a zone added in game; turn is rotate's other name.
     public static string? EditVerb(string arg)
         => arg.ToLowerInvariant() switch
@@ -104,6 +136,7 @@ internal static class ZoneEdit
             "edit"             => "edit",
             "move"             => "move",
             "rotate" or "turn" => "rotate",
+            "resize"           => "resize",
             "done"             => "done",
             _                  => null,
         };
@@ -132,6 +165,24 @@ internal static class ZoneEdit
         degrees = 0f;
 
         return args.Count == 1 && TryParseNumber(args[0], out degrees);
+    }
+
+    // "<1|2> <x|y|z> <units>": the point, the box's axis and how far, as Resize takes them.
+    public static bool TryParseResize(IReadOnlyList<string> args, out int point, out int axis, out float by)
+    {
+        point = 0;
+        axis  = -1;
+        by    = 0f;
+
+        if (args.Count != 3 || args[0] is not ("1" or "2") || args[1].Length != 1 || !TryParseNumber(args[2], out by))
+        {
+            return false;
+        }
+
+        point = args[0][0] - '0';
+        axis  = char.ToLowerInvariant(args[1][0]) - 'x';
+
+        return axis is >= 0 and <= 2;
     }
 
     private static bool TryParseNumber(string text, out float value)

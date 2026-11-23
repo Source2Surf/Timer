@@ -19,6 +19,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Sharp.Shared.Enums;
+using Sharp.Shared.GameEntities;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
@@ -158,6 +160,42 @@ internal partial class ZoneModule
         info.FlatEdges    = null;
 
         trigger.Teleport(info.Origin, new Vector(0, YawOf(info), 0), null);
+
+        _editTargets[slot] = id;
+        ZonesChanged();
+        EditVersion++;
+        SaveCustomZones();
+
+        return true;
+    }
+
+    // Moves point 1 or 2 of the zone's box along one of the box's own axes, as bhoptimer's zone adjuster does; the other
+    // point's side stays. The trigger takes the new box in place, its physics built again (SetShape), which needs what
+    // turning a zone does. The teleport point stays.
+    public bool ResizeZone(PlayerSlot slot, uint id, int point, int axis, float by)
+    {
+        if (!_canTurn
+            || !_zoneEditors[slot]
+            || !_zones.TryGetValue(id, out var info)
+            || info.Prebuilt
+            || _bridge.EntityManager.FindEntityByIndex<IBaseModelEntity>(info.Index) is not { IsValidEntity: true } trigger
+            || trigger.Handle.GetValue() != id
+            || ZoneEdit.Resize(info.Corner1, info.Corner2, info.Yaw, point, axis, by) is not { } resized)
+        {
+            return false;
+        }
+
+        info.Corner1      = resized.Corner1;
+        info.Corner2      = resized.Corner2;
+        info.Origin       = TriggerOrigin(info);
+        info.GroundOrigin = null;
+        info.Edges        = null;
+        info.FlatEdges    = null;
+
+        var (mins, maxs) = TriggerBounds(info);
+        trigger.SetCollisionBounds(mins, maxs);
+        SetShape(trigger, SolidType.Obb);
+        trigger.Teleport(info.Origin, new Vector(0, info.Yaw, 0), null);
 
         _editTargets[slot] = id;
         ZonesChanged();
