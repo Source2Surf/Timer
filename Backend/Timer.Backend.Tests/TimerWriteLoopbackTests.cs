@@ -520,7 +520,7 @@ public sealed class TimerWriteLoopbackTests
             TimeMicros = 80_000_000,
             Jumps = 7,
             Strafes = 13,
-            Sync = 98.5f,
+            Sync = 0.985f,
             Motion = new MotionDto { StartX = 1, AverageY = 2, EndZ = 3 },
             Checkpoints =
             [
@@ -528,7 +528,7 @@ public sealed class TimerWriteLoopbackTests
                 {
                     Index = 1,
                     TimeMicros = 40_000_000,
-                    Sync = 97,
+                    Sync = 0.97f,
                     Motion = new MotionDto { MaxX = 3 },
                 },
             ],

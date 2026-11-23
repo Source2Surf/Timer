@@ -247,7 +247,7 @@ public sealed class TimerStorageConcurrencyTests
             TimeMicros                     = timeMicros,
             Jumps                          = 5,
             Strafes                        = 10,
-            Sync                           = 90,
+            Sync                           = 0.9f,
             FinishedAtUnixTimeMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ContractVersion                = 1,
             RulesetVersion                 = 1,

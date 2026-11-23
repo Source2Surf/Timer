@@ -304,7 +304,7 @@ public sealed class RunSubmissionTests : IDisposable
                                   .Where(x => x.RunId == result.RunId)
                                   .SingleAsync();
 
-        Assert.Equal("d63345a1bafa2860ca5554f86f462a91ace83c97ffd7ce60da4438140951a8c8",
+        Assert.Equal("a7c5304db9254d2aad8fcd422d1813e93e4c912801c39b3417a07da0bd3e48fa",
                      inbox.PayloadHash);
     }
 
@@ -501,18 +501,18 @@ public sealed class RunSubmissionTests : IDisposable
             TimeMicros = timeMicros,
             Jumps = 7,
             Strafes = 13,
-            Sync = 98.5f,
+            Sync = 0.985f,
             Motion = motion ?? new TimerBackendMotion { VelocityStartX = 1, VelocityEndZ = 2, VelocityMaxY = 3, VelocityAvgX = 4 },
             Checkpoints =
             [
                 new TimerBackendSubmissionCheckpoint
                 {
-                    CheckpointIndex = 1, TimeMicros = timeMicros / 2, Sync = 97,
+                    CheckpointIndex = 1, TimeMicros = timeMicros / 2, Sync = 0.97f,
                     Motion = new TimerBackendMotion { VelocityStartX = 10, VelocityEndZ = 11 },
                 },
                 new TimerBackendSubmissionCheckpoint
                 {
-                    CheckpointIndex = 2, TimeMicros = timeMicros - 1, Sync = 96,
+                    CheckpointIndex = 2, TimeMicros = timeMicros - 1, Sync = 0.96f,
                     Motion = new TimerBackendMotion { VelocityStartY = 12, VelocityMaxZ = 13 },
                 },
             ],

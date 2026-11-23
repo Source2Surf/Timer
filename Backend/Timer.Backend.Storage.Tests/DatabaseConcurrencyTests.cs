@@ -563,18 +563,18 @@ public sealed class DatabaseConcurrencyTests(ITestOutputHelper output)
             TimeMicros = timeMicros,
             Jumps = 8,
             Strafes = 12,
-            Sync = 98,
+            Sync = 0.98f,
             Motion = new TimerBackendMotion { VelocityStartX = 1, VelocityEndZ = 2, VelocityAvgY = 3 },
             Checkpoints =
             [
                 new TimerBackendSubmissionCheckpoint
                 {
-                    CheckpointIndex = 1, TimeMicros = timeMicros / 2, Sync = 97,
+                    CheckpointIndex = 1, TimeMicros = timeMicros / 2, Sync = 0.97f,
                     Motion = new TimerBackendMotion { VelocityStartY = 4, VelocityMaxZ = 5 },
                 },
                 new TimerBackendSubmissionCheckpoint
                 {
-                    CheckpointIndex = 2, TimeMicros = timeMicros - 1, Sync = 96,
+                    CheckpointIndex = 2, TimeMicros = timeMicros - 1, Sync = 0.96f,
                     Motion = new TimerBackendMotion { VelocityEndX = 6, VelocityAvgZ = 7 },
                 },
             ],

@@ -551,9 +551,9 @@ internal sealed partial class StorageServiceImpl
     private static void ValidateSync(float value, string fieldName)
     {
         ValidateFinite(value, fieldName);
-        if (value < 0 || value > 100)
+        if (value < 0 || value > 1)
         {
-            throw new TimerBackendSubmissionValidationException($"{fieldName} must be between zero and 100.");
+            throw new TimerBackendSubmissionValidationException($"{fieldName} must be between zero and one.");
         }
     }
 
