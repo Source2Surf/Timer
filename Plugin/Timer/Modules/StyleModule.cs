@@ -501,9 +501,10 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
                 scale *= (speed + style.BonusVelocity) / speed;
             }
 
-            if (style.MinVelocity > 0f && speed < style.MinVelocity)
+            // 下限管的是乘完加完之后的速度, 不是起跳前的原速
+            if (style.MinVelocity > 0f && speed * scale < style.MinVelocity)
             {
-                scale *= style.MinVelocity / speed;
+                scale = style.MinVelocity / speed;
             }
         }
 

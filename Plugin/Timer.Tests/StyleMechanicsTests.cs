@@ -77,6 +77,8 @@ public sealed class StyleMechanicsTests
         Assert.Equal(450f, Horizontal(StyleModule.JumpVelocity(velocity, new StyleSetting { VelocityMultiplier = 0.9f })), 3);
         Assert.Equal(600f, Horizontal(StyleModule.JumpVelocity(velocity, new StyleSetting { BonusVelocity = 100 })), 3);
         Assert.Equal(700f, Horizontal(StyleModule.JumpVelocity(velocity, new StyleSetting { MinVelocity = 700 })), 3);
+        Assert.Equal(300f, Horizontal(StyleModule.JumpVelocity(velocity, new StyleSetting { VelocityMultiplier = 0.5f, MinVelocity = 300 })), 3);
+        Assert.Equal(600f, Horizontal(StyleModule.JumpVelocity(velocity, new StyleSetting { VelocityMultiplier = 1.2f, MinVelocity = 550 })), 3);
 
         var jump = StyleModule.JumpVelocity(velocity, new StyleSetting { JumpMultiplier = 2, JumpBonus = 10 });
         Assert.Equal(590f, jump.Z, 3);
