@@ -973,8 +973,19 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
     }
 
     public void OnZoneEndTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
+        => LeaveZone(_players[controller.PlayerSlot], info);
+
+    public void OnZoneRemoved(IZoneInfo info)
     {
-        if (_players[controller.PlayerSlot] is { } p
+        foreach (var p in _players)
+        {
+            LeaveZone(p, info);
+        }
+    }
+
+    private static void LeaveZone(HudPlayer? p, IZoneInfo info)
+    {
+        if (p is not null
             && p.ZoneType == info.ZoneType
             && p.ZoneTrack == info.Track
             && p.ZoneData == info.Data)

@@ -233,6 +233,7 @@ internal partial class ZoneModule
         _zones.Remove(id);
         UnindexZone(info);
         RecountStages(info.Track);
+        NotifyZoneRemoved(info);
 
         if (_bridge.EntityManager.FindEntityByIndex(info.Index) is { IsValidEntity: true } trigger
             && trigger.Handle.GetValue() == id)

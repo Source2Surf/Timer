@@ -494,6 +494,22 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         }
     }
 
+    public void OnZoneRemoved(IZoneInfo info)
+    {
+        for (var slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
+        {
+            if (_timerInfo[slot] is { } timerInfo && timerInfo.Track == info.Track && timerInfo.InZone == info.ZoneType)
+            {
+                timerInfo.UpdateInZone(EZoneType.Invalid);
+            }
+
+            if (_stageTimerInfo[slot] is { } stageTimer && stageTimer.Track == info.Track && stageTimer.InZone == info.ZoneType)
+            {
+                stageTimer.UpdateInZone(EZoneType.Invalid);
+            }
+        }
+    }
+
     public void OnZoneEndTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
     {
         if (_timerInfo[controller.PlayerSlot] is not { } timerInfo

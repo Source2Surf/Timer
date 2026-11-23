@@ -273,6 +273,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             return;
 
         UnindexZone(info);
+        NotifyZoneRemoved(info);
 
 #if DEBUG
         _logger.LogWarning("Removed zone {t}", info.TargetName);
@@ -569,6 +570,11 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         => _listenerHub.NotifyAll("OnZoneTrigger",
                                   static (l, i, c, p) => l.OnZoneTrigger(i, c, p),
                                   info, controller, pawn);
+
+    private void NotifyZoneRemoved(ZoneInfo info)
+        => _listenerHub.NotifyAll("OnZoneRemoved",
+                                  static (l, i) => l.OnZoneRemoved(i),
+                                  info);
 
     public unsafe void AddZone(ZoneInfo info)
     {
