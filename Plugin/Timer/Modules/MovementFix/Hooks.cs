@@ -41,6 +41,7 @@ internal unsafe partial class MovementFixModule
 
     private static delegate* unmanaged<nint, MoveData*, bool, void>             CCSPlayer_MovementServices_CategorizePosition;
     private static delegate* unmanaged<nint, MoveData*, nint, nint, nint, void> CCSPlayer_MovementServices_TryPlayerMove;
+    private static delegate* unmanaged<nint, MoveData*, void>                   CCSPlayer_MovementServices_CheckJump;
     private static delegate* unmanaged<nint, nint, nint>                        CTriggerTeleport_Teleport;
 
     // bool (this, CBaseEntity* pEntity, CBaseEntity* pDestination, Vector vecAbsOrigin, QAngle angAbs,
@@ -82,6 +83,7 @@ internal unsafe partial class MovementFixModule
     private static int CBasePlayerPawn_m_hController_offset;
     private static int CBasePlayerPawn_m_pMovementServices_offset;
     private static int CCSPlayer_MovementServices_m_bDucked_offset;
+    private static int CCSPlayer_MovementServices_m_LegacyJump_offset;
     private static int CBaseTrigger_m_hTouchingEntities_offset;
     private static int CBaseTrigger_m_bDisabled_offset;
     private static int CEntityIdentity_m_designerName_offset;
@@ -118,13 +120,14 @@ internal unsafe partial class MovementFixModule
         VPhysicsCollisionAttribute_t_m_nHierarchyId_offset
             = schema.GetNetVarOffset("VPhysicsCollisionAttribute_t", "m_nHierarchyId");
 
-        CBasePlayerPawn_m_hController_offset        = schema.GetNetVarOffset("CBasePlayerPawn", "m_hController");
-        CBasePlayerPawn_m_pMovementServices_offset  = schema.GetNetVarOffset("CBasePlayerPawn", "m_pMovementServices");
-        CCSPlayer_MovementServices_m_bDucked_offset = schema.GetNetVarOffset("CCSPlayer_MovementServices", "m_bDucked");
-        CBaseTrigger_m_hTouchingEntities_offset     = schema.GetNetVarOffset("CBaseTrigger", "m_hTouchingEntities");
-        CBaseTrigger_m_bDisabled_offset             = schema.GetNetVarOffset("CBaseTrigger", "m_bDisabled");
-        CEntityIdentity_m_designerName_offset       = schema.GetNetVarOffset("CEntityIdentity", "m_designerName");
-        CCSPlayerPawn_m_angEyeAngles_offset         = schema.GetNetVarOffset("CCSPlayerPawn", "m_angEyeAngles");
+        CBasePlayerPawn_m_hController_offset           = schema.GetNetVarOffset("CBasePlayerPawn", "m_hController");
+        CBasePlayerPawn_m_pMovementServices_offset     = schema.GetNetVarOffset("CBasePlayerPawn", "m_pMovementServices");
+        CCSPlayer_MovementServices_m_bDucked_offset    = schema.GetNetVarOffset("CCSPlayer_MovementServices", "m_bDucked");
+        CCSPlayer_MovementServices_m_LegacyJump_offset = schema.GetNetVarOffset("CCSPlayer_MovementServices", "m_LegacyJump");
+        CBaseTrigger_m_hTouchingEntities_offset        = schema.GetNetVarOffset("CBaseTrigger", "m_hTouchingEntities");
+        CBaseTrigger_m_bDisabled_offset                = schema.GetNetVarOffset("CBaseTrigger", "m_bDisabled");
+        CEntityIdentity_m_designerName_offset          = schema.GetNetVarOffset("CEntityIdentity", "m_designerName");
+        CCSPlayerPawn_m_angEyeAngles_offset            = schema.GetNetVarOffset("CCSPlayerPawn", "m_angEyeAngles");
 
         // All of these come from ModSharp's own gamedata.
         var gameData = _bridge.ModSharp.GetGameData();
@@ -177,6 +180,14 @@ internal unsafe partial class MovementFixModule
                  out trampoline))
         {
             CCSPlayer_MovementServices_TryPlayerMove = (delegate* unmanaged<nint, MoveData*, nint, nint, nint, void>) trampoline;
+        }
+
+        if (Hook("CCSPlayer_MovementServices::CheckJump",
+                 FindFunction("CCSPlayer_MovementServices::CheckJump"),
+                 (nint) (delegate* unmanaged<nint, MoveData*, void>) (&hk_CCSPlayer_MovementServices_CheckJump),
+                 out trampoline))
+        {
+            CCSPlayer_MovementServices_CheckJump = (delegate* unmanaged<nint, MoveData*, void>) trampoline;
         }
 
         var teleport = FindTriggerTeleportTeleport();
@@ -709,6 +720,28 @@ internal unsafe partial class MovementFixModule
         {
             ReportHookError(e);
         }
+    }
+
+    [UnmanagedCallersOnly]
+    private static void hk_CCSPlayer_MovementServices_CheckJump(nint jump, MoveData* mv)
+    {
+        try
+        {
+            var service = jump - CCSPlayer_MovementServices_m_LegacyJump_offset;
+            var pawn    = *(nint*) (service + CPlayerPawnComponent_m_pChainEntity_offset);
+            var slot    = pawn != nint.Zero ? GetPlayerSlot(pawn) : -1;
+
+            if (slot >= 0)
+            {
+                RefreshStepStart(slot, mv->AbsOrigin);
+            }
+        }
+        catch (Exception e)
+        {
+            ReportHookError(e);
+        }
+
+        CCSPlayer_MovementServices_CheckJump(jump, mv);
     }
 
     [UnmanagedCallersOnly]

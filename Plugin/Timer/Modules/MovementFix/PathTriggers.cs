@@ -56,6 +56,16 @@ internal unsafe partial class MovementFixModule
         }
     }
 
+    // 引擎先 Duck 再 CheckJump (sub_180AD64D0 / sub_180AD5DE0 / sub_180AD6E40 @ server.dll 20261120), 空中蹲起已把 origin 挪了 ±9;
+    // 换版要重核这个先后, 顺序变了不报错, 起点会退回挪之前
+    private static void RefreshStepStart(int slot, Vector origin)
+    {
+        if (_stepTraced[slot])
+        {
+            _stepStart[slot] = origin;
+        }
+    }
+
     private static void OnPathTriggersMovePost(IPlayerProcessMoveForwardParams param)
     {
         int slot = param.Client.Slot;
