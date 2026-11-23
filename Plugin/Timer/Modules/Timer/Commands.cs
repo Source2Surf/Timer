@@ -18,6 +18,8 @@
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models.Zone;
 
@@ -165,6 +167,10 @@ internal partial class TimerModule
         if (moved)
         {
             _noclipped[slot] = false;
+        }
+        else
+        {
+            controller.PrintToChat(_localization.For(slot).Format(ChatTexts.StageNoStart, stage));
         }
 
         _bridge.ModSharp.InvokeFrameAction(() => { StopTimer(slot); });

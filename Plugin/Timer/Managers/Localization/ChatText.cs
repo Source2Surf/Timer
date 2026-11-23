@@ -129,6 +129,7 @@ internal static class ChatTexts
     public static readonly ChatText MissingStages      = new ("chat.timer.missing_stages", "Missing stages, stopping timer");
     public static readonly ChatText MissingCheckpoints = new ("chat.timer.missing_checkpoints", "Timer stopped: missing checkpoints");
     public static readonly ChatText NoclipRestart      = new ("chat.timer.noclip_restart", "You used noclip. Type [lightgreen]!r[white] to restart before the timer can start.");
+    public static readonly ChatText StageNoStart       = new ("chat.timer.stage_no_start", "This map has no start for stage [lightgreen]{0}[white].");
 
     public static readonly ChatText Unverified = new ("chat.timer.unverified",
                                                       "Your Steam account has not been verified yet. The server may not be connected to Steam. Please wait and try again.");
