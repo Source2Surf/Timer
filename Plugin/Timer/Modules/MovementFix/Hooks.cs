@@ -585,39 +585,63 @@ internal unsafe partial class MovementFixModule
     [UnmanagedCallersOnly]
     private static void hk_CCSPlayer_MovementServices_CategorizePosition(nint service, MoveData* mv, bool stayOnGround)
     {
-        var pawn = *(nint*) (service + CPlayerPawnComponent_m_pChainEntity_offset);
-        var slot = pawn != nint.Zero ? GetPlayerSlot(pawn) : -1;
+        var pawn = nint.Zero;
+        var slot = -1;
+        var step = default(StepMove);
 
-        // stayOnGround is the pawn's FL_ONGROUND.
-        if (stayOnGround || slot < 0 || IsOnGround(pawn))
+        try
         {
-            CCSPlayer_MovementServices_CategorizePosition(service, mv, stayOnGround);
+            pawn = *(nint*) (service + CPlayerPawnComponent_m_pChainEntity_offset);
+            slot = pawn != nint.Zero ? GetPlayerSlot(pawn) : -1;
 
-            return;
+            // stayOnGround is the pawn's FL_ONGROUND.
+            if (stayOnGround || slot < 0 || IsOnGround(pawn))
+            {
+                slot = -1;
+            }
+            else
+            {
+                step = TakeStepMove(slot, mv->Velocity);
+            }
         }
-
-        var step = TakeStepMove(slot, mv->Velocity);
+        catch (Exception e)
+        {
+            slot = -1;
+            ReportHookError(e);
+        }
 
         CCSPlayer_MovementServices_CategorizePosition(service, mv, stayOnGround);
 
-        var landed = IsOnGround(pawn);
-
-        if (step.Collided || landed)
-        {
-            RecordSpeedLoss(slot, step.ExpectedVelocity);
-        }
-
-        if (!landed)
+        if (slot < 0)
         {
             return;
         }
 
-        RecordLanding(slot, mv->AbsOrigin, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
-
-        // TryPlayerMove already clipped it.
-        if (step.Moved && !step.Collided)
+        try
         {
-            ApplySlopeFix(service, pawn, slot, mv, step.MoveVelocity);
+            var landed = IsOnGround(pawn);
+
+            if (step.Collided || landed)
+            {
+                RecordSpeedLoss(slot, step.ExpectedVelocity);
+            }
+
+            if (!landed)
+            {
+                return;
+            }
+
+            RecordLanding(slot, mv->AbsOrigin, *(bool*) (service + CCSPlayer_MovementServices_m_bDucked_offset));
+
+            // TryPlayerMove already clipped it.
+            if (step.Moved && !step.Collided)
+            {
+                ApplySlopeFix(service, pawn, slot, mv, step.MoveVelocity);
+            }
+        }
+        catch (Exception e)
+        {
+            ReportHookError(e);
         }
     }
 
@@ -628,38 +652,57 @@ internal unsafe partial class MovementFixModule
                                                                      nint      firstTrace,
                                                                      nint      isSurfing)
     {
-        var pawn = *(nint*) (service + CPlayerPawnComponent_m_pChainEntity_offset);
-        var slot = pawn != nint.Zero ? GetPlayerSlot(pawn) : -1;
+        var pawn     = nint.Zero;
+        var slot     = -1;
+        var onGround = false;
+        var origin   = default(Vector);
+        var velocity = default(Vector);
 
-        if (slot < 0)
+        try
         {
-            CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
+            pawn = *(nint*) (service + CPlayerPawnComponent_m_pChainEntity_offset);
+            slot = pawn != nint.Zero ? GetPlayerSlot(pawn) : -1;
 
-            return;
+            if (slot >= 0)
+            {
+                onGround = IsOnGround(pawn);
+
+                // These only move the start of the move, never the velocity.
+                if (!onGround)
+                {
+                    ApplyPreMoveFixes(service, pawn, slot, mv);
+                }
+
+                origin   = mv->AbsOrigin;
+                velocity = mv->Velocity;
+            }
         }
-
-        if (IsOnGround(pawn))
+        catch (Exception e)
         {
-            var groundOrigin   = mv->AbsOrigin;
-            var groundVelocity = mv->Velocity;
-
-            CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
-
-            ApplyStairsFix(service, pawn, slot, mv, groundOrigin, groundVelocity, true);
-
-            return;
+            slot = -1;
+            ReportHookError(e);
         }
-
-        // These only move the start of the move, never the velocity.
-        ApplyPreMoveFixes(service, pawn, slot, mv);
-
-        var origin   = mv->AbsOrigin;
-        var velocity = mv->Velocity;
 
         CCSPlayer_MovementServices_TryPlayerMove(service, mv, firstDest, firstTrace, isSurfing);
 
-        ApplyStairsFix(service, pawn, slot, mv, origin, velocity, false);
-        RecordStepMove(slot, velocity, mv->Velocity);
+        if (slot < 0)
+        {
+            return;
+        }
+
+        try
+        {
+            ApplyStairsFix(service, pawn, slot, mv, origin, velocity, onGround);
+
+            if (!onGround)
+            {
+                RecordStepMove(slot, velocity, mv->Velocity);
+            }
+        }
+        catch (Exception e)
+        {
+            ReportHookError(e);
+        }
     }
 
     [UnmanagedCallersOnly]
@@ -685,7 +728,16 @@ internal unsafe partial class MovementFixModule
                                                                   newAngles,
                                                                   newVelocity);
 
-        return KeepTeleportAngles(entity, newAngles) ? (byte) 0 : result;
+        try
+        {
+            return KeepTeleportAngles(entity, newAngles) ? (byte) 0 : result;
+        }
+        catch (Exception e)
+        {
+            ReportHookError(e);
+
+            return result;
+        }
     }
 
     [UnmanagedCallersOnly]
@@ -711,6 +763,15 @@ internal unsafe partial class MovementFixModule
                                                                 absAnglesXY,
                                                                 absAnglesZ);
 
-        return KeepTeleportAngles(entity, newAngles) ? (byte) 0 : result;
+        try
+        {
+            return KeepTeleportAngles(entity, newAngles) ? (byte) 0 : result;
+        }
+        catch (Exception e)
+        {
+            ReportHookError(e);
+
+            return result;
+        }
     }
 }

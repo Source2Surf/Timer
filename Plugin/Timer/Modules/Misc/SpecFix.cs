@@ -45,8 +45,15 @@ internal unsafe partial class MiscModule
 
     // ReSharper restore InconsistentNaming
 
+    private const long SpecFixErrorLogIntervalMs = 10_000;
+
+    private static ILogger? _specFixLogger;
+    private static long     _specFixErrorAt;
+
     private void InstallSpecFix()
     {
+        _specFixLogger = _logger;
+
         var schema = _bridge.SchemaManager;
 
         CBaseEntity_m_lifeState_offset = schema.GetNetVarOffset("CBaseEntity", "m_lifeState");
@@ -158,24 +165,39 @@ internal unsafe partial class MiscModule
     {
         var valid = CCSObserver_ObserverServices_IsValidObserverTarget(service, target);
 
-        if (valid == 0 || target == nint.Zero || *(nint*) target != g_CCSPlayerPawn_vtable)
+        try
         {
+            if (valid == 0 || target == nint.Zero || *(nint*) target != g_CCSPlayerPawn_vtable)
+            {
+                return valid;
+            }
+
+            if (IsOwnPawn(service, target))
+            {
+                return 0;
+            }
+
+            var lifeState = (LifeState) (*(byte*) (target + CBaseEntity_m_lifeState_offset));
+
+            if (lifeState == LifeState.Alive)
+            {
+                return *(byte*) (target + CBaseEntity_m_iTeamNum_offset) >= (byte) CStrikeTeam.TE ? valid : (byte) 0;
+            }
+
+            return lifeState is LifeState.Dying or LifeState.Dead && IsObserverTarget(service, target) ? valid : (byte) 0;
+        }
+        catch (Exception e)
+        {
+            var now = Environment.TickCount64;
+
+            if (now >= _specFixErrorAt)
+            {
+                _specFixErrorAt = now + SpecFixErrorLogIntervalMs;
+                _specFixLogger?.LogError(e, "Failed to check the observer target");
+            }
+
             return valid;
         }
-
-        if (IsOwnPawn(service, target))
-        {
-            return 0;
-        }
-
-        var lifeState = (LifeState) (*(byte*) (target + CBaseEntity_m_lifeState_offset));
-
-        if (lifeState == LifeState.Alive)
-        {
-            return *(byte*) (target + CBaseEntity_m_iTeamNum_offset) >= (byte) CStrikeTeam.TE ? valid : (byte) 0;
-        }
-
-        return lifeState is LifeState.Dying or LifeState.Dead && IsObserverTarget(service, target) ? valid : (byte) 0;
     }
 
     // The observer pawn owning the services and the target pawn belong to the same controller.

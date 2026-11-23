@@ -380,9 +380,16 @@ internal unsafe partial class MovementFixModule
     [UnmanagedCallersOnly]
     private static bool TriggerFilterShouldHitEntity(CTraceFilter* filter, nint entity)
     {
-        if (entity != nint.Zero && _triggerHits != null && _triggerHitCount < MaxTriggerHits && IsTrigger(entity))
+        try
         {
-            _triggerHits[_triggerHitCount++] = entity;
+            if (entity != nint.Zero && _triggerHits != null && _triggerHitCount < MaxTriggerHits && IsTrigger(entity))
+            {
+                _triggerHits[_triggerHitCount++] = entity;
+            }
+        }
+        catch (Exception e)
+        {
+            ReportHookError(e);
         }
 
         // Keep going, so every trigger gets reported.

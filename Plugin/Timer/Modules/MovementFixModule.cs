@@ -51,6 +51,11 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     private static IMovementExtension _movementExtension = null!;
     private static IMapInfoModule     _mapInfo           = null!;
     private static IEntityManager     _entityManager     = null!;
+    private static ILogger            _hookLogger        = null!;
+
+    private const long HookErrorLogIntervalMs = 10_000;
+
+    private static long _hookErrorAt;
 
     // cvars
     // ReSharper disable InconsistentNaming
@@ -103,6 +108,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         _movementExtension = movementExtension;
         _mapInfo           = mapInfo;
         _entityManager     = bridge.EntityManager;
+        _hookLogger        = logger;
 
         timer_slopefix = bridge.ConVarManager.CreateConVar("timer_slopefix",
                                                            true,
@@ -292,4 +298,17 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
     // The acceleration a sub-tick step is part of. Steps split from one accelerate once between them.
     internal static long GetAccelerationStep(PlayerSlot slot, MoveData* mv)
         => _movementExtension.GetAccelerationStep(slot, (nint) mv);
+
+    private static void ReportHookError(Exception e)
+    {
+        var now = Environment.TickCount64;
+
+        if (now < _hookErrorAt)
+        {
+            return;
+        }
+
+        _hookErrorAt = now + HookErrorLogIntervalMs;
+        _hookLogger.LogError(e, "Movement fix hook failed");
+    }
 }

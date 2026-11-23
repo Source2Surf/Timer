@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
@@ -53,10 +54,35 @@ internal unsafe partial class MovementFixModule
     // Shared by the teleport detour and the trigger jump fix.
     private static nint RunTriggerTeleport(nint trigger, nint other, out bool teleported)
     {
-        var pending = BeforeTriggerTeleport(other);
-        var result  = CTriggerTeleport_Teleport(trigger, other);
+        PendingTelehop pending;
 
-        teleported = pending.Pawn != nint.Zero && AfterTriggerTeleport(pending);
+        try
+        {
+            pending = BeforeTriggerTeleport(other);
+        }
+        catch (Exception e)
+        {
+            pending = default;
+            ReportHookError(e);
+        }
+
+        var result = CTriggerTeleport_Teleport(trigger, other);
+
+        teleported = false;
+
+        if (pending.Pawn == nint.Zero)
+        {
+            return result;
+        }
+
+        try
+        {
+            teleported = AfterTriggerTeleport(pending);
+        }
+        catch (Exception e)
+        {
+            ReportHookError(e);
+        }
 
         return result;
     }
