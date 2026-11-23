@@ -629,14 +629,9 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         }
     }
 
-    // Where a placed zone's trigger is: the middle of its box, 2 units above its first corner.
+    // Where a placed zone's trigger is: the middle of its box, as its mins and maxs are half the box either way.
     private static Vector TriggerOrigin(ZoneInfo info)
-    {
-        var origin = (info.Corner1 + info.Corner2) / 2.0f;
-        origin.Z = info.Corner1.Z + 2f;
-
-        return origin;
-    }
+        => (info.Corner1 + info.Corner2) / 2.0f;
 
     public bool TeleportToZone(IPlayerPawn pawn, int track, EZoneType type)
     {
