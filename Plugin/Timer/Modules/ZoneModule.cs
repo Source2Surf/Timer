@@ -738,7 +738,16 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         => _currentMaxStages[track];
 
     public int GetCurrentTrackCheckpointCount(int track)
-        => GetZoneBucket(track, EZoneType.Checkpoint)?.Count ?? 0;
+    {
+        var numbers = 0UL;
+
+        foreach (var zone in GetZoneBucket(track, EZoneType.Checkpoint) ?? [])
+        {
+            numbers |= 1UL << zone.Data;
+        }
+
+        return System.Numerics.BitOperations.PopCount(numbers);
+    }
 
     public int GetLastCheckpoint(int track)
     {
