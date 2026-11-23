@@ -956,7 +956,8 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
     public void OnZoneStartTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
     {
         if (_players[controller.PlayerSlot] is not { } p
-            || info.ZoneType is not (EZoneType.Start or EZoneType.Stage or EZoneType.End))
+            || info.ZoneType is not (EZoneType.Start or EZoneType.Stage or EZoneType.End)
+            || _timerModule.GetTimerInfo(controller.PlayerSlot)?.Track != info.Track)
         {
             return;
         }
