@@ -358,7 +358,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
         }
 
         // Only handle Bot players
-        if (!client.IsFakeClient)
+        if (!client.IsFakeClient || client.IsHltv)
         {
             return;
         }
