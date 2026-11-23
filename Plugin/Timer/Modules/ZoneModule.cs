@@ -960,6 +960,11 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                         }
                     }
                 }
+                catch (Exception e)
+                {
+                    edgesToDraw.Clear();
+                    _logger.LogWarning(e, "Failed to read the outline of zone {Zone}, it is not drawn", val.TargetName);
+                }
                 finally
                 {
                     kv3.DeleteThis();
