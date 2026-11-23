@@ -462,6 +462,19 @@ internal static class HudTexts
     public static readonly HudText ZnAimSecond      = new ("zn.prompt.aim_second", "Aim at the opposite corner and press");
     public static readonly HudText ZnTall           = new ("zn.prompt.tall", "The zone is 128 units tall.");
     public static readonly HudText ZnHelp           = new ("zn.prompt.help", "!zone cancel to stop · !zone opens the panel");
+    public static readonly HudText ZnEdit           = new ("zn.edit", "Edit");
+    public static readonly HudText ZnEditSection    = new ("zn.edit_section", "Edit zone");
+    public static readonly HudText ZnEditPlace      = new ("zn.edit_place", "Centre {0} · turned {1}°");
+    public static readonly HudText ZnMoveBy         = new ("zn.move_by", "Move by");
+    public static readonly HudText ZnTurnBy         = new ("zn.turn_by", "Turn by");
+    public static readonly HudText ZnUnits          = new ("zn.units", "{0} u");
+    public static readonly HudText ZnDegrees        = new ("zn.degrees", "{0}°");
+    public static readonly HudText ZnTurnLeft       = new ("zn.turn_left", "Turn left");
+    public static readonly HudText ZnTurnRight      = new ("zn.turn_right", "Turn right");
+    public static readonly HudText ZnDone           = new ("zn.done", "Done");
+    public static readonly HudText ZnEditHint       = new ("zn.edit_hint", "X, Y and Z move it along the map's axes; left turns it anticlockwise as seen from above. Each change is saved.");
+    public static readonly HudText ZnCantTurn       = new ("zn.cant_turn", "This server can't turn zones.");
+    public static readonly HudText ZnEditFailed     = new ("zn.edit_failed", "Couldn't change {0}.");
 
     // ---- map chooser
     public static readonly HudText VoteEndOfMap  = new ("hud.vote.title", "Vote for the next map");
@@ -688,9 +701,15 @@ internal static class HudLabels
         ("ZnType5Label", HudTexts.ZnReset),
         ("LZnNumber", HudTexts.ZnNumber),
         ("LZnPlacing", HudTexts.ZnPlacingSection),
+        ("LZnEditing", HudTexts.ZnEditSection),
+        ("LZnMoveBy", HudTexts.ZnMoveBy),
+        ("LZnTurnBy", HudTexts.ZnTurnBy),
+        ("ZnTurnLeftLabel", HudTexts.ZnTurnLeft),
+        ("ZnTurnRightLabel", HudTexts.ZnTurnRight),
         ("LZnClose", HudTexts.Close),
         .. HudModule.ZoneMapIds.Select(id => (id, HudTexts.ZnMap)),
         .. HudModule.ZoneGoHint.Select(id => (id, HudTexts.ZnTeleport)),
+        .. HudModule.ZoneEditLabel.Select(id => (id, HudTexts.ZnEdit)),
     ];
 
     public static readonly (string Id, HudText Text)[] ZonePrompt =

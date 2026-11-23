@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Iced.Intel;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ using Sharp.Shared.Listeners;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Player;
 using Source2Surf.Timer.Modules.Zone;
 using Source2Surf.Timer.Shared;
@@ -94,6 +96,29 @@ internal interface IZoneModule
 
     // Takes the player to any zone, the map's own included. Stops their run, so the zone can't start, split or finish it.
     bool TeleportToZone(PlayerSlot slot, uint id);
+
+    // Whether this server's zones can turn (the SetSolid hook is in); they can always move.
+    bool CanTurnZones { get; }
+
+    // The zone added in game that the player edits, 0 for none.
+    uint GetEditTarget(PlayerSlot slot);
+
+    // Picks a zone added in game to edit; the map's own can't be.
+    bool SelectZone(PlayerSlot slot, uint id);
+
+    void DeselectZone(PlayerSlot slot);
+
+    // The zone added in game the player stands in, 0 for none.
+    uint ZoneAt(PlayerSlot slot);
+
+    // Where a zone added in game is now; null for the map's own and unknown ids.
+    ZonePlacement? GetPlacement(uint id);
+
+    // Moves a zone added in game by so many units along the map's axes, and saves it.
+    bool MoveZone(PlayerSlot slot, uint id, Vector delta);
+
+    // Turns a zone added in game about its centre, anticlockwise from above, and saves it.
+    bool TurnZone(PlayerSlot slot, uint id, float degrees);
 }
 
 // TODO:
@@ -151,15 +176,15 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                       IMapInfoModule        mapInfoModule,
                       ILogger<ZoneModule>   logger)
     {
-        _bridge         = bridge;
-        _localization   = localization;
-        _logger         = logger;
-        _listenerHub    = new ListenerHub<IZoneModuleListener>(logger);
-        _commandManager = commandManager;
-        _requestManager = requestManager;
-        _playerManager  = playerManager;
-        _mapInfoModule  = mapInfoModule;
-        _buildZoneInfo  = new BuildZoneInfo?[PlayerSlot.MaxPlayerCount];
+        _bridge            = bridge;
+        _localization      = localization;
+        _logger            = logger;
+        _listenerHub       = new ListenerHub<IZoneModuleListener>(logger);
+        _commandManager    = commandManager;
+        _requestManager    = requestManager;
+        _playerManager     = playerManager;
+        _mapInfoModule     = mapInfoModule;
+        _buildZoneInfo     = new BuildZoneInfo?[PlayerSlot.MaxPlayerCount];
 
         for (var t = 0; t < TimerConstants.MAX_TRACK; t++)
         {
@@ -169,6 +194,10 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             }
         }
     }
+
+    // A zone's turn as its trigger has it: none where zones can't turn.
+    private float YawOf(ZoneInfo info)
+        => _canTurn ? info.Yaw : 0f;
 
     public void OnEntitySpawned(IBaseEntity entity)
     {
@@ -294,6 +323,8 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             throw new InvalidOperationException("Failed to find CreateTriggerInternal");
         }
 
+        FindShapeCalls();
+
         for (var i = 0; i < TimerConstants.MAX_TRACK; i++)
         {
             _currentMaxStages[i] = -1;
@@ -314,6 +345,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         }
 
         Array.Fill(_zoneEditors, false);
+        Array.Clear(_editTargets);
 
         _zones.Clear();
         ZonesChanged();
@@ -416,7 +448,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
     {
         DropLines(slot);
         ClearBuildZoneInfo(slot);
-        _zoneEditors[slot] = false;
+        CloseZoneEditor(slot);
         _allTrackLines[slot] = false;
     }
 
@@ -472,8 +504,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             mins[i] = -maxs[i];
         }
 
-        var origin = (infoCorner1 + infoCorner2) / 2.0f;
-        origin.Z = infoCorner1.Z + 2f;
+        var origin = TriggerOrigin(info);
 
         var entPtr = CreateTrigger(&origin, &mins, &maxs);
 
@@ -495,6 +526,17 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         ent.Effects    |= EntityEffects.NoDraw;
         ent.SetNetVar("m_flWait", TimerConstants.TickInterval);
 
+        // Made SOLID_OBB, so that turning the trigger turns its box; unturned, it touches what a SOLID_BBOX one would.
+        if (_canTurn)
+        {
+            SetShape(ent, SolidType.Obb);
+        }
+
+        if (YawOf(info) != 0f)
+        {
+            ent.Teleport(null, new Vector(0, info.Yaw, 0), null);
+        }
+
         info.Origin = origin;
         info.Index  = ent.Index;
 
@@ -503,6 +545,15 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             IndexZone(info);
             RecountStages(info.Track);
         }
+    }
+
+    // Where a placed zone's trigger is: the middle of its box, 2 units above its first corner.
+    private static Vector TriggerOrigin(ZoneInfo info)
+    {
+        var origin = (info.Corner1 + info.Corner2) / 2.0f;
+        origin.Z = info.Corner1.Z + 2f;
+
+        return origin;
     }
 
     public bool TeleportToZone(IPlayerPawn pawn, int track, EZoneType type)
@@ -822,39 +873,17 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         }
         else
         {
-            // Calculate a complete 3D wireframe for manual AABB zones
-            var p1 = val.Corner1; // Min bounds
-            var p2 = val.Corner2; // Max bounds
+            // A placed zone's box, turned as its trigger is: around the bottom, around the top, and the 4 uprights.
+            var corners = ZoneEdit.Corners(val.Corner1, val.Corner2, YawOf(val));
 
-            // Bottom Corners
-            var b0 = new Vector(p1.X, p1.Y, p1.Z);
-            var b1 = new Vector(p2.X, p1.Y, p1.Z);
-            var b2 = new Vector(p2.X, p2.Y, p1.Z);
-            var b3 = new Vector(p1.X, p2.Y, p1.Z);
+            for (var i = 0; i < 4; i++)
+            {
+                var next = (i + 1) % 4;
 
-            // Top Corners
-            var t0 = new Vector(p1.X, p1.Y, p2.Z);
-            var t1 = new Vector(p2.X, p1.Y, p2.Z);
-            var t2 = new Vector(p2.X, p2.Y, p2.Z);
-            var t3 = new Vector(p1.X, p2.Y, p2.Z);
-
-            // Add Bottom Edges
-            edgesToDraw.Add(new Edge(b0, b1));
-            edgesToDraw.Add(new Edge(b1, b2));
-            edgesToDraw.Add(new Edge(b2, b3));
-            edgesToDraw.Add(new Edge(b3, b0));
-
-            // Add Top Edges
-            edgesToDraw.Add(new Edge(t0, t1));
-            edgesToDraw.Add(new Edge(t1, t2));
-            edgesToDraw.Add(new Edge(t2, t3));
-            edgesToDraw.Add(new Edge(t3, t0));
-
-            // Add Vertical Pillars
-            edgesToDraw.Add(new Edge(b0, t0));
-            edgesToDraw.Add(new Edge(b1, t1));
-            edgesToDraw.Add(new Edge(b2, t2));
-            edgesToDraw.Add(new Edge(b3, t3));
+                edgesToDraw.Add(new Edge(corners[i], corners[next]));
+                edgesToDraw.Add(new Edge(corners[i + 4], corners[next + 4]));
+                edgesToDraw.Add(new Edge(corners[i], corners[i + 4]));
+            }
         }
 
         return edgesToDraw;

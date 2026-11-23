@@ -1,5 +1,4 @@
 using System;
-using Sharp.Shared.Types;
 using Source2Surf.Timer.Common.Entities;
 using Source2Surf.Timer.Shared.Models.Zone;
 
@@ -18,7 +17,7 @@ internal static class ZoneEntityMapper
             Mins           = data.Mins,
             Maxs           = data.Maxs,
             Center         = data.Center,
-            Angles         = new Vector(),
+            Angles         = data.Angles,
             TeleportOrigin = data.TeleportOrigin,
             TeleportAngles = data.TeleportAngles,
             Config         = data.Config,
@@ -36,6 +35,7 @@ internal static class ZoneEntityMapper
             Mins           = entity.Mins,
             Maxs           = entity.Maxs,
             Center         = entity.Center,
+            Angles         = entity.Angles,
             TeleportOrigin = entity.TeleportOrigin,
             TeleportAngles = entity.TeleportAngles,
             Config         = entity.Config,

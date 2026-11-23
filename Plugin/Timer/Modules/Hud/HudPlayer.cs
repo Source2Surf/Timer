@@ -159,6 +159,8 @@ internal sealed class HudZones
     public readonly uint[] RowIds = new uint[HudModule.ZoneRows];
     public bool            PromptShown;
     public bool            PromptRecheck;           // flipped each time the prompt shows, so its key cap looks the key up again
+    public int             MoveStep = ZoneEdit.DefaultMoveStep; // indices into ZoneEdit.MoveSteps and TurnSteps
+    public int             TurnStep = ZoneEdit.DefaultTurnStep;
 }
 
 /// <summary>

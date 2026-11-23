@@ -192,6 +192,10 @@ public sealed class ZoneDto
 
     [Key(9)]
     public string? Config { get; set; }
+
+    // The zone's turn about Center; null from a plugin that doesn't send it, read as none.
+    [Key(10)]
+    public VectorDto? Angles { get; set; }
 }
 
 [MessagePackObject]

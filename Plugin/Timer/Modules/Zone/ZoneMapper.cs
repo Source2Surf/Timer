@@ -49,6 +49,7 @@ internal static class ZoneMapper
             Mins           = mins,
             Maxs           = maxs,
             Center         = center,
+            Angles         = new Vector(0, info.Yaw, 0),
             TeleportOrigin = info.TeleportOrigin,
             TeleportAngles = info.TeleportAngles,
         };
@@ -68,6 +69,7 @@ internal static class ZoneMapper
             Corner1        = data.Mins,
             Corner2        = data.Maxs,
             Origin         = data.Center,
+            Yaw            = ZoneEdit.NormalizeYaw(data.Angles.Y),
             TeleportOrigin = data.TeleportOrigin,
             TeleportAngles = data.TeleportAngles,
             Prebuilt       = false,

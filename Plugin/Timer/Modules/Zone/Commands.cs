@@ -20,14 +20,18 @@ using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
 using Sharp.Shared.Units;
+using Source2Surf.Timer.Extensions;
+using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Modules.Zone;
+using Source2Surf.Timer.Shared.Models.Zone;
 
 // ReSharper disable once CheckNamespace
 namespace Source2Surf.Timer.Modules;
 
 internal partial class ZoneModule
 {
-    // !zone opens the zone editor; !zone cancel; !zone all; !zone <type> [number]; !zone b<track> <type> [number].
+    // !zone opens the zone editor; !zone cancel; !zone all; !zone <type> [number]; !zone b<track> <type> [number];
+    // !zone edit, move <x> <y> <z>, rotate <degrees> and done for a zone added in game.
     private ECommandAction OnCommandZone(PlayerSlot slot, StringCommand command)
     {
         if (_bridge.ClientManager.GetGameClient(slot) is not { } client
@@ -58,6 +62,11 @@ internal partial class ZoneModule
             return ToggleAllTrackLines(slot);
         }
 
+        if (ZoneEdit.EditVerb(command.GetArg(1)) is { } verb)
+        {
+            return OnCommandZoneEdit(slot, verb, command);
+        }
+
         var args = new string[command.ArgCount];
 
         for (var i = 0; i < args.Length; i++)
@@ -76,4 +85,101 @@ internal partial class ZoneModule
 
         return ECommandAction.Handled;
     }
+
+    private ECommandAction OnCommandZoneEdit(PlayerSlot slot, string verb, StringCommand command)
+    {
+        if (!_bridge.TryGetController(slot, out var controller))
+        {
+            return ECommandAction.Handled;
+        }
+
+        var tr = _localization.For(slot);
+
+        if (verb == "done")
+        {
+            DeselectZone(slot);
+            controller.PrintToChat(tr[ChatTexts.ZoneEditDone]);
+
+            return ECommandAction.Handled;
+        }
+
+        // The zone picked to edit, else the one the player stands in.
+        var id = verb == "edit" ? ZoneAt(slot) : GetEditTarget(slot) is var picked and not 0 ? picked : ZoneAt(slot);
+
+        if (id == 0 || !_zones.TryGetValue(id, out var info))
+        {
+            controller.PrintToChat(tr[ChatTexts.ZoneEditNone]);
+
+            return ECommandAction.Handled;
+        }
+
+        var name = ZoneChatName(tr, info);
+        var args = new string[command.ArgCount - 1];
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            args[i] = command.GetArg(i + 2);
+        }
+
+        bool done;
+
+        switch (verb)
+        {
+            case "edit":
+                done = SelectZone(slot, id);
+
+                if (done)
+                {
+                    controller.PrintToChat(tr.Format(ChatTexts.ZoneEditPicked, name, tr.Track(info.Track)));
+
+                    return ECommandAction.Handled;
+                }
+
+                break;
+            case "move" when ZoneEdit.TryParseMove(args, out var delta):
+                done = MoveZone(slot, id, delta);
+
+                break;
+            case "rotate" when !_canTurn:
+                controller.PrintToChat(tr[ChatTexts.ZoneCantTurn]);
+
+                return ECommandAction.Handled;
+            case "rotate" when ZoneEdit.TryParseTurn(args, out var degrees):
+                done = TurnZone(slot, id, degrees);
+
+                break;
+            default:
+                controller.PrintToChat(tr[ChatTexts.ZoneEditUsage]);
+
+                return ECommandAction.Handled;
+        }
+
+        if (!done)
+        {
+            controller.PrintToChat(tr.Format(ChatTexts.ZoneEditFailed, name));
+
+            return ECommandAction.Handled;
+        }
+
+        var center = (info.Corner1 + info.Corner2) / 2f;
+
+        controller.PrintToChat(tr.Format(ChatTexts.ZoneEditPlaced,
+                                         name,
+                                         tr.Track(info.Track),
+                                         ZoneEdit.FormatPoint(center),
+                                         ZoneEdit.FormatYaw(YawOf(info))));
+
+        return ECommandAction.Handled;
+    }
+
+    private static string ZoneChatName(ChatTr tr, ZoneInfo info)
+        => info.ZoneType switch
+        {
+            EZoneType.Start      => tr[ChatTexts.ZoneStart],
+            EZoneType.End        => tr[ChatTexts.ZoneEnd],
+            EZoneType.Stage      => tr.Format(ChatTexts.TrackStage, info.Data),
+            EZoneType.Checkpoint => tr.Format(ChatTexts.ZoneCheckpoint, info.Data),
+            EZoneType.Reset      => tr[ChatTexts.ZoneReset],
+            _                    => tr[ChatTexts.ZoneStopTimer],
+        };
 }

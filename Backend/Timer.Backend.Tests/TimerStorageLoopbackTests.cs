@@ -90,12 +90,13 @@ public sealed class TimerStorageLoopbackTests : IAsyncLifetime
         await _client.SaveZonesAsync("surf_rpc", 0,
         [
             new ZoneDto { Type = 1, Track = 0, Mins = new VectorDto { X = -1 }, Maxs = new VectorDto { X = 1 },
-                          Center = new VectorDto(), TeleportAngles = new VectorDto { Y = 90 } },
+                          Center = new VectorDto(), Angles = new VectorDto { Y = 30 }, TeleportAngles = new VectorDto { Y = 90 } },
         ]);
         var zone = Assert.Single(await _client.GetZonesAsync("surf_rpc", 0));
         Assert.Equal(-1f, zone.Mins.X);
         Assert.Null(zone.TeleportOrigin);
         Assert.Equal(90f, zone.TeleportAngles!.Y);
+        Assert.Equal(30f, zone.Angles!.Y);
 
         await _client.IncrementMapStatsAsync("surf_rpc", 0, 30);
         await _client.UpdatePlayerMapStatsAsync(SteamId, "surf_rpc", 0, 30);

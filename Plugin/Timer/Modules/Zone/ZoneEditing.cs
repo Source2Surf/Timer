@@ -35,15 +35,127 @@ internal partial class ZoneModule
     // Players who ran !zone, which only admins with timer:zone can, until they close the editor or leave.
     private readonly bool[] _zoneEditors = new bool[PlayerSlot.MaxPlayerCount];
 
+    // By slot: the zone added in game each editor moves and turns, 0 for none.
+    private readonly uint[] _editTargets = new uint[PlayerSlot.MaxPlayerCount];
+
+    // Saves run one after another, so the last change made is the one stored.
+    private Task _saving = Task.CompletedTask;
+
     public event Action<PlayerSlot>? EditorRequested;
 
     public int EditVersion { get; private set; }
+
+    public bool CanTurnZones => _canTurn;
 
     public bool IsZoneEditor(PlayerSlot slot)
         => _zoneEditors[slot];
 
     public void CloseZoneEditor(PlayerSlot slot)
-        => _zoneEditors[slot] = false;
+    {
+        _zoneEditors[slot] = false;
+        _editTargets[slot] = 0;
+    }
+
+    public uint GetEditTarget(PlayerSlot slot)
+        => _editTargets[slot];
+
+    public bool SelectZone(PlayerSlot slot, uint id)
+    {
+        if (!_zoneEditors[slot] || !_zones.TryGetValue(id, out var info) || info.Prebuilt)
+        {
+            return false;
+        }
+
+        _editTargets[slot] = id;
+        EditVersion++;
+
+        return true;
+    }
+
+    public void DeselectZone(PlayerSlot slot)
+    {
+        if (_editTargets[slot] != 0)
+        {
+            _editTargets[slot] = 0;
+            EditVersion++;
+        }
+    }
+
+    // At the player's middle: a placed zone's box starts a little above the floor it was aimed at.
+    public uint ZoneAt(PlayerSlot slot)
+    {
+        if (_bridge.ClientManager.GetGameClient(slot)?.GetPlayerController()?.GetPlayerPawn() is not { IsValidEntity: true, IsAlive: true } pawn)
+        {
+            return 0;
+        }
+
+        var point = pawn.GetAbsOrigin() + new Vector(0, 0, 36);
+
+        foreach (var (id, info) in _zones)
+        {
+            if (!info.Prebuilt && ZoneEdit.Contains(info.Corner1, info.Corner2, YawOf(info), point))
+            {
+                return id;
+            }
+        }
+
+        return 0;
+    }
+
+    public ZonePlacement? GetPlacement(uint id)
+        => _zones.TryGetValue(id, out var info) && !info.Prebuilt
+            ? new ZonePlacement((info.Corner1 + info.Corner2) / 2f, YawOf(info))
+            : null;
+
+    public bool MoveZone(PlayerSlot slot, uint id, Vector delta)
+        => Reshape(slot, id, delta, 0f);
+
+    public bool TurnZone(PlayerSlot slot, uint id, float degrees)
+        => _canTurn && Reshape(slot, id, new Vector(), degrees);
+
+    // Moves the zone's box, then turns it about its new centre; its teleport point and view go along. The trigger is
+    // moved and turned in place, so whoever stands in it touches it as before where it still covers them.
+    private bool Reshape(PlayerSlot slot, uint id, Vector delta, float degrees)
+    {
+        if (!_zoneEditors[slot]
+            || !_zones.TryGetValue(id, out var info)
+            || info.Prebuilt
+            || _bridge.EntityManager.FindEntityByIndex(info.Index) is not { IsValidEntity: true } trigger
+            || trigger.Handle.GetValue() != id)
+        {
+            return false;
+        }
+
+        info.Corner1 += delta;
+        info.Corner2 += delta;
+        info.Yaw     =  ZoneEdit.NormalizeYaw(info.Yaw + degrees);
+
+        var center = (info.Corner1 + info.Corner2) / 2f;
+
+        if (info.TeleportOrigin is { } teleport)
+        {
+            info.TeleportOrigin = ZoneEdit.Turn(teleport + delta, center, degrees);
+        }
+
+        if (info.TeleportAngles is { } view && degrees != 0f)
+        {
+            info.TeleportAngles = new Vector(view.X, ZoneEdit.NormalizeYaw(view.Y + degrees), view.Z);
+        }
+
+        info.Origin       = TriggerOrigin(info);
+        info.GroundOrigin = null;
+        info.Edges        = null;
+        info.FlatEdges    = null;
+
+        trigger.Teleport(info.Origin, new Vector(0, YawOf(info), 0), null);
+
+        _editTargets[slot] = id;
+        ZonesChanged();
+        EditVersion++;
+        SaveCustomZones();
+
+        return true;
+    }
 
     public IReadOnlyList<ZoneEntry> GetZones()
     {
@@ -117,6 +229,14 @@ internal partial class ZoneModule
             trigger.Kill();
         }
 
+        for (var i = 0; i < _editTargets.Length; i++)
+        {
+            if (_editTargets[i] == id)
+            {
+                _editTargets[i] = 0;
+            }
+        }
+
         EditVersion++;
         SaveCustomZones();
 
@@ -173,6 +293,7 @@ internal partial class ZoneModule
         _currentMaxStages[track] = stages;
     }
 
+    // Each save waits for the one before, so a burst of edits can't land out of order.
     private void SaveCustomZones()
     {
         var mapName = _bridge.CurrentMapName;
@@ -182,20 +303,23 @@ internal partial class ZoneModule
                           .Select(i => ZoneMapper.ToZoneData(i.Value))
                           .ToArray();
 
-        Task.Run(async () =>
-                 {
-                     try
-                     {
-                         await RetryHelper.RetryAsync(() => _requestManager.SaveZonesAsync(mapName, zones),
-                                                      RetryHelper.IsTransient,
-                                                      _logger,
-                                                      "SaveZonesAsync");
-                     }
-                     catch (Exception e)
-                     {
-                         _logger.LogError(e, "Failed to save custom zones to database");
-                     }
-                 },
-                 _bridge.CancellationToken);
+        _saving = _saving.ContinueWith(async _ =>
+                                       {
+                                           try
+                                           {
+                                               await RetryHelper.RetryAsync(() => _requestManager.SaveZonesAsync(mapName, zones),
+                                                                            RetryHelper.IsTransient,
+                                                                            _logger,
+                                                                            "SaveZonesAsync");
+                                           }
+                                           catch (Exception e)
+                                           {
+                                               _logger.LogError(e, "Failed to save custom zones to database");
+                                           }
+                                       },
+                                       _bridge.CancellationToken,
+                                       TaskContinuationOptions.None,
+                                       TaskScheduler.Default)
+                         .Unwrap();
     }
 }

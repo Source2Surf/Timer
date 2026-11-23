@@ -1547,6 +1547,58 @@
     "en-us": "!zone cancel to stop · !zone opens the panel",
     "zh-cn": "!zone cancel 停止 · !zone 打开面板"
   },
+  "zn.edit": {
+    "en-us": "Edit",
+    "zh-cn": "编辑"
+  },
+  "zn.edit_section": {
+    "en-us": "Edit zone",
+    "zh-cn": "编辑区域"
+  },
+  "zn.edit_place": {
+    "en-us": "Centre {0} · turned {1}°",
+    "zh-cn": "中心 {0} · 旋转 {1}°"
+  },
+  "zn.move_by": {
+    "en-us": "Move by",
+    "zh-cn": "移动步长"
+  },
+  "zn.turn_by": {
+    "en-us": "Turn by",
+    "zh-cn": "旋转步长"
+  },
+  "zn.units": {
+    "en-us": "{0} u",
+    "zh-cn": "{0} 单位"
+  },
+  "zn.degrees": {
+    "en-us": "{0}°",
+    "zh-cn": "{0}°"
+  },
+  "zn.turn_left": {
+    "en-us": "Turn left",
+    "zh-cn": "左转"
+  },
+  "zn.turn_right": {
+    "en-us": "Turn right",
+    "zh-cn": "右转"
+  },
+  "zn.done": {
+    "en-us": "Done",
+    "zh-cn": "完成"
+  },
+  "zn.edit_hint": {
+    "en-us": "X, Y and Z move it along the map's axes; left turns it anticlockwise as seen from above. Each change is saved.",
+    "zh-cn": "X、Y、Z 沿地图坐标轴移动；左转为俯视逆时针。每次改动都会保存。"
+  },
+  "zn.cant_turn": {
+    "en-us": "This server can't turn zones.",
+    "zh-cn": "本服务器无法旋转区域。"
+  },
+  "zn.edit_failed": {
+    "en-us": "Couldn't change {0}.",
+    "zh-cn": "无法修改{0}。"
+  },
   "chat.track.main": {
     "en-us": "Main",
     "zh-cn": "主线"
@@ -2022,6 +2074,54 @@
   "chat.zones.own_track": {
     "en-us": "Only your track's zones are outlined again.",
     "zh-cn": "已恢复为只显示当前赛道的区域轮廓。"
+  },
+  "chat.zone.start": {
+    "en-us": "Start",
+    "zh-cn": "起点"
+  },
+  "chat.zone.end": {
+    "en-us": "End",
+    "zh-cn": "终点"
+  },
+  "chat.zone.checkpoint": {
+    "en-us": "Checkpoint {0}",
+    "zh-cn": "检查点 {0}"
+  },
+  "chat.zone.stop": {
+    "en-us": "Stop timer",
+    "zh-cn": "停止计时"
+  },
+  "chat.zone.reset": {
+    "en-us": "Reset",
+    "zh-cn": "重置"
+  },
+  "chat.zone.edit.picked": {
+    "en-us": "Editing [lightgreen]{0}[white] ({1}): [lightgreen]!zone move x y z[white] moves it, [lightgreen]!zone rotate degrees[white] turns it.",
+    "zh-cn": "正在编辑 [lightgreen]{0}[white]（{1}）：[lightgreen]!zone move x y z[white] 移动，[lightgreen]!zone rotate 角度[white] 旋转。"
+  },
+  "chat.zone.edit.none": {
+    "en-us": "Stand in a zone added in game, or pick one with Edit on [lightgreen]!zone[white]'s panel.",
+    "zh-cn": "请站进一个游戏内添加的区域，或在 [lightgreen]!zone[white] 面板上点「编辑」选一个。"
+  },
+  "chat.zone.edit.placed": {
+    "en-us": "[lightgreen]{0}[white] ({1}) is centred at [lightgreen]{2}[white], turned [lightgreen]{3}°[white].",
+    "zh-cn": "[lightgreen]{0}[white]（{1}）中心在 [lightgreen]{2}[white]，旋转 [lightgreen]{3}°[white]。"
+  },
+  "chat.zone.edit.failed": {
+    "en-us": "Couldn't change {0}.",
+    "zh-cn": "无法修改{0}。"
+  },
+  "chat.zone.edit.done": {
+    "en-us": "Stopped editing zones.",
+    "zh-cn": "已结束区域编辑。"
+  },
+  "chat.zone.cant_turn": {
+    "en-us": "Zones can't be turned on this server.",
+    "zh-cn": "本服务器无法旋转区域。"
+  },
+  "chat.zone.edit.usage": {
+    "en-us": "[lightgreen]!zone move <x> <y> <z>[white] moves the zone by so many units, [lightgreen]!zone rotate <degrees>[white] turns it anticlockwise as seen from above.",
+    "zh-cn": "[lightgreen]!zone move <x> <y> <z>[white] 按单位移动区域，[lightgreen]!zone rotate <角度>[white] 俯视逆时针旋转。"
   },
   "chat.country.shown": {
     "en-us": "Your profile shows your country again.",

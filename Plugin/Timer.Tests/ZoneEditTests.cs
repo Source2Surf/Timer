@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sharp.Shared.Types;
 using Source2Surf.Timer.Modules.Zone;
 using Source2Surf.Timer.Shared.Models.Zone;
 using Xunit;
@@ -85,5 +87,80 @@ public sealed class ZoneEditTests
 
         // The map's own start zone before the one added in game.
         Assert.Equal([16u, 15u, 14u, 13u, 12u, 11u, 10u], zones.Select(z => z.Id));
+    }
+
+    // As the engine turns a SOLID_OBB trigger: yaw 90 lays a box long along X along Y.
+    [Fact]
+    public void TurningAnticlockwiseLaysXAlongY()
+    {
+        var corner1 = new Vector(-100, -20, 0);
+        var corner2 = new Vector(100, 20, 100);
+
+        Assert.True(ZoneEdit.Contains(corner1, corner2, 0f, new Vector(70, 0, 50)));
+        Assert.False(ZoneEdit.Contains(corner1, corner2, 0f, new Vector(0, 70, 50)));
+
+        Assert.False(ZoneEdit.Contains(corner1, corner2, 90f, new Vector(70, 0, 50)));
+        Assert.True(ZoneEdit.Contains(corner1, corner2, 90f, new Vector(0, 70, 50)));
+        Assert.False(ZoneEdit.Contains(corner1, corner2, 90f, new Vector(0, 70, 150))); // above it
+
+        var turned = ZoneEdit.Corners(corner1, corner2, 90f);
+        Assert.All(turned, c => Assert.InRange(MathF.Abs(c.X), 0f, 20.001f));
+        Assert.Equal([0f, 0f, 0f, 0f, 100f, 100f, 100f, 100f], turned.Select(c => c.Z));
+
+        var point = ZoneEdit.Turn(new Vector(10, 0, 5), new Vector(), 90f);
+        Assert.Equal(0f, point.X, 3);
+        Assert.Equal(10f, point.Y, 3);
+        Assert.Equal(5f, point.Z);
+    }
+
+    // A turn about a centre off the origin keeps the centre where it is.
+    [Fact]
+    public void TurnsAboutTheBoxCentre()
+    {
+        var corner1 = new Vector(1000, 2000, 0);
+        var corner2 = new Vector(1200, 2040, 64);
+
+        Assert.True(ZoneEdit.Contains(corner1, corner2, 45f, new Vector(1100, 2020, 32)));
+        Assert.True(ZoneEdit.Contains(corner1, corner2, 90f, new Vector(1100, 2100, 32)));
+        Assert.False(ZoneEdit.Contains(corner1, corner2, 90f, new Vector(1180, 2020, 32)));
+    }
+
+    [Theory]
+    [InlineData(-15f, 345f)]
+    [InlineData(360f, 0f)]
+    [InlineData(725f, 5f)]
+    [InlineData(90f, 90f)]
+    [InlineData(float.NaN, 0f)]
+    [InlineData(float.PositiveInfinity, 0f)]
+    public void NormalizesYaw(float yaw, float normal)
+        => Assert.Equal(normal, ZoneEdit.NormalizeYaw(yaw), 3);
+
+    [Theory]
+    [InlineData("1 -2 3.5", true, 1f, -2f, 3.5f)]
+    [InlineData("0 0 -16", true, 0f, 0f, -16f)]
+    [InlineData("1 2", false, 0f, 0f, 0f)]
+    [InlineData("1 2 3 4", false, 0f, 0f, 0f)]
+    [InlineData("x 2 3", false, 0f, 0f, 0f)]
+    [InlineData("NaN 0 0", false, 0f, 0f, 0f)]
+    [InlineData("1e40 0 0", false, 0f, 0f, 0f)]
+    public void ParsesMoves(string input, bool ok, float x, float y, float z)
+    {
+        Assert.Equal(ok, ZoneEdit.TryParseMove(input.Split(' '), out var delta));
+
+        if (ok)
+        {
+            Assert.Equal((x, y, z), (delta.X, delta.Y, delta.Z));
+        }
+    }
+
+    [Theory]
+    [InlineData("15", true, 15f)]
+    [InlineData("-90", true, -90f)]
+    [InlineData("1,5", false, 0f)]
+    [InlineData("15 30", false, 0f)]
+    public void ParsesTurns(string input, bool ok, float degrees)
+    {
+        Assert.Equal(ok, ZoneEdit.TryParseTurn(input.Split(' '), out var turn));
+        Assert.Equal(degrees, turn);
     }
 }

@@ -17,6 +17,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using Sharp.Shared.Types;
 using Source2Surf.Timer.Shared;
 using Source2Surf.Timer.Shared.Models.Zone;
 
@@ -28,9 +30,118 @@ internal readonly record struct ZoneEntry(uint Id, int Track, EZoneType Type, in
 // A zone a player is placing. Step 0 waits for the first corner, 1 for the second.
 internal readonly record struct ZoneBuildState(int Track, EZoneType Type, int Number, int Step);
 
+// Where a zone placed in game is: the centre of its box and its turn about the vertical axis.
+internal readonly record struct ZonePlacement(Vector Center, float Yaw);
+
 internal static class ZoneEdit
 {
     public const int MaxNumber = 99;
+
+    // The editor's steps: units a move, degrees a turn.
+    public static readonly int[] MoveSteps = [1, 2, 4, 8, 16, 32, 64, 128];
+    public static readonly int[] TurnSteps = [1, 5, 15, 45, 90];
+
+    public const int DefaultMoveStep = 3; // 8 units
+    public const int DefaultTurnStep = 2; // 15 degrees
+
+    // 0 up to 360; anything not a number is no turn.
+    public static float NormalizeYaw(float yaw)
+    {
+        if (!float.IsFinite(yaw))
+        {
+            return 0f;
+        }
+
+        yaw %= 360f;
+
+        return yaw < 0f ? yaw + 360f : yaw;
+    }
+
+    // The point turned by degrees about the vertical axis through the pivot; positive is anticlockwise from above.
+    public static Vector Turn(Vector point, Vector pivot, float degrees)
+    {
+        var (sin, cos) = MathF.SinCos(degrees * (MathF.PI / 180f));
+        var dx         = point.X - pivot.X;
+        var dy         = point.Y - pivot.Y;
+
+        return new Vector(pivot.X + (dx * cos) - (dy * sin), pivot.Y + (dx * sin) + (dy * cos), point.Z);
+    }
+
+    // The box's 8 corners, turned about its centre: the bottom 4, then the top 4, each going round.
+    public static Vector[] Corners(Vector corner1, Vector corner2, float yaw)
+    {
+        var center = (corner1 + corner2) / 2f;
+        var low    = MathF.Min(corner1.Z, corner2.Z);
+        var high   = MathF.Max(corner1.Z, corner2.Z);
+
+        Span<(float X, float Y)> round = [(corner1.X, corner1.Y), (corner2.X, corner1.Y), (corner2.X, corner2.Y), (corner1.X, corner2.Y)];
+        var corners = new Vector[8];
+
+        for (var i = 0; i < 4; i++)
+        {
+            corners[i]     = Turn(new Vector(round[i].X, round[i].Y, low), center, yaw);
+            corners[i + 4] = Turn(new Vector(round[i].X, round[i].Y, high), center, yaw);
+        }
+
+        return corners;
+    }
+
+    // Whether the point is in the box turned about its centre.
+    public static bool Contains(Vector corner1, Vector corner2, float yaw, Vector point)
+    {
+        var center = (corner1 + corner2) / 2f;
+        var local  = Turn(point, center, -yaw);
+
+        return local.X >= MathF.Min(corner1.X, corner2.X) && local.X <= MathF.Max(corner1.X, corner2.X)
+            && local.Y >= MathF.Min(corner1.Y, corner2.Y) && local.Y <= MathF.Max(corner1.Y, corner2.Y)
+            && local.Z >= MathF.Min(corner1.Z, corner2.Z) && local.Z <= MathF.Max(corner1.Z, corner2.Z);
+    }
+
+    // !zone's verbs for a zone added in game; turn is rotate's other name.
+    public static string? EditVerb(string arg)
+        => arg.ToLowerInvariant() switch
+        {
+            "edit"             => "edit",
+            "move"             => "move",
+            "rotate" or "turn" => "rotate",
+            "done"             => "done",
+            _                  => null,
+        };
+
+    // "x y z" in units; each a finite number.
+    public static bool TryParseMove(IReadOnlyList<string> args, out Vector delta)
+    {
+        delta = new Vector();
+
+        if (args.Count != 3
+            || !TryParseNumber(args[0], out var x)
+            || !TryParseNumber(args[1], out var y)
+            || !TryParseNumber(args[2], out var z))
+        {
+            return false;
+        }
+
+        delta = new Vector(x, y, z);
+
+        return true;
+    }
+
+    // Degrees, anticlockwise from above.
+    public static bool TryParseTurn(IReadOnlyList<string> args, out float degrees)
+    {
+        degrees = 0f;
+
+        return args.Count == 1 && TryParseNumber(args[0], out degrees);
+    }
+
+    private static bool TryParseNumber(string text, out float value)
+        => float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && float.IsFinite(value);
+
+    public static string FormatPoint(Vector point)
+        => string.Create(CultureInfo.InvariantCulture, $"{point.X:0.#} {point.Y:0.#} {point.Z:0.#}");
+
+    public static string FormatYaw(float yaw)
+        => yaw.ToString("0.#", CultureInfo.InvariantCulture);
 
     // Stage 1 is the start zone, so stages count from 2.
     public static int FirstNumber(EZoneType type)

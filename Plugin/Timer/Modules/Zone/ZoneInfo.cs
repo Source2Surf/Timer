@@ -33,8 +33,12 @@ internal class ZoneInfo : IZoneInfo
     [JsonIgnore]
     public EntityIndex Index { get; set; }
 
-    public Vector Corner1    { get; init; } = new ();
-    public Vector Corner2    { get; init; } = new ();
+    // The box before Yaw turns it about the centre between them.
+    public Vector Corner1    { get; set; } = new ();
+    public Vector Corner2    { get; set; } = new ();
+
+    // Degrees about the vertical axis, 0 to 360; a map's own zone keeps 0.
+    public float  Yaw        { get; set; }
 
     [JsonIgnore]
     public string TargetName { get; init; } = string.Empty;

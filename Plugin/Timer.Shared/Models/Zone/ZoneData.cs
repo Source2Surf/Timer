@@ -19,6 +19,7 @@ using Sharp.Shared.Types;
 
 namespace Source2Surf.Timer.Shared.Models.Zone;
 
+// Mins and Maxs are the box before Angles turns it about Center; only the yaw (Y) is used.
 public sealed class ZoneData
 {
     public ulong     Id             { get; set; }
@@ -28,6 +29,7 @@ public sealed class ZoneData
     public Vector    Mins           { get; set; }
     public Vector    Maxs           { get; set; }
     public Vector    Center         { get; set; }
+    public Vector    Angles         { get; set; }
     public Vector?   TeleportOrigin { get; set; }
     public Vector?   TeleportAngles { get; set; }
     public string?   Config         { get; set; }

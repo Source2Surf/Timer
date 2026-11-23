@@ -250,6 +250,20 @@ internal static class ChatTexts
     public static readonly ChatText ZonesAllTracks = new ("chat.zones.all_tracks", "While you edit zones, every track's are outlined.");
     public static readonly ChatText ZonesOwnTrack  = new ("chat.zones.own_track", "Only your track's zones are outlined again.");
 
+    // ---- !zone edit / move / rotate: a zone added in game, by its name and track
+    public static readonly ChatText ZoneStart       = new ("chat.zone.start", "Start");
+    public static readonly ChatText ZoneEnd         = new ("chat.zone.end", "End");
+    public static readonly ChatText ZoneCheckpoint  = new ("chat.zone.checkpoint", "Checkpoint {0}");
+    public static readonly ChatText ZoneStopTimer   = new ("chat.zone.stop", "Stop timer");
+    public static readonly ChatText ZoneReset       = new ("chat.zone.reset", "Reset");
+    public static readonly ChatText ZoneEditPicked  = new ("chat.zone.edit.picked", "Editing [lightgreen]{0}[white] ({1}): [lightgreen]!zone move x y z[white] moves it, [lightgreen]!zone rotate degrees[white] turns it.");
+    public static readonly ChatText ZoneEditNone    = new ("chat.zone.edit.none", "Stand in a zone added in game, or pick one with Edit on [lightgreen]!zone[white]'s panel.");
+    public static readonly ChatText ZoneEditPlaced  = new ("chat.zone.edit.placed", "[lightgreen]{0}[white] ({1}) is centred at [lightgreen]{2}[white], turned [lightgreen]{3}°[white].");
+    public static readonly ChatText ZoneEditFailed  = new ("chat.zone.edit.failed", "Couldn't change {0}.");
+    public static readonly ChatText ZoneEditDone    = new ("chat.zone.edit.done", "Stopped editing zones.");
+    public static readonly ChatText ZoneCantTurn    = new ("chat.zone.cant_turn", "Zones can't be turned on this server.");
+    public static readonly ChatText ZoneEditUsage   = new ("chat.zone.edit.usage", "[lightgreen]!zone move <x> <y> <z>[white] moves the zone by so many units, [lightgreen]!zone rotate <degrees>[white] turns it anticlockwise as seen from above.");
+
     public static readonly ChatText CountryShown  = new ("chat.country.shown", "Your profile shows your country again.");
     public static readonly ChatText CountryHidden = new ("chat.country.hidden", "Your country is hidden from your profile.");
 

@@ -713,11 +713,14 @@ public sealed class HudLayoutContractTests
     {
         var ids = HudModule.ZoneRowIds.Concat(HudModule.ZoneNameIds).Concat(HudModule.ZoneMapIds).Concat(HudModule.ZoneDelIds)
                            .Concat(HudModule.ZoneDelLabel).Concat(HudModule.ZoneTypeIds).Concat(HudModule.ZoneTypeLabel)
-                           .Concat(HudModule.ZoneGoIds).Concat(HudModule.ZoneGoHint)
+                           .Concat(HudModule.ZoneGoIds).Concat(HudModule.ZoneGoHint).Concat(HudModule.ZoneEditIds).Concat(HudModule.ZoneEditLabel)
                            .Concat(["ZnMenu", "ZnCount", "ZnTrackPrev", "ZnTrackValue", "ZnTrackNext", "ZnEmpty", "ZnPrev", "ZnPage", "ZnNext",
                                     "ZnAdd", "ZnNumPrev", "ZnNumberValue", "ZnNumNext", "ZnStatus", "ZnStatusName", "ZnStatusSub", "ZnNote",
                                     "ZnClose", "ZnPlace", "ZnPlaceLabel", "ZnPrompt", "ZnPromptTitle", "ZnPromptTrack", "ZnDot1", "ZnDot2",
-                                    "ZnStep", "ZnPromptDo", "ZnPromptKey", "LZnTall", "LZnHelp"]);
+                                    "ZnStep", "ZnPromptDo", "ZnPromptKey", "LZnTall", "LZnHelp",
+                                    "ZnEditBox", "ZnEditName", "ZnEditPlace", "ZnMoveStepPrev", "ZnMoveStepValue", "ZnMoveStepNext",
+                                    "ZnMoveXm", "ZnMoveXp", "ZnMoveYm", "ZnMoveYp", "ZnMoveZm", "ZnMoveZp",
+                                    "ZnTurnStepPrev", "ZnTurnStepValue", "ZnTurnStepNext", "ZnTurnLeft", "ZnTurnRight"]);
 
         foreach (var id in ids)
         {
@@ -1003,7 +1006,7 @@ public sealed class HudLocaleTests
         }
 
         // Anything else a label shows comes from the plugin, or reads the same in every language.
-        string[] same = ["W", "A", "S", "D", "−5s", "+5s"];
+        string[] same = ["W", "A", "S", "D", "−5s", "+5s", "X −", "X +", "Y −", "Y +", "Z −", "Z +"];
         var literal = Regex.Matches(xml, "<Label[^>]* text=\"([^\"]*)\"")
                            .Select(m => Regex.Replace(m.Groups[1].Value, @"{[sg]:[a-z0-9_:]+}", ""))
                            .Where(t => t.Any(char.IsLetter) && !same.Contains(t));

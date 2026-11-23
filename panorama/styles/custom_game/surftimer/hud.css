@@ -2086,6 +2086,24 @@
     color: white;
 }
 
+/* Edit sits before Delete, in its shape, blue on hover. */
+.ZnEdit {
+    margin-right: 6px;
+}
+
+.ZnEdit:hover {
+    background-color: #5ab4ff2e;
+}
+
+.ZnRow.editing {
+    background-color: #5ab4ff26;
+}
+
+/* The move and turn buttons, one width so they line up. */
+.ZnNudges .NomChip {
+    min-width: 56px;
+}
+
 .ZnStatusBox {
     width: 100%;
     height: fit-children;

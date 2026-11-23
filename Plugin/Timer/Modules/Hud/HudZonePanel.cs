@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Text;
+using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Modules.Hud;
 using Source2Surf.Timer.Modules.Zone;
@@ -27,8 +28,9 @@ using Source2Surf.Timer.Shared.Models.Zone;
 
 namespace Source2Surf.Timer.Modules;
 
-// The admin zone panel (!zone): list, delete and add zones. Placing takes aim, so the panel steps aside for a prompt
-// while a zone is placed, and comes back when one placed from it is done. The zone module keeps all the state.
+// The admin zone panel (!zone): list, delete, add and edit zones. Placing takes aim, so the panel steps aside for a prompt
+// while a zone is placed, and comes back when one placed from it is done. Editing moves and turns a zone added in game in
+// place, with the panel open. The zone module keeps all the state but the steps.
 internal partial class HudModule
 {
     internal const int ZoneRows = 8;
@@ -40,6 +42,8 @@ internal partial class HudModule
     internal static readonly string[] ZoneDelLabel = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnDel", i, "Label")).ToArray();
     internal static readonly string[] ZoneGoIds    = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnGo", i)).ToArray();
     internal static readonly string[] ZoneGoHint   = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnGo", i, "Hint")).ToArray();
+    internal static readonly string[] ZoneEditIds  = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnEdit", i)).ToArray();
+    internal static readonly string[] ZoneEditLabel = Enumerable.Range(0, ZoneRows).Select(i => ZString.Concat("ZnEdit", i, "Label")).ToArray();
 
     // The type chips, in EZoneType order.
     internal static readonly EZoneType[] ZoneTypes     = [EZoneType.Start, EZoneType.End, EZoneType.Stage, EZoneType.Checkpoint, EZoneType.StopTimer, EZoneType.Reset];
@@ -283,6 +287,11 @@ internal partial class HudModule
         w.Class("ZnTrackPrev", "disabled", z.Track == 0);
         w.Class("ZnTrackNext", "disabled", z.Track >= TimerConstants.MAX_TRACK - 1);
 
+        // The zone being edited; none while one is placed.
+        var target    = z.Build is null ? _zoneModule.GetEditTarget(p.Slot) : 0;
+        var placement = target != 0 ? _zoneModule.GetPlacement(target) : null;
+        var editing   = placement is not null;
+
         // This track's zones, a page of them.
         var first = z.Page * ZoneRows;
         var index = 0;
@@ -304,9 +313,11 @@ internal partial class HudModule
             w.Class(ZoneRowIds[row], "blank", false);
             w.Class(ZoneRowIds[row], "new", z.Added == entry.Id);
             w.Class(ZoneRowIds[row], "sel", z.Here == entry.Id);
+            w.Class(ZoneRowIds[row], "editing", editing && target == entry.Id);
             w.Text(ZoneNameIds[row], "text", ZoneName(p, entry.Type, entry.Number));
             w.Class(ZoneNameIds[row], "map", entry.Prebuilt);
             w.Class(ZoneMapIds[row], "Hidden", !entry.Prebuilt);
+            w.Class(ZoneEditIds[row], "Hidden", entry.Prebuilt || z.Build is not null);
             w.Class(ZoneDelIds[row], "Hidden", entry.Prebuilt);
             w.Class(ZoneDelIds[row], "confirm", confirm);
             w.Text(ZoneDelLabel[row], "text", tr[confirm ? HudTexts.ZnConfirm : HudTexts.ZnDelete]);
@@ -318,7 +329,9 @@ internal partial class HudModule
         {
             w.Class(ZoneRowIds[row], "blank", true);
             w.Class(ZoneRowIds[row], "sel", false);
+            w.Class(ZoneRowIds[row], "editing", false);
             w.Class(ZoneMapIds[row], "Hidden", true);
+            w.Class(ZoneEditIds[row], "Hidden", true);
             w.Class(ZoneDelIds[row], "Hidden", true);
             z.RowIds[row] = 0;
         }
@@ -328,10 +341,11 @@ internal partial class HudModule
         w.Class("ZnPrev", "disabled", z.Page == 0);
         w.Class("ZnNext", "disabled", z.Page >= pages - 1);
 
-        // Add a zone, or, while one is being placed, what's being placed.
+        // Add a zone; or what's being placed while one is; or the zone being edited.
         var placing = z.Build is not null;
-        w.Class("ZnAdd", "Hidden", placing);
+        w.Class("ZnAdd", "Hidden", placing || editing);
         w.Class("ZnStatus", "Hidden", !placing);
+        w.Class("ZnEditBox", "Hidden", !editing);
 
         string? note = z.Note;
         var     warn = z.Warn;
@@ -341,6 +355,30 @@ internal partial class HudModule
             w.Text("ZnStatusName", "text", ZString.Concat(ZoneName(p, build.Type, build.Number), " · ", TrackName(p, build.Track)));
             w.Text("ZnStatusSub", "text", tr.Format(HudTexts.ZnStatus, build.Step + 1));
             w.Text("ZnPlaceLabel", "text", tr[HudTexts.ZnCancel]);
+        }
+        else if (placement is { } at && zones.FirstOrDefault(x => x.Id == target) is { Id: not 0 } edited)
+        {
+            w.Text("ZnEditName", "text", ZString.Concat(ZoneName(p, edited.Type, edited.Number), " · ", TrackName(p, edited.Track)));
+            w.Text("ZnEditPlace", "text", tr.Format(HudTexts.ZnEditPlace, ZoneEdit.FormatPoint(at.Center), ZoneEdit.FormatYaw(at.Yaw)));
+            w.Text("ZnMoveStepValue", "value", tr.Format(HudTexts.ZnUnits, ZoneEdit.MoveSteps[z.MoveStep]));
+            w.Class("ZnMoveStepPrev", "disabled", z.MoveStep == 0);
+            w.Class("ZnMoveStepNext", "disabled", z.MoveStep >= ZoneEdit.MoveSteps.Length - 1);
+            w.Text("ZnTurnStepValue", "value", tr.Format(HudTexts.ZnDegrees, ZoneEdit.TurnSteps[z.TurnStep]));
+            w.Class("ZnTurnStepPrev", "disabled", z.TurnStep == 0);
+            w.Class("ZnTurnStepNext", "disabled", z.TurnStep >= ZoneEdit.TurnSteps.Length - 1);
+            w.Text("ZnPlaceLabel", "text", tr[HudTexts.ZnDone]);
+
+            if (note is null && !_zoneModule.CanTurnZones)
+            {
+                note = tr[HudTexts.ZnCantTurn];
+                warn = true;
+            }
+
+            if (note is null)
+            {
+                note = tr[HudTexts.ZnEditHint];
+                warn = false;
+            }
         }
         else
         {
@@ -428,6 +466,22 @@ internal partial class HudModule
                 PlaceZone(p);
 
                 return;
+            case "ZnMoveStepPrev" or "ZnMoveStepNext":
+                z.MoveStep = Math.Clamp(z.MoveStep + (buttonId == "ZnMoveStepNext" ? 1 : -1), 0, ZoneEdit.MoveSteps.Length - 1);
+
+                break;
+            case "ZnTurnStepPrev" or "ZnTurnStepNext":
+                z.TurnStep = Math.Clamp(z.TurnStep + (buttonId == "ZnTurnStepNext" ? 1 : -1), 0, ZoneEdit.TurnSteps.Length - 1);
+
+                break;
+            case "ZnMoveXm" or "ZnMoveXp" or "ZnMoveYm" or "ZnMoveYp" or "ZnMoveZm" or "ZnMoveZp":
+                ReshapeZone(p, Nudge(buttonId, ZoneEdit.MoveSteps[z.MoveStep]), 0f);
+
+                break;
+            case "ZnTurnLeft" or "ZnTurnRight":
+                ReshapeZone(p, new Vector(), buttonId == "ZnTurnLeft" ? ZoneEdit.TurnSteps[z.TurnStep] : -ZoneEdit.TurnSteps[z.TurnStep]);
+
+                break;
             default:
                 if (TryParseIndex(buttonId, "ZnType", out var type) && type < ZoneTypes.Length)
                 {
@@ -442,6 +496,11 @@ internal partial class HudModule
                 else if (TryParseIndex(buttonId, "ZnGo", out var go) && go < ZoneRows && z.RowIds[go] is var target and not 0)
                 {
                     TeleportToZone(p, target);
+                }
+                else if (TryParseIndex(buttonId, "ZnEdit", out var edit) && edit < ZoneRows && z.RowIds[edit] is var pick and not 0)
+                {
+                    z.Note = _zoneModule.SelectZone(p.Slot, pick) ? null : p.Tr.Format(HudTexts.ZnEditFailed, EntryName(p, pick));
+                    z.Warn = z.Note is not null;
                 }
 
                 break;
@@ -499,6 +558,46 @@ internal partial class HudModule
         z.Warn = !ok;
     }
 
+    // ZnMove + X/Y/Z + m(inus)/p(lus): that many units along the map's axis.
+    private static Vector Nudge(string buttonId, float step)
+    {
+        var by = buttonId[^1] == 'p' ? step : -step;
+
+        return buttonId["ZnMove".Length] switch
+        {
+            'X' => new Vector(by, 0, 0),
+            'Y' => new Vector(0, by, 0),
+            _   => new Vector(0, 0, by),
+        };
+    }
+
+    // Moves and turns the zone being edited; the panel stays open on it.
+    private void ReshapeZone(HudPlayer p, Vector delta, float degrees)
+    {
+        var z  = p.Zones;
+        var id = _zoneModule.GetEditTarget(p.Slot);
+
+        if (id == 0)
+        {
+            return;
+        }
+
+        if (degrees != 0f && !_zoneModule.CanTurnZones)
+        {
+            z.Note = p.Tr[HudTexts.ZnCantTurn];
+            z.Warn = true;
+
+            return;
+        }
+
+        var ok = degrees != 0f ? _zoneModule.TurnZone(p.Slot, id, degrees) : _zoneModule.MoveZone(p.Slot, id, delta);
+        z.Note = ok ? null : p.Tr.Format(HudTexts.ZnEditFailed, EntryName(p, id));
+        z.Warn = !ok;
+    }
+
+    private string EntryName(HudPlayer p, uint id)
+        => _zoneModule.GetZones().FirstOrDefault(x => x.Id == id) is { Id: not 0 } entry ? ZoneName(p, entry.Type, entry.Number) : string.Empty;
+
     private void PlaceZone(HudPlayer p)
     {
         var z = p.Zones;
@@ -511,6 +610,16 @@ internal partial class HudModule
             z.Note      = p.Tr[HudTexts.ZnCancelled];
             z.Warn      = false;
             z.Dirty     = true;
+
+            return;
+        }
+
+        // While editing, this button ends it.
+        if (_zoneModule.GetEditTarget(p.Slot) != 0)
+        {
+            _zoneModule.DeselectZone(p.Slot);
+            z.Note  = null;
+            z.Dirty = true;
 
             return;
         }
