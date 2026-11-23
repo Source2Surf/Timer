@@ -269,7 +269,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         {
             case EZoneType.Start:
             {
-                timerInfo.StopTimer();
+                StopTimer(controller.PlayerSlot);
 
                 // Clamp speed on entering start zone: kill momentum from flying in, don't preserve Z velocity
                 var enterLimit = _mapInfoModule.GetEnterSpeedLimit(info.Track);
