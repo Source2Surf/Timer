@@ -1893,7 +1893,7 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                 Angles         = new (angles.X, angles.Y),
                 PressedButtons = service.KeyButtons,
                 ChangedButtons = service.KeyChangedButtons,
-                ScrollButtons  = service.ScrollButtons,
+                ScrollButtons  = arg.ScrollButtons,
                 MoveType       = pawn.MoveType,
                 Velocity       = pawn.GetAbsVelocity(),
             });
