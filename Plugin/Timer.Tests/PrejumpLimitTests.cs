@@ -33,6 +33,10 @@ public sealed class PrejumpLimitTests
         run.StartTimer(0, new Vector());
         Assert.False(TimerModule.IsStageStart(run, stage));
 
+        // 主表暂停时站在里面
+        run.PauseTimer();
+        Assert.False(TimerModule.IsStageStart(run, stage));
+
         stage.UpdateInZone(EZoneType.Invalid);
         run.StopTimer();
         Assert.False(TimerModule.IsStageStart(run, stage));

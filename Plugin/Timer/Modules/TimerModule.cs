@@ -579,7 +579,9 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             }
             case EZoneType.Stage:
             {
-                if (_zoneModule.IsCurrentTrackLinear(timerInfo.Track) || stageTimer.Stage != info.Data)
+                if (timerInfo.IsTimerPaused()
+                    || _zoneModule.IsCurrentTrackLinear(timerInfo.Track)
+                    || stageTimer.Stage != info.Data)
                 {
                     return;
                 }

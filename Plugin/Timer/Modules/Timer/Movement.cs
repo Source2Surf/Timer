@@ -129,7 +129,7 @@ internal partial class TimerModule
     ///     only passed through, as its speed limits are: a second hop in it had the player stopped dead.
     /// </summary>
     internal static bool IsStageStart(TimerInfo timerInfo, TimerInfo stageTimer)
-        => stageTimer.InZone == EZoneType.Stage && !timerInfo.IsTimerRunning();
+        => stageTimer.InZone == EZoneType.Stage && !timerInfo.IsTimerRunning() && !timerInfo.IsTimerPaused();
 
     private unsafe void OnPlayerProcessMovePost(IPlayerProcessMoveForwardParams arg)
     {
