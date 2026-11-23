@@ -255,7 +255,8 @@ internal partial class TimerModule
     private void OnPlayerJump(IGameEvent e)
     {
         if (e.GetPlayerController("userid") is not { IsValidEntity: true } controller
-            || _timerInfo[controller.PlayerSlot] is not { } timerInfo)
+            || _timerInfo[controller.PlayerSlot] is not { } timerInfo
+            || timerInfo.IsTimerPaused())
         {
             return;
         }
