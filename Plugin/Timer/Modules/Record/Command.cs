@@ -50,7 +50,7 @@ internal partial class RecordModule
 
         var stage = command.TryGetArg<byte>(1, out var s) ? s : 0;
 
-        if (stage < 1)
+        if (stage < 1 || stage >= TimerConstants.MAX_STAGE)
         {
             controller.PrintToChat(tr[ChatTexts.UsageSwr]);
             return ECommandAction.Handled;
@@ -81,7 +81,7 @@ internal partial class RecordModule
 
         var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
-        if (bonus < 1)
+        if (bonus < 1 || bonus >= TimerConstants.MAX_TRACK)
         {
             controller.PrintToChat(tr[ChatTexts.UsageBtop]);
             return ECommandAction.Handled;
@@ -121,7 +121,7 @@ internal partial class RecordModule
 
         var bonus = command.TryGetArg<byte>(1, out var b) ? b : 1;
 
-        if (bonus < 1)
+        if (bonus < 1 || bonus >= TimerConstants.MAX_TRACK)
         {
             controller.PrintToChat(tr[ChatTexts.UsageBwr]);
             return ECommandAction.Handled;
@@ -186,7 +186,7 @@ internal partial class RecordModule
 
         var stage = command.TryGetArg<byte>(1, out var s) ? s : 0;
 
-        if (stage < 1)
+        if (stage < 1 || stage >= TimerConstants.MAX_STAGE)
         {
             controller.PrintToChat(tr[ChatTexts.UsageSpb]);
             return ECommandAction.Handled;
