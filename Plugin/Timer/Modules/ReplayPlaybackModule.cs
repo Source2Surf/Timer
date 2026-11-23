@@ -554,8 +554,12 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
     private void Timer_CheckReplayBot()
     {
         // don't add bots if there are no clients in the server to prevent bots from disappearing in scoreboard/hud
-        if (_bridge.ClientManager.GetClientCount(true) == 0)
+        if (!HasPlayerInGame())
+        {
+            KickReplayBots();
+
             return;
+        }
 
         if (_replayBots.Count < _replayBotConfigs.Length)
         {
@@ -589,6 +593,27 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
             }
 
             pawn.RemoveAllItems();
+        }
+    }
+
+    private bool HasPlayerInGame()
+    {
+        foreach (var client in _bridge.ClientManager.GetGameClients(true))
+        {
+            if (!client.IsFakeClient && !client.IsHltv)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void KickReplayBots()
+    {
+        foreach (var bot in _replayBots.ToArray())
+        {
+            _bridge.ClientManager.KickClient(bot.Client, "no", NetworkDisconnectionReason.Kicked);
         }
     }
 
