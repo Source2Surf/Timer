@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
@@ -150,7 +151,9 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     private readonly IZoneModule _zoneModule;
     private readonly IMovementFixModule _movementFix;
 
-    private readonly IConVar sv_standable_normal;
+    private readonly List<(IConVar ConVar, ConVarFlags Flags)> _strippedFlags;
+
+    private IConVar sv_standable_normal = null!;
 
     public TimerModule(InterfaceBridge      bridge,
                        IPlayerManager       playerManager,
@@ -184,28 +187,23 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _zoneStartSuppress = new int[PlayerSlot.MaxPlayerCount];
         _noclipped         = new bool[PlayerSlot.MaxPlayerCount];
 
-        sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
-
-        // ReSharper disable InconsistentNaming
-        if (bridge.ConVarManager.FindConVar("view_punch_decay") is { } view_punch_decay)
-        {
-            view_punch_decay.Flags &= ~ConVarFlags.Cheat;
-
-            view_punch_decay.Set(1000000f);
-        }
-
-        if (bridge.ConVarManager.FindConVar("sv_suppress_viewpunch", true) is { } sv_suppress_viewpunch)
-        {
-            sv_suppress_viewpunch.Flags &= ~ConVarFlags.DevelopmentOnly;
-
-            sv_suppress_viewpunch.Set(1);
-        }
-
-        // ReSharper restore InconsistentNaming
+        _strippedFlags = [];
     }
 
     public bool Init()
     {
+        if (_bridge.ConVarManager.FindConVar("sv_standable_normal") is not { } standableNormal)
+        {
+            _logger.LogError("Failed to find convar sv_standable_normal");
+
+            return false;
+        }
+
+        sv_standable_normal = standableNormal;
+
+        StripFlags("view_punch_decay",      ConVarFlags.Cheat)?.Set(1000000f);
+        StripFlags("sv_suppress_viewpunch", ConVarFlags.DevelopmentOnly, true)?.Set(1);
+
         _eventHook.ListenEvent("player_jump", OnPlayerJump);
         _eventHook.HookEvent("player_team", hk_OnPlayerJoinTeam);
 
@@ -243,6 +241,26 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _zoneModule.UnregisterListener(this);
 
         _playerManager.UnregisterListener(this);
+
+        foreach (var (conVar, flags) in _strippedFlags)
+        {
+            conVar.Flags |= flags;
+        }
+
+        _strippedFlags.Clear();
+    }
+
+    private IConVar? StripFlags(string name, ConVarFlags flags, bool useIterator = false)
+    {
+        if (_bridge.ConVarManager.FindConVar(name, useIterator) is not { } conVar)
+        {
+            return null;
+        }
+
+        _strippedFlags.Add((conVar, conVar.Flags & flags));
+        conVar.Flags &= ~flags;
+
+        return conVar;
     }
 
     public void OnZoneStartTouch(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)

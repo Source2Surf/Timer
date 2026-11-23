@@ -87,6 +87,8 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
     // ReSharper restore InconsistentNaming
 
+    private readonly List<(IConVar ConVar, ConVarFlags Flags)> _strippedFlags;
+
     private CancellationTokenSource _mapRecordLoadToken = new();
 
     // Static bot creation flag
@@ -121,6 +123,7 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
         _hasNoBotParam = bridge.ModSharp.HasCommandLine("-nobots");
 
         _replayBotBySlot = new ReplayBotData?[PlayerSlot.MaxPlayerCount];
+        _strippedFlags   = [];
 
         mp_randomspawn = bridge.ConVarManager.FindConVar("mp_randomspawn") ?? throw new Exception("Failed to find convar mp_randomspawn");
 
@@ -166,6 +169,9 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
     {
         _replayProviderProxy.RefreshProvider();
 
+        StripFlags("bot_zombie", ConVarFlags.Cheat);
+        StripFlags("bot_stop",   ConVarFlags.Cheat);
+
         _bridge.ModSharp.InstallGameListener(this);
 
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnPlayerProcessMovementPre);
@@ -186,24 +192,30 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
 
         _playerManager.UnregisterListener(this);
         _recordModule.UnregisterListener(this);
+
+        foreach (var (conVar, flags) in _strippedFlags)
+        {
+            conVar.Flags |= flags;
+        }
+
+        _strippedFlags.Clear();
+    }
+
+    private void StripFlags(string name, ConVarFlags flags)
+    {
+        if (_bridge.ConVarManager.FindConVar(name) is not { } conVar)
+        {
+            return;
+        }
+
+        _strippedFlags.Add((conVar, conVar.Flags & flags));
+        conVar.Flags &= ~flags;
     }
 
     public void OnServerActivate()
     {
-        // ReSharper disable InconsistentNaming
-        if (_bridge.ConVarManager.FindConVar("bot_zombie") is { } bot_zombie)
-        {
-            bot_zombie.Flags &= ~ConVarFlags.Cheat;
-            bot_zombie.Set("1");
-        }
-
-        if (_bridge.ConVarManager.FindConVar("bot_stop") is { } bot_stop)
-        {
-            bot_stop.Flags &= ~ConVarFlags.Cheat;
-            bot_stop.Set("1");
-        }
-
-        // ReSharper restore InconsistentNaming
+        _bridge.ConVarManager.FindConVar("bot_zombie")?.Set("1");
+        _bridge.ConVarManager.FindConVar("bot_stop")?.Set("1");
 
         if (_hasNoBotParam)
         {
