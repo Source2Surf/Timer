@@ -119,14 +119,29 @@ internal static class Utils
         => ZString.Concat(ChatColor.LightGreen, value, ChatColor.White);
 
     /// <summary>
-    ///     A signed chat-colored time delta: red <c>+</c> when losing time,
-    ///     green <c>-</c> when ahead, followed by |delta| and a reset to white.
+    ///     A signed chat-colored time delta, <paramref name="time" /> - <paramref name="reference" />: red <c>+</c> when
+    ///     losing time, green <c>-</c> when ahead, followed by |delta| and a reset to white. Taken from the milliseconds
+    ///     each shows, so it agrees with the two times on screen.
     /// </summary>
-    public static string SignedDelta(float delta, bool precise = true)
-        => ZString.Concat(delta >= 0f ? ChatColor.Red : ChatColor.LightGreen,
-                          delta >= 0f ? '+' : '-',
-                          FormatTime(MathF.Abs(delta), precise),
-                          ChatColor.White);
+    public static string SignedDelta(float time, float reference)
+    {
+        var ms = Millis(time) - Millis(reference);
+        var sb = ZString.CreateStringBuilder(true);
+
+        try
+        {
+            sb.Append(ms >= 0 ? ChatColor.Red : ChatColor.LightGreen);
+            sb.Append(ms >= 0 ? '+' : '-');
+            AppendMillis(ref sb, Math.Abs(ms));
+            sb.Append(ChatColor.White);
+
+            return sb.ToString();
+        }
+        finally
+        {
+            sb.Dispose();
+        }
+    }
 
     private static void AppendPadded2(ref Utf16ValueStringBuilder sb, int value)
     {

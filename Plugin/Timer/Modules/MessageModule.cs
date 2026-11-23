@@ -126,8 +126,8 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
                                         checkpoint,
                                         _zoneModule.GetLastCheckpoint(timerInfo.Track),
                                         timerInfo.Time,
-                                        wr is not null && index >= 0 && index < wr.Count ? timerInfo.Time - wr[index].Time : null,
-                                        pb is not null && index >= 0 && index < pb.Count ? timerInfo.Time - pb[index].Time : null,
+                                        wr is not null && index >= 0 && index < wr.Count ? wr[index].Time : null,
+                                        pb is not null && index >= 0 && index < pb.Count ? pb[index].Time : null,
                                         index >= 0 && index < timerInfo.Checkpoints.Count
                                             ? timerInfo.Checkpoints[index].EndVelocity.Length2D()
                                             : null));
@@ -137,18 +137,18 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
     ///     "CP 1/4 | 16.171 | SR -0.123 | PB +0.045 | 1290 u/s": grey, with its values in colour. Without an SR, a PB
     ///     or a speed, that part is left out.
     /// </summary>
-    internal static string CheckpointLine(ChatTr tr, int checkpoint, int total, float time, float? vsSr, float? vsPb, float? speed)
+    internal static string CheckpointLine(ChatTr tr, int checkpoint, int total, float time, float? srTime, float? pbTime, float? speed)
     {
         var line = tr.Format(ChatTexts.Checkpoint, checkpoint, Math.Max(total, checkpoint), Utils.FormatTime(time, true));
 
-        if (vsSr is { } sr)
+        if (srTime is { } sr)
         {
-            line = ZString.Concat(line, tr.Format(ChatTexts.VsSr, Utils.SignedDelta(sr)));
+            line = ZString.Concat(line, tr.Format(ChatTexts.VsSr, Utils.SignedDelta(time, sr)));
         }
 
-        if (vsPb is { } pb)
+        if (pbTime is { } pb)
         {
-            line = ZString.Concat(line, tr.Format(ChatTexts.VsPb, Utils.SignedDelta(pb)));
+            line = ZString.Concat(line, tr.Format(ChatTexts.VsPb, Utils.SignedDelta(time, pb)));
         }
 
         if (speed is { } s && float.IsFinite(s))
@@ -209,7 +209,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
     {
         var record = recordEvent.SavedRecord;
         var style  = _styleModule.GetStyleSetting(record.Style).Name;
-        var delta  = recordEvent.WrRecord is { } sr ? Improvement(sr.Time, record.Time) : null;
+        var delta  = recordEvent.WrRecord is { } sr ? Utils.SignedDelta(record.Time, sr.Time) : null;
 
         _bridge.PrintToChatAll(_localization,
                                              tr => ZString.Concat(tr[ChatTexts.FinishSr],
@@ -224,7 +224,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
     {
         var record        = recordEvent.SavedRecord;
         var style         = _styleModule.GetStyleSetting(record.Style).Name;
-        var delta         = recordEvent.PbRecord is { } pb ? Improvement(pb.Time, record.Time) : null;
+        var delta         = recordEvent.PbRecord is { } pb ? Utils.SignedDelta(record.Time, pb.Time) : null;
         var (rank, total) = recordEvent.IsStageRecord ? (0, 0) : GetRank(record, recordEvent.PbRecord is null);
 
         string Message(ChatTr tr)
@@ -256,7 +256,7 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
 
         if (recordEvent.PbRecord is { } pb)
         {
-            message += tr.Format(ChatTexts.FinishVsPb, Utils.SignedDelta(record.Time - pb.Time));
+            message += tr.Format(ChatTexts.FinishVsPb, Utils.SignedDelta(record.Time, pb.Time));
         }
 
         controller.PrintToChat(message);
@@ -269,9 +269,6 @@ internal class MessageModule : IModule, IMessageModule, IRecordModuleListener, I
         => record.Stage <= 0 ? tr.Track(record.Track)
             : record.Track <= 0 ? tr.Format(ChatTexts.TrackStage, record.Stage)
                                   : tr.Format(ChatTexts.TrackBonusStage, record.Track, record.Stage);
-
-    private static string Improvement(float previous, float time)
-        => ZString.Concat(ChatColor.LightGreen, '-', Utils.FormatTime(MathF.Max(previous - time, 0f), true), ChatColor.White);
 
     // The leaderboard is refreshed after this message, so it doesn't hold the new run yet: a first finish adds one.
     private (int rank, int total) GetRank(RunRecord record, bool firstFinish)

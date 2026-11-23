@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Sharp.Shared.Definition;
 using Sharp.Shared.Units;
+using Source2Surf.Timer;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Modules;
 using Source2Surf.Timer.Shared.Interfaces;
@@ -12,20 +13,27 @@ namespace Timer.Tests;
 public sealed class CheckpointMessageTests
 {
     // 1035 ticks: a run's time is whole ticks.
-    private const float Time = 1035 / 64f;
+    private const float Time   = 1035 / 64f;
+    private const float SrTime = 1043 / 64f;
+    private const float PbTime = 1032 / 64f;
 
     [Fact]
     public void ALineHasProgressTimeBothDiffsAndSpeed()
     {
-        var line = MessageModule.CheckpointLine(default, 1, 4, Time, -0.123f, 0.045f, 1290.4f);
+        var line = MessageModule.CheckpointLine(default, 1, 4, Time, SrTime, PbTime, 1290.4f);
 
-        Assert.Equal("CP 1/4 | 16.171 | SR -0.123 | PB +0.045 | 1290 u/s", Plain(line));
+        Assert.Equal("CP 1/4 | 16.171 | SR -0.125 | PB +0.046 | 1290 u/s", Plain(line));
         Assert.StartsWith(ChatColor.Grey, line);
         Assert.Contains(ChatColor.Gold + "16.171" + ChatColor.Grey, line);
-        Assert.Contains(ChatColor.LightGreen + "-0.123", line);
-        Assert.Contains(ChatColor.Red + "+0.045", line);
+        Assert.Contains(ChatColor.LightGreen + "-0.125", line);
+        Assert.Contains(ChatColor.Red + "+0.046", line);
         Assert.Contains(ChatColor.Blue + "1290" + ChatColor.Grey, line);
     }
+
+    // 17.140 对 16.171: 直接相减的 0.96875 截断后显示成 0.968
+    [Fact]
+    public void ADiffAgreesWithTheTwoTimesShown()
+        => Assert.Equal("+0.969", Plain(Utils.SignedDelta(1097 / 64f, Time)));
 
     [Fact]
     public void WithoutARecordOrPbItKeepsProgressTimeAndSpeed()
@@ -36,8 +44,8 @@ public sealed class CheckpointMessageTests
     {
         var chinese = new ChatTr(new LocaleFile("zh-cn"), default);
 
-        Assert.Equal("检查点 1/4 | 16.171 | SR -0.123 | PB +0.045 | 1290 u/s",
-                     Plain(MessageModule.CheckpointLine(chinese, 1, 4, Time, -0.123f, 0.045f, 1290f)));
+        Assert.Equal("检查点 1/4 | 16.171 | SR -0.125 | PB +0.046 | 1290 u/s",
+                     Plain(MessageModule.CheckpointLine(chinese, 1, 4, Time, SrTime, PbTime, 1290f)));
     }
 
     // The texts carry the colours, so a custom one recolours a value.

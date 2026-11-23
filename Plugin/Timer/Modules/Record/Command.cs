@@ -205,7 +205,7 @@ internal partial class RecordModule
 
         if (wr is not null)
         {
-            message += tr.Format(ChatTexts.PbVsSr, Utils.SignedDelta(pb.Time - wr.Time));
+            message += tr.Format(ChatTexts.PbVsSr, Utils.SignedDelta(pb.Time, wr.Time));
         }
 
         controller.PrintToChat(message);
@@ -379,7 +379,7 @@ internal partial class RecordModule
                                      var pbCp = pbCheckpoints[i];
                                      var wrCp = wrCheckpoints[i];
 
-                                     ctrl.PrintToChat(MessageModule.CheckpointLine(tr, i + 1, count, pbCp.Time, pbCp.Time - wrCp.Time, null, null));
+                                     ctrl.PrintToChat(MessageModule.CheckpointLine(tr, i + 1, count, pbCp.Time, wrCp.Time, null, null));
                                  }
 
                                  // Final time diff
@@ -389,7 +389,7 @@ internal partial class RecordModule
                                  }
 
                                  ctrl.PrintToChat(ZString.Concat(tr.Format(ChatTexts.CprFinal, Utils.FormatTime(pb.Time, true)),
-                                                                 tr.Format(ChatTexts.VsSr, Utils.SignedDelta(pb.Time - wr.Time))));
+                                                                 tr.Format(ChatTexts.VsSr, Utils.SignedDelta(pb.Time, wr.Time))));
                              });
 
         return ECommandAction.Handled;
