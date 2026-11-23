@@ -28,7 +28,7 @@ public sealed class ReplayBufferTests
         data.TimerStartFrame  = 100;
         data.TimerFinishFrame = 2900;
 
-        var snapshot = ReplayShared.CreateMainReplaySnapshot(data);
+        var snapshot = ReplayShared.CreateMainReplaySnapshot(data, 0);
 
         var frames = Assert.IsType<ReplayFrameData[]>(snapshot.Frames);
         Assert.Equal(3000, frames.Length);
@@ -46,7 +46,7 @@ public sealed class ReplayBufferTests
     {
         var data = Recording(100_000, 2000);
 
-        ReplayShared.CreateMainReplaySnapshot(data);
+        ReplayShared.CreateMainReplaySnapshot(data, 0);
 
         Assert.Equal(2000, data.Frames.Capacity);
     }
@@ -56,8 +56,25 @@ public sealed class ReplayBufferTests
     {
         var data = Recording(ReplayShared.InitialFrames, 100);
 
-        ReplayShared.CreateMainReplaySnapshot(data);
+        ReplayShared.CreateMainReplaySnapshot(data, 0);
 
         Assert.Equal(ReplayShared.InitialFrames, data.Frames.Capacity);
+    }
+
+    [Fact]
+    public void TheEndOfTheRecordingStaysAsTheNextRunsPreRun()
+    {
+        var data = Recording(4096, 3000);
+
+        var snapshot = ReplayShared.CreateMainReplaySnapshot(data, 200);
+
+        Assert.Equal(3000, snapshot.Frames.Count);
+        Assert.Equal(200, data.Frames.Count);
+        Assert.Equal((2800f, 2999f), (data.Frames[0].Origin.X, data.Frames[^1].Origin.X));
+
+        ReplayShared.DiscardMainRecording(data, 50);
+
+        Assert.Equal(50, data.Frames.Count);
+        Assert.Equal(2950f, data.Frames[0].Origin.X);
     }
 }

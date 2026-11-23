@@ -40,7 +40,7 @@ public class ReplaySnapshotAllocationBenchmark
     [InvocationCount(1)]
     public int MainSnapshot()
     {
-        var snapshot = ReplayShared.CreateMainReplaySnapshot(_mainFrame);
+        var snapshot = ReplayShared.CreateMainReplaySnapshot(_mainFrame, 0);
         var count = snapshot.Header.TotalFrames;
         GC.KeepAlive(snapshot.Frames);
         GC.KeepAlive(_mainFrame.Frames);
@@ -68,7 +68,7 @@ public class ReplaySnapshotAllocationBenchmark
         for (var i = 0; i < _frames.Length; i++)
             frame.Frames.Add(_frames[i]);
 
-        var snapshot = ReplayShared.CreateMainReplaySnapshot(frame);
+        var snapshot = ReplayShared.CreateMainReplaySnapshot(frame, 0);
         var count = snapshot.Header.TotalFrames;
         GC.KeepAlive(snapshot.Frames);
         GC.KeepAlive(frame.Frames);
@@ -82,7 +82,7 @@ public class ReplaySnapshotAllocationBenchmark
 
         var mainProbe = CreateRecordedFrame(_frames);
         mainProbe.NewStageTicks.Add(FrameCount / 2);
-        var mainSnapshot = ReplayShared.CreateMainReplaySnapshot(mainProbe);
+        var mainSnapshot = ReplayShared.CreateMainReplaySnapshot(mainProbe, 0);
         Require(mainSnapshot.Header.TotalFrames == FrameCount, "Main snapshot frame count changed.");
         Require(mainSnapshot.Header.PreFrame == 0 && mainSnapshot.Header.PostFrame == FrameCount,
                 "Main snapshot markers changed.");
@@ -132,7 +132,7 @@ public class ReplaySnapshotAllocationBenchmark
             "REPLAY_SNAPSHOT_SCOPE units=per-operation backingBytes=structural-not-rss "
           + "mainTiming=single-invocation-may-be-noisy");
         var current = CreateRecordedFrame(_frames);
-        var currentSnapshot = ReplayShared.CreateMainReplaySnapshot(current);
+        var currentSnapshot = ReplayShared.CreateMainReplaySnapshot(current, 0);
         WriteCapacityLine("current", 1, FrameCount,
                           ((List<ReplayFrameData>) currentSnapshot.Frames).Capacity,
                           current.Frames.Capacity);
@@ -155,7 +155,7 @@ public class ReplaySnapshotAllocationBenchmark
             for (var i = 0; i < count; i++)
                 frame.Frames.Add(default);
 
-            var snapshot = ReplayShared.CreateMainReplaySnapshot(frame);
+            var snapshot = ReplayShared.CreateMainReplaySnapshot(frame, 0);
             latestFrames = snapshot.Frames;
             WriteCapacityLine(scenario, step + 1, count,
                               ((List<ReplayFrameData>) snapshot.Frames).Capacity,

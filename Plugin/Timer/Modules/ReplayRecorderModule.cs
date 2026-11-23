@@ -734,15 +734,20 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
 
                                                               frame.StagePostFrameTimer = null;
 
+                                                              // 下一跑开表会经 ForceCallOnStop 提前跑到这里, 这时缓冲末尾就是它的前缓冲
+                                                              var keepFrames = (int) (timer_replay_prerun_time.GetFloat() * TimerConstants.Tickrate);
+
                                                               if (NeedsNoReplay(frame.PendingMainRecordResult, attemptId, style, track, 0, finishTime))
                                                               {
                                                                   frame.PendingMainRecordResult = null;
-                                                                  ReplayShared.DiscardMainRecording(frame);
+                                                                  ReplayShared.DiscardMainRecording(frame, keepFrames);
+                                                                  frame.Lineage = _nextLineage++;
 
                                                                   return TimerAction.Stop;
                                                               }
 
-                                                              var snapshot = ReplayShared.CreateMainReplaySnapshot(frame);
+                                                              var snapshot = ReplayShared.CreateMainReplaySnapshot(frame, keepFrames);
+                                                              frame.Lineage = _nextLineage++;
 
                                                               StorePendingReplay(frame, snapshot, stage: 0, attemptId,
                                                                                  style, track);

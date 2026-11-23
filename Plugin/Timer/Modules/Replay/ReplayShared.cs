@@ -499,15 +499,16 @@ internal static class ReplayShared
 
     /// <summary>
     /// Create a main replay snapshot from PlayerFrameData.
-    /// Resets the frame buffer and timer state on the source frame data.
+    /// Resets the frame buffer and timer state on the source frame data, keeping the last
+    /// <paramref name="keepFrames"/> frames as the next run's pre-run.
     /// </summary>
-    public static ReplaySaveSnapshot CreateMainReplaySnapshot(PlayerFrameData frame)
+    public static ReplaySaveSnapshot CreateMainReplaySnapshot(PlayerFrameData frame, int keepFrames)
     {
         // The replay gets an exact copy and the buffer is kept for the next run, at its size unless it grew far past
         // this run (a long warm-up, then short attempts).
         var buffer       = frame.Frames;
         var framesBuffer = buffer.ToArray();
-        buffer.Clear();
+        TrimPreRunFrames(frame, keepFrames);
 
         if (buffer.Capacity > 4 * Math.Max(framesBuffer.Length, InitialFrames))
         {
@@ -538,9 +539,9 @@ internal static class ReplayShared
     /// What <see cref="CreateMainReplaySnapshot" /> does to the recording, for a finish that keeps no replay: reset,
     /// without copying its frames.
     /// </summary>
-    public static void DiscardMainRecording(PlayerFrameData frame)
+    public static void DiscardMainRecording(PlayerFrameData frame, int keepFrames)
     {
-        frame.Frames.Clear();
+        TrimPreRunFrames(frame, keepFrames);
         frame.NewStageTicks.Clear();
         frame.StageTimerStartTicks.Clear();
         frame.TimerStartFrame  = 0;
