@@ -35,7 +35,7 @@ internal readonly record struct ZonePlacement(Vector Center, float Yaw);
 
 internal static class ZoneEdit
 {
-    public const int MaxNumber = 99;
+    public const int MaxNumber = TimerConstants.MAX_STAGE - 1;
 
     // The editor's steps: units a move, degrees a turn.
     public static readonly int[] MoveSteps = [1, 2, 4, 8, 16, 32, 64, 128];
@@ -152,13 +152,17 @@ internal static class ZoneEdit
             _                    => 0,
         };
 
+    // 到终点还要补一条末段, 一条成绩最多提交 MAX_STAGE - 1 条检查点
+    public static int LastNumber(EZoneType type)
+        => type == EZoneType.Checkpoint ? MaxNumber - 1 : MaxNumber;
+
     public static bool IsNumbered(EZoneType type)
         => type is EZoneType.Stage or EZoneType.Checkpoint;
 
     public static bool IsValid(int track, EZoneType type, int number)
         => track is >= 0 and < TimerConstants.MAX_TRACK
            && type is > EZoneType.Invalid and < EZoneType.Max
-           && (IsNumbered(type) ? number >= FirstNumber(type) && number <= MaxNumber : number == 0);
+           && (IsNumbered(type) ? number >= FirstNumber(type) && number <= LastNumber(type) : number == 0);
 
     public static int NextNumber(IEnumerable<ZoneEntry> zones, int track, EZoneType type)
     {
@@ -177,7 +181,7 @@ internal static class ZoneEdit
             }
         }
 
-        return next;
+        return Math.Min(next, LastNumber(type));
     }
 
     // Main track first, then bonuses; in a track: start, stages, checkpoints, end, stop timer.

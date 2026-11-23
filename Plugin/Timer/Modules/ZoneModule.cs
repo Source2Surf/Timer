@@ -448,6 +448,16 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                              {
                                  var zoneInfo = ZoneMapper.ToZoneInfo(zoneData);
 
+                                 if (!ZoneEdit.IsValid(zoneInfo.Track, zoneInfo.ZoneType, zoneInfo.Data))
+                                 {
+                                     _logger.LogWarning("Skipped stored zone (track={Track}, type={Type}, number={Number}): out of range",
+                                                        zoneInfo.Track,
+                                                        zoneInfo.ZoneType,
+                                                        zoneInfo.Data);
+
+                                     continue;
+                                 }
+
                                  try
                                  {
                                      AddZone(zoneInfo);
@@ -818,7 +828,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             }
             case EZoneType.Stage:
             {
-                if (!ZoneMatcher.IsStageZone(targetName, out var stage))
+                if (!ZoneMatcher.IsStageZone(targetName, out var stage) || !NumberInRange(targetName, EZoneType.Stage, stage))
                 {
                     return false;
                 }
@@ -838,7 +848,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                 {
                     info.Data = cp;
 
-                    return TryAddZoneToIndex(handle, info);
+                    return NumberInRange(targetName, EZoneType.Checkpoint, cp) && TryAddZoneToIndex(handle, info);
                 }
 
                 if (ZoneMatcher.IsBonusCheckpointZone(targetName, out var bonusTrack, out cp))
@@ -846,12 +856,24 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
                     info.Track = bonusTrack;
                     info.Data  = cp;
 
-                    return TryAddZoneToIndex(handle, info);
+                    return NumberInRange(targetName, EZoneType.Checkpoint, cp) && TryAddZoneToIndex(handle, info);
                 }
 
                 break;
             }
         }
+
+        return false;
+    }
+
+    private bool NumberInRange(string name, EZoneType type, int number)
+    {
+        if (number <= ZoneEdit.LastNumber(type))
+        {
+            return true;
+        }
+
+        _logger.LogWarning("Map trigger {Name} is numbered {Number}, past what a run can submit; not used as a zone", name, number);
 
         return false;
     }

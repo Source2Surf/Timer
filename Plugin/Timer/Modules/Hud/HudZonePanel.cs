@@ -392,7 +392,7 @@ internal partial class HudModule
 
             w.Text("ZnNumberValue", "value", numbered ? z.Number.ToString(System.Globalization.CultureInfo.InvariantCulture) : "—");
             w.Class("ZnNumPrev", "disabled", !numbered || z.Number <= ZoneEdit.FirstNumber(z.Type));
-            w.Class("ZnNumNext", "disabled", !numbered || z.Number >= ZoneEdit.MaxNumber);
+            w.Class("ZnNumNext", "disabled", !numbered || z.Number >= ZoneEdit.LastNumber(z.Type));
 
             var name = ZoneName(p, z.Type, z.Number);
             w.Text("ZnPlaceLabel", "text", tr.Format(HudTexts.ZnPlace, name));
@@ -457,7 +457,7 @@ internal partial class HudModule
             case "ZnNumPrev" or "ZnNumNext":
                 if (ZoneEdit.IsNumbered(z.Type))
                 {
-                    z.Number = Math.Clamp(z.Number + (buttonId == "ZnNumNext" ? 1 : -1), ZoneEdit.FirstNumber(z.Type), ZoneEdit.MaxNumber);
+                    z.Number = Math.Clamp(z.Number + (buttonId == "ZnNumNext" ? 1 : -1), ZoneEdit.FirstNumber(z.Type), ZoneEdit.LastNumber(z.Type));
                     z.Note   = null;
                 }
 
