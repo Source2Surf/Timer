@@ -186,6 +186,10 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         _mapInfoModule     = mapInfoModule;
         _buildZoneInfo     = new BuildZoneInfo?[PlayerSlot.MaxPlayerCount];
 
+        timer_zone_solidify = bridge.ConVarManager.CreateConVar("timer_zone_solidify",
+                                                                true,
+                                                                "Make map zones built as hollow shells solid, from the next map");
+
         for (var t = 0; t < TimerConstants.MAX_TRACK; t++)
         {
             for (var z = 0; z < ZoneTypeCount; z++)
@@ -239,6 +243,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 #endif
 
             entity.SetNetVar("m_flWait", TimerConstants.TickInterval);
+            RebuildIfHollowLater(handle);
 
             return;
         }
@@ -249,6 +254,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
             _logger.LogInformation("Added prebuilt zone: {name}", targetName);
 #endif
             entity.SetNetVar("m_flWait", TimerConstants.TickInterval);
+            RebuildIfHollowLater(handle);
 
             return;
         }

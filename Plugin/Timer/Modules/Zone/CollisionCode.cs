@@ -31,8 +31,104 @@ internal static class CollisionCode
     // Bytes read of the function that creates a trigger: the box set up comes after spawning it.
     private const int CreateTriggerWindow = 0xC00;
 
+    // Levels of calls and jumps followed from SetSolid: Linux's SetSolid jumps to its body, which makes the call.
+    private const int Depth = 2;
+
     // Instructions read for the jump of a stub.
     private const int StubLength = 4;
+
+    // The slot the schema puts after the capsule's radius, 8-aligned.
+    public static int Expected(int capsuleRadiusOffset)
+        => (capsuleRadiusOffset + sizeof(float) + 7) & ~7;
+
+    // Where CCollisionProperty keeps the RnHull_t a SOLID_CYLINDER (8) trigger's physics are built from. It isn't a
+    // schema field: it's the pointer right after m_flCapsuleRadius. SetSolid rebuilds it when the type is 8, storing what
+    // the physics interface built: `call [rax+...]` then `mov [this+offset], rax`. Windows does it in a function that
+    // compares [this+m_nSolidType] with 8 itself; Linux compares in SetSolid's body and calls a function that only builds
+    // and stores. So the store counts where its function, or the one that called it, compares something with 8, and only
+    // at the slot the schema puts after m_flCapsuleRadius. Null when no store matches it.
+    public static int? ShapeSlot(ulong setSolid, int expected, Func<ulong, int, byte[]?> read)
+    {
+        var queue = new Queue<(ulong Address, int Depth, bool CallerComparesEight)>();
+        var seen  = new HashSet<ulong>();
+        queue.Enqueue((setSolid, 0, false));
+
+        while (queue.TryDequeue(out var item))
+        {
+            if (!seen.Add(item.Address) || read(item.Address, Window) is not { } code)
+            {
+                continue;
+            }
+
+            var decoder       = Decoder.Create(64, new ByteArrayCodeReader(code), item.Address);
+            var end           = item.Address + (ulong) code.Length;
+            var comparesEight = false;
+            var stores        = false;
+            var targets       = new List<ulong>();
+            var previous      = default(Instruction);
+
+            while (decoder.IP < end)
+            {
+                decoder.Decode(out var instruction);
+
+                if (instruction.IsInvalid)
+                {
+                    break;
+                }
+
+                // cmp <byte>, 8
+                if (instruction.Mnemonic == Mnemonic.Cmp
+                    && instruction.Op1Kind == OpKind.Immediate8
+                    && instruction.Immediate8 == 8
+                    && (instruction.Op0Kind == OpKind.Register ? instruction.Op0Register.GetSize() == 1 : instruction.MemorySize == MemorySize.UInt8))
+                {
+                    comparesEight = true;
+                }
+
+                // call [reg+x], then mov [reg+expected], rax
+                if (previous.Mnemonic == Mnemonic.Call
+                    && previous.Op0Kind == OpKind.Memory
+                    && instruction.Mnemonic == Mnemonic.Mov
+                    && instruction.Op0Kind == OpKind.Memory
+                    && instruction.MemorySize == MemorySize.UInt64
+                    && instruction.MemoryBase is not (Register.RSP or Register.RIP or Register.None)
+                    && instruction.Op1Kind == OpKind.Register
+                    && instruction.Op1Register == Register.RAX
+                    && (long) instruction.MemoryDisplacement64 == expected)
+                {
+                    stores = true;
+                }
+
+                if (instruction.FlowControl is FlowControl.Call or FlowControl.UnconditionalBranch
+                    && instruction.Op0Kind == OpKind.NearBranch64)
+                {
+                    targets.Add(instruction.NearBranchTarget);
+                }
+
+                if (IsEnd(previous, instruction))
+                {
+                    break;
+                }
+
+                previous = instruction;
+            }
+
+            if (stores && (comparesEight || item.CallerComparesEight))
+            {
+                return expected;
+            }
+
+            if (item.Depth < Depth)
+            {
+                foreach (var target in targets)
+                {
+                    queue.Enqueue((target, item.Depth + 1, comparesEight));
+                }
+            }
+        }
+
+        return null;
+    }
 
     // Where SetSolid's work is done. Linux's SetSolid is a stub (`cmp [rdi+m_nSolidType], sil; je; movzx; jmp body`) and
     // most callers, the box set up among them, check the type themselves and call the body: a call to either is a call

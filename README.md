@@ -84,6 +84,21 @@ dotnet run -c Release --project tools/MapZoneScanner -- {CS2}/game/bin/linuxstea
 The prefix (default `bhop`) picks the maps by name. A map's skybox and prefab
 maps count as part of it; zones drawn with `!zone` are in the database, not seen.
 
+### Hollow map zones
+
+Some maps build a zone as shells around an empty inside, as an open mesh or as a plate a few units thin. A player
+inside it and touching none of its faces isn't in it, so a jump in a start zone starts the timer and the landing
+restarts it; a closed mesh counts its inside. When the map loads, the plugin gives a shell zone's trigger one solid hull
+around its points instead, if its footprint is convex (`timer_zone_solidify`, on by default); the others are only
+logged. `tools/ZoneShapeScanner` runs the same check (`ZoneSolidity`) over the workshop maps and writes every zone to
+`zone-shapes.csv`:
+
+```sh
+dotnet run -c Release --project tools/ZoneShapeScanner -- {CS2}/game/bin/linuxsteamrt64/steamapps/workshop/content/730 [prefixes]
+```
+
+The prefixes (default `surf,bhop`) pick the maps by name.
+
 ## Commands
 
 - **Timer:** `!r` / `!main`, `!b<n>`, `!s <n>`, `!end`, `!stop`, `!pause`, `!nc`, `!style`. `!r` and `!b<n>` also pick
