@@ -48,6 +48,8 @@ internal sealed class SavedLoc
 
     public required PhysicsSnapshot Physics { get; init; }
 
+    public required bool Noclipped { get; init; }
+
     public TimerStateSnapshot? Timer { get; init; }
 
     public StageTimerStateSnapshot? StageTimer { get; init; }

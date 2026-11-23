@@ -160,6 +160,7 @@ internal sealed partial class PracticeManager : IModule,
             Segmented  = segmented,
             Track      = track,
             Physics    = CapturePhysics(pawn),
+            Noclipped  = _timerModule.HasNoclipped(slot),
             Timer      = timerSnapshot,
             StageTimer = stageTimerSnapshot,
             BhopBlocks = _movementFix.CaptureBhopBlocks(slot),
@@ -277,6 +278,7 @@ internal sealed partial class PracticeManager : IModule,
         }
 
         _timerModule.SuppressZoneStarts(slot);
+        _timerModule.SetNoclipped(slot, loc.Noclipped);
 
         _movementFix.RestoreBhopBlocks(slot, loc.BhopBlocks);
 

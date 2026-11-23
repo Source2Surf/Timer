@@ -1683,6 +1683,10 @@
     "en-us": "Timer stopped: missing checkpoints",
     "zh-cn": "计时已停止：跳过了检查点"
   },
+  "chat.timer.noclip_restart": {
+    "en-us": "You used noclip. Type [lightgreen]!r[white] to restart before the timer can start.",
+    "zh-cn": "使用过穿墙，需要输入 [lightgreen]!r[white] 重新开始后才能计时。"
+  },
   "chat.timer.unverified": {
     "en-us": "Your Steam account has not been verified yet. The server may not be connected to Steam. Please wait and try again.",
     "zh-cn": "你的 Steam 账号尚未通过验证，服务器可能没有连接到 Steam。请稍后再试。"

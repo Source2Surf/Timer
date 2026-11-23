@@ -28,6 +28,7 @@ using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Managers;
 using Source2Surf.Timer.Managers.Localization;
 using Source2Surf.Timer.Managers.Player;
+using Source2Surf.Timer.Modules.Practice;
 using Source2Surf.Timer.Modules.Timer;
 using Source2Surf.Timer.Shared.Interfaces;
 using Source2Surf.Timer.Shared.Interfaces.Listeners;
@@ -85,6 +86,13 @@ internal interface ITimerModule
     ///     were standing in, which would otherwise start a fresh timer at the destination.
     /// </summary>
     void SuppressZoneStarts(PlayerSlot slot);
+
+    /// <summary>
+    ///     用过 noclip, 还没重开或重生的玩家为真, 出起点区不开表; 存点要带上它, 读点时用 <see cref="SetNoclipped"/> 还原
+    /// </summary>
+    bool HasNoclipped(PlayerSlot slot);
+
+    void SetNoclipped(PlayerSlot slot, bool noclipped);
 }
 
 // TODO:
@@ -108,6 +116,10 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     private readonly bool[]            _authenticated;
     private readonly PauseState?[]     _pauseState;
     private readonly int[]             _zoneStartSuppressedUntil;
+    private readonly bool[]            _noclipped;
+
+    // 在 OnPostInit 里取: PracticeManager 的构造函数要 ITimerModule, 构造注入会循环依赖
+    private IPracticeModule _practiceModule = null!;
 
     // By slot: the moves the last movement used, after the style's blocked keys.
     private readonly (float Forward, float Side)[] _moves = new (float, float)[PlayerSlot.MaxPlayerCount];
@@ -172,6 +184,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _pauseState     = new PauseState?[PlayerSlot.MaxPlayerCount];
 
         _zoneStartSuppressedUntil = new int[PlayerSlot.MaxPlayerCount];
+        _noclipped                = new bool[PlayerSlot.MaxPlayerCount];
 
         sv_standable_normal = bridge.ConVarManager.FindConVar("sv_standable_normal")!;
 
@@ -215,8 +228,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     }
 
     public void OnPostInit(ServiceProvider provider)
-    {
-    }
+        => _practiceModule = provider.GetRequiredService<IPracticeModule>();
 
     public void Shutdown()
     {
@@ -517,6 +529,11 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
                     return;
                 }
 
+                if (!CanStartAfterNoclip(controller, pawn, false))
+                {
+                    return;
+                }
+
                 if (!CanAllListenersStartTimer(controller, pawn))
                 {
                     return;
@@ -563,6 +580,12 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             case EZoneType.Stage:
             {
                 if (_zoneModule.IsCurrentTrackLinear(timerInfo.Track) || stageTimer.Stage != info.Data)
+                {
+                    return;
+                }
+
+                // 练习中的关卡成绩不提交
+                if (!CanStartAfterNoclip(controller, pawn, _practiceModule.IsInPractice(controller.PlayerSlot)))
                 {
                     return;
                 }
@@ -632,6 +655,27 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
     public void SuppressZoneStarts(PlayerSlot slot)
         => _zoneStartSuppressedUntil[slot] = _bridge.GlobalVars.TickCount + ZoneStartSuppressTicks;
 
+    public bool HasNoclipped(PlayerSlot slot)
+        => _noclipped[slot];
+
+    public void SetNoclipped(PlayerSlot slot, bool noclipped)
+        => _noclipped[slot] = noclipped;
+
+    private bool CanStartAfterNoclip(IPlayerController controller, IPlayerPawn pawn, bool practice)
+    {
+        if (!_noclipped[controller.PlayerSlot] || practice)
+        {
+            return true;
+        }
+
+        if (pawn.ActualMoveType != MoveType.NoClip)
+        {
+            controller.PrintToChat(_localization.For(controller.PlayerSlot)[ChatTexts.NoclipRestart]);
+        }
+
+        return false;
+    }
+
     public void RegisterListener(ITimerModuleListener listener)
         => _listenerHub.Register(listener);
 
@@ -682,7 +726,10 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             return;
         }
 
-        _zoneModule.TeleportToZone(pawn, track, EZoneType.Start);
+        if (_zoneModule.TeleportToZone(pawn, track, EZoneType.Start))
+        {
+            _noclipped[slot] = false;
+        }
     }
 
     private void NotifyPlayerTimerStart(IPlayerController controller, IPlayerPawn pawn, TimerInfo timerInfo)
@@ -885,6 +932,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
         // Back at the start, as on a restart.
         _movementFix.ClearBhopBlocks(client.Slot);
+        _noclipped[client.Slot] = false;
 
         if (_timerInfo[client.Slot] is { } timerInfo)
         {
@@ -909,6 +957,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _stageTimerInfo[slot]!.ChangeStyle(_styleModule.DefaultStyle);
 
         _zoneStartSuppressedUntil[slot] = 0;
+        _noclipped[slot]                = false;
 
         // when the server is not connected to the steam server, or maybe GC server,
         // it won't trigger OnClientPostAdminCheck, and we want to save records from authenticated players

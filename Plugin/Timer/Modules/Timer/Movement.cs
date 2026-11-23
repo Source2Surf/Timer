@@ -59,6 +59,8 @@ internal partial class TimerModule
             timerInfo.StopTimer();
             stageTimer.StopTimer();
 
+            _noclipped[client.Slot] = true;
+
             timerInfo.OnGroundTick  = 0;
             stageTimer.OnGroundTick = 0;
 

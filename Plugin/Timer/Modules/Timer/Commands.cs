@@ -153,13 +153,13 @@ internal partial class TimerModule
         _movementFix.ClearBhopBlocks(slot);
 
         // Stage 1 = start zone
-        if (stage == 1)
+        var moved = stage == 1
+            ? _zoneModule.TeleportToZone(pawn, track, EZoneType.Start)
+            : _zoneModule.TeleportToStage(pawn, track, stage);
+
+        if (moved)
         {
-            _zoneModule.TeleportToZone(pawn, track, EZoneType.Start);
-        }
-        else
-        {
-            _zoneModule.TeleportToStage(pawn, track, stage);
+            _noclipped[slot] = false;
         }
 
         _bridge.ModSharp.InvokeFrameAction(() => { StopTimer(slot); });
