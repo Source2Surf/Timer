@@ -123,6 +123,29 @@ internal sealed class RecordSaver
         return recordRequest;
     }
 
+    // 远端对一条不合规的检查点会拒掉整条成绩(RemoteRunSubmissionMapper.CreateCheckpoints), 提交前先查, 只丢检查点
+    internal static bool CheckpointsFit(RecordRequest request)
+    {
+        if (request.Checkpoints.Count > TimerConstants.MAX_STAGE - 1)
+        {
+            return false;
+        }
+
+        var previous = 0f;
+
+        foreach (var checkpoint in request.Checkpoints)
+        {
+            if (!float.IsFinite(checkpoint.Time) || checkpoint.Time <= previous || checkpoint.Time > request.Time)
+            {
+                return false;
+            }
+
+            previous = checkpoint.Time;
+        }
+
+        return true;
+    }
+
     public Task SaveMapRecordAsync(SteamID           steamId,
                                    string            playerName,
                                    string            mapName,
@@ -134,6 +157,18 @@ internal sealed class RecordSaver
         var mapLoad       = _mapCache.BeginLoad();
         var finishedAtUtc = DateTime.UtcNow;
         var recordRequest = CreateRecordRequest(timerInfo);
+
+        if (!CheckpointsFit(recordRequest))
+        {
+            _logger.LogWarning("Dropped the checkpoints of {SteamId}'s run on style {Style} track {Track}: [{Times}] / {Time}",
+                               steamId,
+                               recordRequest.Style,
+                               recordRequest.Track,
+                               string.Join(',', recordRequest.Checkpoints.ConvertAll(static x => x.Time)),
+                               recordRequest.Time);
+
+            recordRequest.Checkpoints.Clear();
+        }
 
         // An async method runs through its first await on this finish callback. Build and
         // enqueue the immutable facts before returning to the game loop or scheduling UI.

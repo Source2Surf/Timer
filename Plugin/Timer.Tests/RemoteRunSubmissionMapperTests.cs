@@ -147,6 +147,30 @@ public sealed class RemoteRunSubmissionMapperTests
     }
 
     [Fact]
+    public void CheckpointsTheMapperWouldRejectAreFoundBeforeSubmitting()
+    {
+        Assert.True(RecordSaver.CheckpointsFit(CreateRecord()));
+
+        var repeated = CreateRecord();
+        repeated.Checkpoints[1].Time = repeated.Checkpoints[0].Time;
+        Assert.False(RecordSaver.CheckpointsFit(repeated));
+
+        var late = CreateRecord();
+        late.Checkpoints[1].Time = late.Time + 1f;
+        Assert.False(RecordSaver.CheckpointsFit(late));
+
+        var tooMany = CreateRecord();
+        tooMany.Checkpoints.Clear();
+
+        for (var i = 1; i <= TimerConstants.MAX_STAGE; i++)
+        {
+            tooMany.Checkpoints.Add(new RecordRequest.CheckpointRecord { CheckpointIndex = i, Time = i * 0.1f });
+        }
+
+        Assert.False(RecordSaver.CheckpointsFit(tooMany));
+    }
+
+    [Fact]
     public async Task WriterEnqueuesBeforeItWaitsForCanonicalAcknowledgement()
     {
         var request = RemoteRunSubmissionMapper.CreateMain(76561198000000001UL,
