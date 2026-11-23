@@ -29,9 +29,9 @@ internal static class AsyncChatCommand
     /// <summary>
     ///     The standard pattern for chat commands needing a DB round-trip: run the fetch
     ///     off-thread with transient-error retry, then marshal back to the main thread and
-    ///     re-resolve the player by slot (they may have disconnected during the await)
-    ///     before printing. Fire-and-forget; failures are logged under
-    ///     <paramref name="operationName" />.
+    ///     re-resolve the player by SteamID (they may have left during the await, and their
+    ///     slot gone to someone else) before printing; a map change drops the result.
+    ///     Fire-and-forget; failures are logged under <paramref name="operationName" />.
     /// </summary>
     public static void Run<TResult>(InterfaceBridge                    bridge,
                                     ILogger                            logger,
@@ -40,6 +40,14 @@ internal static class AsyncChatCommand
                                     Func<Task<TResult>>                fetch,
                                     Action<IPlayerController, TResult> print)
     {
+        if (bridge.ClientManager.GetGameClient(slot) is not { } client)
+        {
+            return;
+        }
+
+        var steamId = client.SteamId;
+        var mapName = bridge.CurrentMapName;
+
         Task.Run(async () =>
                  {
                      try
@@ -49,7 +57,8 @@ internal static class AsyncChatCommand
 
                          await bridge.ModSharp.InvokeFrameActionAsync(() =>
                          {
-                             if (!bridge.TryGetController(slot, out var controller))
+                             if (bridge.CurrentMapName != mapName
+                                 || bridge.ClientManager.GetGameClient(steamId)?.GetPlayerController() is not { IsValidEntity: true } controller)
                              {
                                  return;
                              }
