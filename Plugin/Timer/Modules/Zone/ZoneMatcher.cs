@@ -24,10 +24,10 @@ namespace Source2Surf.Timer.Modules.Zone;
 internal static partial class ZoneMatcher
 {
     private static readonly FrozenSet<string> StartZoneName = FrozenSet.ToFrozenSet(
-        ["map_start", "s1_start", "stage1_start", "timer_startzone", "zone_start"], StringComparer.Ordinal);
+        ["map_start", "s1_start", "stage1_start", "timer_startzone", "zone_start"], StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> EndZoneName = FrozenSet.ToFrozenSet(
-        ["map_end", "timer_endzone", "zone_end"], StringComparer.Ordinal);
+        ["map_end", "timer_endzone", "zone_end"], StringComparer.OrdinalIgnoreCase);
 
     public static bool IsStartZone(string name)
         => StartZoneName.Contains(name);
