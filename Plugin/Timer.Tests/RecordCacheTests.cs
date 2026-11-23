@@ -103,12 +103,12 @@ public sealed class RecordCacheTests
         RunCheckpoint[] bestCheckpoints = [new() { RecordId = best.Id, Time = 40 }];
         cache.RefreshTrack(0, 0, [best], newLoad);
         cache.RefreshStage(0, 0, 1, [best], newLoad);
-        cache.SetWRCheckpoints(0, 0, bestCheckpoints, newLoad);
+        cache.SetWRCheckpoints(0, 0, best.Id, bestCheckpoints, newLoad);
 
         cache.Populate([slow], [], oldLoad);
         cache.RefreshTrack(0, 0, [slow], oldLoad);
         cache.RefreshStage(0, 0, 1, [slow], oldLoad);
-        cache.SetWRCheckpoints(0, 0, [], oldLoad);
+        cache.SetWRCheckpoints(0, 0, slow.Id, [], oldLoad);
 
         Assert.Same(best, cache.GetWR(0, 0));
         Assert.Same(best, cache.GetWR(0, 0, 1));
@@ -170,11 +170,29 @@ public sealed class RecordCacheTests
 
         var upsert = cache.Upsert(0, 0, 0, best);
         cache.RefreshTrack(0, 0, [old], stale);
-        cache.SetWRCheckpoints(0, 0, [], stale);
+        cache.SetWRCheckpoints(0, 0, old.Id, [], stale);
 
         Assert.Same(best, cache.GetWR(0, 0));
         RunCheckpoint[] checkpoints = [new () { RecordId = best.Id, Time = 30 }];
-        cache.SetWRCheckpoints(0, 0, checkpoints, upsert);
+        cache.SetWRCheckpoints(0, 0, best.Id, checkpoints, upsert);
         Assert.Same(checkpoints, cache.GetWRCheckpoints(0, 0));
+    }
+
+    [Fact]
+    public void TheServerRecordsCheckpointsLastUntilItIsBeaten()
+    {
+        var cache  = new MapRecordCache(NullLogger.Instance);
+        var record = new RunRecord { Id = 1, SteamId = 1, Time = 60 };
+
+        var upsert = cache.Upsert(0, 0, 0, record);
+        RunCheckpoint[] checkpoints = [new () { RecordId = record.Id, Time = 30 }];
+        cache.SetWRCheckpoints(0, 0, record.Id, checkpoints, upsert);
+
+        // 别人在它后面破 PB
+        cache.Upsert(0, 0, 0, new RunRecord { Id = 2, SteamId = 2, Time = 70 });
+        Assert.Same(checkpoints, cache.GetWRCheckpoints(0, 0));
+
+        cache.Upsert(0, 0, 0, new RunRecord { Id = 3, SteamId = 3, Time = 50 });
+        Assert.Null(cache.GetWRCheckpoints(0, 0));
     }
 }

@@ -29,8 +29,8 @@ internal sealed class MapRecordCache
 {
     private readonly List<RunRecord>[,] _mapRecords = new List<RunRecord>[TimerConstants.MAX_STYLE, TimerConstants.MAX_TRACK];
     private readonly Dictionary<(int style, int track, int stage), List<RunRecord>> _stageRecords = [];
-    private readonly IReadOnlyList<RunCheckpoint>?[,] _wrCheckpoints
-        = new IReadOnlyList<RunCheckpoint>?[TimerConstants.MAX_STYLE, TimerConstants.MAX_TRACK];
+    private readonly (long RunId, IReadOnlyList<RunCheckpoint> Checkpoints)?[,] _wrCheckpoints
+        = new (long, IReadOnlyList<RunCheckpoint>)?[TimerConstants.MAX_STYLE, TimerConstants.MAX_TRACK];
     private readonly ILogger _logger;
     private long _generation;
     private long _loadSequence;
@@ -359,16 +359,15 @@ internal sealed class MapRecordCache
         }
     }
 
-    public void SetWRCheckpoints(int style, int track, IReadOnlyList<RunCheckpoint> checkpoints, LoadToken load)
+    // 按 RunId 认领: 认榜的加载序号的话, 同榜随后谁的 Upsert 都会让新 SR 的检查点作废
+    public void SetWRCheckpoints(int style, int track, long runId, IReadOnlyList<RunCheckpoint> checkpoints, LoadToken load)
     {
-        if (!IsCurrent(load) || load.Sequence != _trackLoads[style, track]) return;
-        _wrCheckpoints[style, track] = checkpoints;
+        if (!IsCurrent(load) || GetWR(style, track)?.Id != runId) return;
+        _wrCheckpoints[style, track] = (runId, checkpoints);
     }
 
     public IReadOnlyList<RunCheckpoint>? GetWRCheckpoints(int style, int track)
-    {
-        return _wrCheckpoints[style, track];
-    }
+        => _wrCheckpoints[style, track] is { } wr && GetWR(style, track)?.Id == wr.RunId ? wr.Checkpoints : null;
 
     private static bool IsValidStageIndex(int stage) =>
         stage is >= 1 and < TimerConstants.MAX_STAGE;

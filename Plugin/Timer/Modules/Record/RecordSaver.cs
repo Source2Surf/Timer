@@ -291,7 +291,6 @@ internal sealed class RecordSaver
 
         var acknowledged = RemoteRunSubmissionMapper.ToAcknowledgedRun(request, response, playerName, mapId);
         var boardMissing = false;
-        MapRecordCache.LoadToken? newServerRecord = null;
         await _bridge.ModSharp.InvokeFrameActionAsync(() =>
         {
             if (!_mapCache.IsCurrent(mapLoad))
@@ -342,13 +341,14 @@ internal sealed class RecordSaver
                                        acknowledged.SavedRecord);
             }
 
-            // The board takes the new best in place; only a new server record's checkpoints are fetched.
+            // 原地进榜; 成了 SR 时 SetWRCheckpoints 才收下本次提交带的检查点
             var upsert = _mapCache.Upsert(recordRequest.Style, recordRequest.Track, 0, acknowledged.SavedRecord);
 
-            if (_mapCache.GetWR(recordRequest.Style, recordRequest.Track)?.Id == acknowledged.SavedRecord.Id)
-            {
-                newServerRecord = upsert;
-            }
+            _mapCache.SetWRCheckpoints(recordRequest.Style,
+                                       recordRequest.Track,
+                                       acknowledged.SavedRecord.Id,
+                                       ToRunCheckpoints(recordRequest, acknowledged.SavedRecord.Id),
+                                       upsert);
         }, ct).ConfigureAwait(false);
 
         // An empty board here was never loaded (a failed map-start read), and is fetched now.
@@ -356,11 +356,28 @@ internal sealed class RecordSaver
         {
             await RefreshMapRecord(mapName, recordRequest.Style, recordRequest.Track, mapLoad).ConfigureAwait(false);
         }
-        else if (newServerRecord is { } recordLoad)
-        {
-            await RefreshWrCheckpoints(recordRequest.Style, recordRequest.Track, acknowledged.SavedRecord.Id, recordLoad).ConfigureAwait(false);
-        }
     }
+
+    private static List<RunCheckpoint> ToRunCheckpoints(RecordRequest request, long recordId)
+        => request.Checkpoints.ConvertAll(c => new RunCheckpoint
+        {
+            RecordId        = recordId,
+            CheckpointIndex = (uint) c.CheckpointIndex,
+            Time            = c.Time,
+            Sync            = c.Sync,
+            VelocityStartX  = c.VelocityStartX,
+            VelocityStartY  = c.VelocityStartY,
+            VelocityStartZ  = c.VelocityStartZ,
+            VelocityAvgX    = c.VelocityAvgX,
+            VelocityAvgY    = c.VelocityAvgY,
+            VelocityAvgZ    = c.VelocityAvgZ,
+            VelocityMaxX    = c.VelocityMaxX,
+            VelocityMaxY    = c.VelocityMaxY,
+            VelocityMaxZ    = c.VelocityMaxZ,
+            VelocityEndX    = c.VelocityEndX,
+            VelocityEndY    = c.VelocityEndY,
+            VelocityEndZ    = c.VelocityEndZ,
+        });
 
     private async Task SaveRemoteStageRecordAsync(SteamID                    steamId,
                                                   string                     playerName,
@@ -522,34 +539,13 @@ internal sealed class RecordSaver
 
                 if (wrCheckpoints is not null)
                 {
-                    _mapCache.SetWRCheckpoints(style, track, wrCheckpoints, load);
-                }
-                else
-                {
-                    _mapCache.SetWRCheckpoints(style, track, [], load);
+                    _mapCache.SetWRCheckpoints(style, track, records[0].Id, wrCheckpoints, load);
                 }
             });
         }
         catch (Exception e)
         {
             _logger.LogError(e, "Error when trying to update map record with style {s}, track: {t}", style, track);
-        }
-    }
-
-    private async Task RefreshWrCheckpoints(int style, int track, long recordId, MapRecordCache.LoadToken load)
-    {
-        try
-        {
-            var checkpoints = await RetryHelper.RetryAsync(() => _request.GetRecordCheckpoints(recordId),
-                                                           RetryHelper.IsTransient,
-                                                           _logger,
-                                                           "GetRecordCheckpoints").ConfigureAwait(false);
-
-            await _bridge.ModSharp.InvokeFrameActionAsync(() => _mapCache.SetWRCheckpoints(style, track, checkpoints, load));
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Error when fetching the server record's checkpoints, style {s}, track: {t}", style, track);
         }
     }
 

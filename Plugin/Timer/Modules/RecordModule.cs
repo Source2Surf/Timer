@@ -286,13 +286,13 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                                                                        _logger,
                                                                        "GetRecordCheckpoints").ConfigureAwait(false);
 
-                        return (key: (wr.Style, wr.Track), checkpoints);
+                        return (key: (wr.Style, wr.Track), id: wr.Id, checkpoints);
                     }
                     catch (Exception e) when (e is not OperationCanceledException)
                     {
                         _logger.LogWarning(e, "Failed to load the SR checkpoints of style {Style} track {Track}", wr.Style, wr.Track);
 
-                        return (key: (wr.Style, wr.Track), checkpoints: (IReadOnlyList<RunCheckpoint>?) null);
+                        return (key: (wr.Style, wr.Track), id: wr.Id, checkpoints: (IReadOnlyList<RunCheckpoint>?) null);
                     }
                 });
 
@@ -300,7 +300,7 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
                 var wrCheckpointMap = wrCheckpointResults
                                       .Where(r => r.checkpoints is not null)
-                                      .ToDictionary(r => r.key, r => r.checkpoints!);
+                                      .ToDictionary(r => r.key, r => (r.id, checkpoints: r.checkpoints!));
 
                 var boards = _mapCache.Group(records, stageRecords);
 
@@ -309,9 +309,9 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
                     if (!_mapCache.IsCurrent(load)) return;
                     _mapCache.Populate(boards, load);
 
-                    foreach (var ((style, track), checkpoints) in wrCheckpointMap)
+                    foreach (var ((style, track), (id, checkpoints)) in wrCheckpointMap)
                     {
-                        _mapCache.SetWRCheckpoints(style, track, checkpoints, load);
+                        _mapCache.SetWRCheckpoints(style, track, id, checkpoints, load);
                     }
 
                     _listenerHub.NotifyAll("OnMapRecordsLoaded", static l => l.OnMapRecordsLoaded());
