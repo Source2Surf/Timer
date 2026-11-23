@@ -166,7 +166,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         sv_air_max_wishspeed  = InitializeConVar("sv_air_max_wishspeed");
         sv_airaccelerate      = InitializeConVar("sv_airaccelerate");
 
-        sv_maxvelocity = InitializeConVar("sv_maxvelocity");
+        sv_maxvelocity = bridge.ConVarManager.FindConVar("sv_maxvelocity")
+                         ?? throw new NullReferenceException("Failed to find sv_maxvelocity");
     }
 
     public bool Init()
