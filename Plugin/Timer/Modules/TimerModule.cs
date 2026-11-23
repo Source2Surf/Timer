@@ -215,6 +215,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _bridge.HookManager.PlayerProcessMovePre.InstallForward(OnPlayerProcessMovePre);
         _bridge.HookManager.PlayerProcessMovePost.InstallForward(OnPlayerProcessMovePost);
         _bridge.HookManager.PlayerSpawnPost.InstallForward(OnPlayerSpawnPost);
+        _bridge.HookManager.PlayerKilledPost.InstallForward(OnPlayerKilledPost);
 
         _zoneModule.RegisterListener(this);
 
@@ -237,6 +238,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         _bridge.HookManager.PlayerProcessMovePre.RemoveForward(OnPlayerProcessMovePre);
         _bridge.HookManager.PlayerProcessMovePost.RemoveForward(OnPlayerProcessMovePost);
         _bridge.HookManager.PlayerSpawnPost.RemoveForward(OnPlayerSpawnPost);
+        _bridge.HookManager.PlayerKilledPost.RemoveForward(OnPlayerKilledPost);
 
         _zoneModule.UnregisterListener(this);
 
@@ -944,8 +946,20 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
         return _mapInfoModule.GetGameModeExitSpeedLimit();
     }
 
-    private static HookReturnValue<bool> hk_OnPlayerJoinTeam(EventHookParams arg)
-        => new (EHookAction.SkipCallReturnOverride);
+    private HookReturnValue<bool> hk_OnPlayerJoinTeam(EventHookParams arg)
+    {
+        var e = arg.Event;
+
+        if (e.GetInt("team") <= (int) CStrikeTeam.Spectator && e.GetPlayerController("userid") is { } controller)
+        {
+            StopTimer(controller.PlayerSlot);
+        }
+
+        return new (EHookAction.SkipCallReturnOverride);
+    }
+
+    private void OnPlayerKilledPost(IPlayerKilledForwardParams arg)
+        => StopTimer(arg.Client.Slot);
 
     private static void OnHandleCommandJoinTeamPost(IHandleCommandJoinTeamHookParams @params, HookReturnValue<bool> hook)
     {
