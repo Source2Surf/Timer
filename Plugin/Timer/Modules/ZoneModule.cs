@@ -188,6 +188,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         _playerManager     = playerManager;
         _mapInfoModule     = mapInfoModule;
         _buildZoneInfo     = new BuildZoneInfo?[PlayerSlot.MaxPlayerCount];
+        _lostZones         = [];
 
         timer_zone_solidify = bridge.ConVarManager.CreateConVar("timer_zone_solidify",
                                                                 true,
@@ -276,6 +277,49 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 #if DEBUG
         _logger.LogWarning("Removed zone {t}", info.TargetName);
 #endif
+
+        if (info.Prebuilt)
+        {
+            return;
+        }
+
+        // 自建的 trigger_multiple 不在 modsharp 的回合保留名单里, 回合重启会被删掉; 地图自带的随地图实体重新生成
+        if (_lostZones.Count == 0)
+        {
+            var generation = _zoneLoadGeneration;
+
+            _bridge.ModSharp.InvokeFrameAction(() => RebuildLostZones(generation));
+        }
+
+        _lostZones.Add(info);
+    }
+
+    private void RebuildLostZones(int generation)
+    {
+        if (generation != _zoneLoadGeneration)
+        {
+            return;
+        }
+
+        foreach (var info in _lostZones)
+        {
+            try
+            {
+                AddZone(info);
+            }
+            catch (Exception e)
+            {
+                _customZonesLoaded = false;
+
+                _logger.LogError(e,
+                                 "Failed to rebuild zone (track={Track}, type={Type}); zones can't be edited until the next map.",
+                                 info.Track,
+                                 info.ZoneType);
+            }
+        }
+
+        _lostZones.Clear();
+        EditVersion++;
     }
 
     public EHookAction OnEntityFireOutput(IBaseEntity entity, string output, IBaseEntity? activator, float delay)
@@ -358,6 +402,7 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
 
         _zoneLoadGeneration++;
         _customZonesLoaded = false;
+        _lostZones.Clear();
 
         _zones.Clear();
         ZonesChanged();

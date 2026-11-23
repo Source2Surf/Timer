@@ -78,7 +78,7 @@ internal partial class ZoneModule
             buildInfo.Step++;
             EditVersion++;
         }
-        else if (buildInfo.Step == 1)
+        else if (buildInfo.Step == 1 && CanEditCustomZones)
         {
             buildInfo.Points[1] = snapped + new Vector(0, 0, 128);
 
