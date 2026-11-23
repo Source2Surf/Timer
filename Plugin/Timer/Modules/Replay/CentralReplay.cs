@@ -225,10 +225,23 @@ internal partial class ReplayPlaybackModule : ICentralReplay
 
     public void TogglePause(PlayerSlot slot)
     {
-        if (Owned(slot) is { } bot)
+        if (Owned(slot) is not { } bot)
         {
-            bot.Paused = !bot.Paused;
+            return;
         }
+
+        if (bot.Status == EReplayBotStatus.End)
+        {
+            StopBotTimer(bot);
+            bot.CurrentFrame = bot.Frames.Count - 1;
+            bot.FrameStep    = 0;
+            bot.Status       = EReplayBotStatus.Running;
+            bot.Paused       = true;
+
+            return;
+        }
+
+        bot.Paused = !bot.Paused;
     }
 
     public void CycleSpeed(PlayerSlot slot)

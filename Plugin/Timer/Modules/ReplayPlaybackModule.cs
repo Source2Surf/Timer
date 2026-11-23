@@ -903,6 +903,12 @@ internal partial class ReplayPlaybackModule : IReplayPlaybackModule,
             return;
         }
 
+        if (bot.CurrentFrame >= totalFrames && bot.Status != EReplayBotStatus.End && bot.Paused)
+        {
+            bot.CurrentFrame = totalFrames - 1;
+            bot.FrameStep    = 0;
+        }
+
         if (bot.CurrentFrame >= totalFrames && bot.Status != EReplayBotStatus.End)
         {
             bot.Status = EReplayBotStatus.End;
