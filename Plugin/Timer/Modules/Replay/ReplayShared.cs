@@ -756,7 +756,7 @@ internal static class ReplayShared
                 return defaultConfigs;
             }
 
-            return configs;
+            return Array.FindAll(configs, c => c.Enabled);
         }
         catch (Exception e)
         {

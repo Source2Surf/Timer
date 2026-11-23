@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging.Abstractions;
 using Source2Surf.Timer.Modules;
 using Source2Surf.Timer.Modules.Replay;
 using Source2Surf.Timer.Shared.Models.Replay;
@@ -37,6 +38,25 @@ public sealed class ReplayPlaybackBotTests
                                     .Invoke(module, [bot]);
 
         Assert.Equal(2, bot.Stage);
+    }
+
+    [Fact]
+    public void DisabledBotConfigsAreNotLoaded()
+    {
+        var path = Path.GetTempFileName();
+
+        try
+        {
+            File.WriteAllText(path, """[ { "name": "a" }, { "name": "b", "enabled": false }, { "name": "c", "enabled": true } ]""");
+
+            var configs = ReplayShared.LoadReplayBotConfigs(path, NullLogger.Instance);
+
+            Assert.Equal(["a", "c"], configs.Select(c => c.Name));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private static bool InvokeIsReplayBotMatch(ReplayBotData bot, int style, int track, int stage)
