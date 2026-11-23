@@ -279,18 +279,28 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
                 var wrCheckpointTasks = wrPerTrack.Select(async wr =>
                 {
-                    var checkpoints = await RetryHelper.RetryAsync(() => _request.GetRecordCheckpoints(wr.Id),
-                                                                   RetryHelper.IsTransient,
-                                                                   _logger,
-                                                                   "GetRecordCheckpoints").ConfigureAwait(false);
+                    try
+                    {
+                        var checkpoints = await RetryHelper.RetryAsync(() => _request.GetRecordCheckpoints(wr.Id),
+                                                                       RetryHelper.IsTransient,
+                                                                       _logger,
+                                                                       "GetRecordCheckpoints").ConfigureAwait(false);
 
-                    return (key: (wr.Style, wr.Track), checkpoints);
+                        return (key: (wr.Style, wr.Track), checkpoints);
+                    }
+                    catch (Exception e) when (e is not OperationCanceledException)
+                    {
+                        _logger.LogWarning(e, "Failed to load the SR checkpoints of style {Style} track {Track}", wr.Style, wr.Track);
+
+                        return (key: (wr.Style, wr.Track), checkpoints: (IReadOnlyList<RunCheckpoint>?) null);
+                    }
                 });
 
                 var wrCheckpointResults = await Task.WhenAll(wrCheckpointTasks).ConfigureAwait(false);
 
                 var wrCheckpointMap = wrCheckpointResults
-                    .ToDictionary(r => r.key, r => r.checkpoints);
+                                      .Where(r => r.checkpoints is not null)
+                                      .ToDictionary(r => r.key, r => r.checkpoints!);
 
                 var boards = _mapCache.Group(records, stageRecords);
 
