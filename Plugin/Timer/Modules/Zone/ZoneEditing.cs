@@ -266,10 +266,9 @@ internal partial class ZoneModule
             return false;
         }
 
-        // Like !end: stop, move, then stop again once leaving a start zone on the way could have restarted it.
         _timerModule.StopTimer(slot);
+        _timerModule.SuppressZoneStarts(slot);
         pawn.Teleport(GetTeleportPosition(info, pawn), null, new Vector());
-        _bridge.ModSharp.InvokeFrameAction(() => _timerModule.StopTimer(slot));
 
         return true;
     }

@@ -112,9 +112,8 @@ internal partial class TimerModule
 
         var track = _timerInfo[slot]?.Track ?? 0;
         StopTimer(slot);
+        SuppressZoneStarts(slot);
         _zoneModule.TeleportToZone(pawn, track, EZoneType.End);
-
-        _bridge.ModSharp.InvokeFrameAction(() => { StopTimer(slot); });
 
         return ECommandAction.Handled;
     }
@@ -159,6 +158,8 @@ internal partial class TimerModule
         // A restart from the stage: the bhop platforms they set off are all back at rest.
         _movementFix.ClearBhopBlocks(slot);
 
+        SuppressZoneStarts(slot);
+
         // Stage 1 = start zone
         var moved = stage == 1
             ? _zoneModule.TeleportToZone(pawn, track, EZoneType.Start)
@@ -172,8 +173,6 @@ internal partial class TimerModule
         {
             controller.PrintToChat(_localization.For(slot).Format(ChatTexts.StageNoStart, stage));
         }
-
-        _bridge.ModSharp.InvokeFrameAction(() => { StopTimer(slot); });
 
         return ECommandAction.Handled;
     }

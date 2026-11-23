@@ -143,12 +143,22 @@ internal partial class TimerModule
     {
         var client = arg.Client;
 
-        if (client.IsFakeClient || arg.Pawn.AsPlayer() is not { IsAlive: true } pawn)
+        if (client.IsFakeClient)
         {
             return;
         }
 
         var slot = client.Slot;
+
+        if (_zoneStartSuppress[slot] > 0)
+        {
+            _zoneStartSuppress[slot]--;
+        }
+
+        if (arg.Pawn.AsPlayer() is not { IsAlive: true } pawn)
+        {
+            return;
+        }
 
         if (_timerInfo[slot] is not { } timerInfo || _stageTimerInfo[slot] is not { } stageTimer)
         {
