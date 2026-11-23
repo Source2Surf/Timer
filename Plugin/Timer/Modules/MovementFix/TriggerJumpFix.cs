@@ -116,9 +116,11 @@ internal unsafe partial class MovementFixModule
         EndTouches(slot);
 
         // Reached earlier in the tick than the rest. After a teleport there, the player never stood or landed where the
-        // tick ended.
+        // tick ended, and no longer stands on the platform of the tick before.
         if (TouchPathTriggers(@params.Pawn, slot))
         {
+            _lastGround[slot] = uint.MaxValue;
+
             return;
         }
 
