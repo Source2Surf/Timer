@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Order;
 using Source2Surf.Timer.Benchmarks.Workload;
@@ -8,13 +7,15 @@ using Source2Surf.Timer.Shared.Models.Replay;
 
 namespace Source2Surf.Timer.Benchmarks.Benchmarks;
 
+// Each snapshot is released once read, as a save that playback doesn't keep releases it, so its chunks go back to the
+// pool and what's measured is the steady state.
 [MemoryDiagnoser]
 [MinIterationTime(250)]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class ReplaySnapshotAllocationBenchmark
 {
-    private const int InitialCapacity = TimerConstants.Tickrate * 60 * 5;
     private const string PlayerName = "allocation-audit";
+    private const long   ChunkBytes = ReplayFrameBuffer.ChunkFrames * 64L;
 
     private ReplayFrameData[] _frames = null!;
     private PlayerFrameData _mainFrame = null!;
@@ -28,7 +29,7 @@ public class ReplaySnapshotAllocationBenchmark
     {
         _frames = ReplayWorkload.CreateFrames(FrameCount);
         ValidateSnapshotOwnership();
-        WriteCapacityDiagnostics();
+        WriteChunkDiagnostics();
         _mainFrame = CreateRecordedFrame(_frames);
         _stageFrame = CreateRecordedFrame(_frames);
     }
@@ -42,8 +43,7 @@ public class ReplaySnapshotAllocationBenchmark
     {
         var snapshot = ReplayShared.CreateMainReplaySnapshot(_mainFrame, 0);
         var count = snapshot.Header.TotalFrames;
-        GC.KeepAlive(snapshot.Frames);
-        GC.KeepAlive(_mainFrame.Frames);
+        snapshot.ReleaseFrames();
         return count;
     }
 
@@ -57,7 +57,7 @@ public class ReplaySnapshotAllocationBenchmark
                                                               postRunFrameCount: 0,
                                                               finishTime: FrameCount * TimerConstants.TickInterval);
         var count = snapshot.Header.TotalFrames;
-        GC.KeepAlive(snapshot.Frames);
+        snapshot.ReleaseFrames();
         return count;
     }
 
@@ -70,8 +70,7 @@ public class ReplaySnapshotAllocationBenchmark
 
         var snapshot = ReplayShared.CreateMainReplaySnapshot(frame, 0);
         var count = snapshot.Header.TotalFrames;
-        GC.KeepAlive(snapshot.Frames);
-        GC.KeepAlive(frame.Frames);
+        snapshot.ReleaseFrames();
         return count;
     }
 
@@ -93,8 +92,7 @@ public class ReplaySnapshotAllocationBenchmark
                 && mainSnapshot.Frames[0].Equals(expectedFirst)
                 && mainSnapshot.Frames[^1].Equals(expectedLast),
                 "Main snapshot contents changed before source mutation.");
-        mainProbe.Frames.Add(default);
-        mainProbe.Frames.Clear();
+        RecordOver(mainProbe);
         Require(mainSnapshot.Frames.Count == FrameCount
                 && mainSnapshot.Frames[0].Equals(expectedFirst)
                 && mainSnapshot.Frames[^1].Equals(expectedLast),
@@ -115,37 +113,43 @@ public class ReplaySnapshotAllocationBenchmark
                 && stageSnapshot.Frames[0].Equals(expectedFirst)
                 && stageSnapshot.Frames[^1].Equals(expectedLast),
                 "Stage snapshot contents changed before source mutation.");
-        stageProbe.Frames[0] = default;
-        stageProbe.Frames.Clear();
+        RecordOver(stageProbe);
         Require(stageSnapshot.Frames.Count == FrameCount
                 && stageSnapshot.Frames[0].Equals(expectedFirst)
                 && stageSnapshot.Frames[^1].Equals(expectedLast),
-                "Stage snapshot aliases the live recording list.");
+                "Stage snapshot aliases the live recording.");
 
-        GC.KeepAlive(mainSnapshot.Frames);
-        GC.KeepAlive(stageSnapshot.Frames);
+        mainSnapshot.ReleaseFrames();
+        stageSnapshot.ReleaseFrames();
     }
 
-    private void WriteCapacityDiagnostics()
+    // Gives the probe's chunks back and records over whatever the pool hands out again.
+    private void RecordOver(PlayerFrameData probe)
+    {
+        probe.Frames.Clear();
+        for (var i = 0; i < FrameCount; i++)
+            probe.Frames.Add(default);
+        probe.Frames.Clear();
+    }
+
+    private void WriteChunkDiagnostics()
     {
         Console.WriteLine(
             "REPLAY_SNAPSHOT_SCOPE units=per-operation backingBytes=structural-not-rss "
           + "mainTiming=single-invocation-may-be-noisy");
         var current = CreateRecordedFrame(_frames);
         var currentSnapshot = ReplayShared.CreateMainReplaySnapshot(current, 0);
-        WriteCapacityLine("current", 1, FrameCount,
-                          ((List<ReplayFrameData>) currentSnapshot.Frames).Capacity,
-                          current.Frames.Capacity);
+        WriteChunkLine("current", 1, FrameCount, ((ReplayFrameBuffer) currentSnapshot.Frames).ChunkCount,
+                       current.Frames.ChunkCount);
+        currentSnapshot.ReleaseFrames();
 
-        TraceCapacitySequence($"equal-{FrameCount}", FrameCount, FrameCount, FrameCount);
-        TraceCapacitySequence("long-then-short", 115200, 19200);
-        GC.KeepAlive(currentSnapshot.Frames);
+        TraceChunkSequence($"equal-{FrameCount}", FrameCount, FrameCount, FrameCount);
+        TraceChunkSequence("long-then-short", 115200, 19200);
     }
 
-    private static void TraceCapacitySequence(string scenario, params int[] frameCounts)
+    private static void TraceChunkSequence(string scenario, params int[] frameCounts)
     {
         var frame = CreateEmptyFrame(frameCounts[0]);
-        IReadOnlyList<ReplayFrameData>? latestFrames = null;
 
         for (var step = 0; step < frameCounts.Length; step++)
         {
@@ -156,24 +160,20 @@ public class ReplaySnapshotAllocationBenchmark
                 frame.Frames.Add(default);
 
             var snapshot = ReplayShared.CreateMainReplaySnapshot(frame, 0);
-            latestFrames = snapshot.Frames;
-            WriteCapacityLine(scenario, step + 1, count,
-                              ((List<ReplayFrameData>) snapshot.Frames).Capacity,
-                              frame.Frames.Capacity);
+            WriteChunkLine(scenario, step + 1, count, ((ReplayFrameBuffer) snapshot.Frames).ChunkCount,
+                           frame.Frames.ChunkCount);
+            snapshot.ReleaseFrames();
         }
 
-        GC.KeepAlive(latestFrames);
-        GC.KeepAlive(frame.Frames);
+        frame.Frames.Clear();
     }
 
-    private static void WriteCapacityLine(string scenario, int step, int count, int completedCapacity,
-                                          int liveCapacity)
+    private static void WriteChunkLine(string scenario, int step, int count, int completedChunks, int liveChunks)
     {
-        var backingBytes = checked((long) (completedCapacity + liveCapacity)
-                                  * Unsafe.SizeOf<ReplayFrameData>());
+        var backingBytes = checked((completedChunks + liveChunks) * ChunkBytes);
         Console.WriteLine(
-            $"REPLAY_SNAPSHOT_CAPACITY scenario={scenario} step={step} count={count} "
-          + $"completedCapacity={completedCapacity} liveCapacity={liveCapacity} backingBytes={backingBytes}");
+            $"REPLAY_SNAPSHOT_CHUNKS scenario={scenario} step={step} count={count} "
+          + $"completedChunks={completedChunks} liveChunks={liveChunks} backingBytes={backingBytes}");
     }
 
     private static PlayerFrameData CreateRecordedFrame(ReplayFrameData[] frames)
@@ -187,7 +187,6 @@ public class ReplaySnapshotAllocationBenchmark
     private static PlayerFrameData CreateEmptyFrame(int finishFrame)
         => new()
         {
-            Frames = new List<ReplayFrameData>(InitialCapacity),
             Name = PlayerName,
             TimerStartFrame = 0,
             TimerFinishFrame = finishFrame,

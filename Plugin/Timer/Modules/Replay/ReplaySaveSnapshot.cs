@@ -20,4 +20,17 @@ using Source2Surf.Timer.Shared.Models.Replay;
 
 namespace Source2Surf.Timer.Modules.Replay;
 
-internal readonly record struct ReplaySaveSnapshot(ReplayFileHeader Header, IReadOnlyList<ReplayFrameData> Frames);
+internal readonly record struct ReplaySaveSnapshot(ReplayFileHeader Header, IReadOnlyList<ReplayFrameData> Frames)
+{
+    /// <summary>
+    ///     Gives the frames' chunks back to their pool, once the save is done and nothing kept them. The frames read
+    ///     as empty afterwards.
+    /// </summary>
+    public void ReleaseFrames()
+    {
+        if (Frames is ReplayFrameBuffer buffer)
+        {
+            buffer.Clear();
+        }
+    }
+}

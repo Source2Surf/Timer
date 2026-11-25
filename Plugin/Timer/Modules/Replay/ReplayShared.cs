@@ -385,9 +385,11 @@ internal static class ReplayShared
 
     /// <summary>
     /// Deserialize replay from raw bytes (JSON header + \n + Zstd-compressed MemoryPack frame data).
-    /// Used for remote replay data deserialization.
+    /// Used for remote replay data deserialization. <paramref name="pooled"/> reads the frames into pooled
+    /// chunks, for a caller that drops them once read (see <see cref="ReplayFrameStorage.DeserializePooled"/>).
     /// </summary>
-    public static ReplayLoadResult? DeserializeReplay(ReadOnlySpan<byte> bytes, int style, int track, int stage, ILogger logger)
+    public static ReplayLoadResult? DeserializeReplay(ReadOnlySpan<byte> bytes, int style, int track, int stage, ILogger logger,
+                                                      bool pooled = false)
     {
         try
         {
@@ -407,7 +409,7 @@ internal static class ReplayShared
             }
 
             using var decompressor = new Decompressor();
-            var frames = DeserializeReplayFrames(bytes[(split + 1)..], header.Version, decompressor);
+            var frames = DeserializeReplayFrames(bytes[(split + 1)..], header.Version, decompressor, pooled);
             if (frames == null)
             {
                 logger.LogError("Failed to deserialize replay frames for style={style} track={track} stage={stage}", style, track, stage);
@@ -426,8 +428,10 @@ internal static class ReplayShared
     /// <summary>
     /// Load a replay file from the given path, reusing a Decompressor instance.
     /// Corrupted files (missing HeaderFrameSeparator) are renamed with a .corrupt suffix as backup.
+    /// <paramref name="pooled"/> as in <see cref="DeserializeReplay"/>.
     /// </summary>
-    public static ReplayLoadResult? LoadReplayFromPath(string path, int style, int track, int stage, Decompressor decompressor, ILogger logger)
+    public static ReplayLoadResult? LoadReplayFromPath(string path, int style, int track, int stage, Decompressor decompressor, ILogger logger,
+                                                       bool pooled = false)
     {
         byte[]? fileBuffer = null;
         try
@@ -469,7 +473,7 @@ internal static class ReplayShared
                 return null;
             }
 
-            var frames = DeserializeReplayFrames(bytes[(split + 1)..], header.Version, decompressor);
+            var frames = DeserializeReplayFrames(bytes[(split + 1)..], header.Version, decompressor, pooled);
             if (frames == null)
             {
                 logger.LogError("Failed to deserialize frames: {p}", path);
@@ -493,32 +497,19 @@ internal static class ReplayShared
     }
 
     /// <summary>
-    /// A player's recording buffer to start with: 64 KB, below the large object heap. It grows with their runs.
-    /// </summary>
-    public const int InitialFrames = 1024;
-
-    /// <summary>
     /// Create a main replay snapshot from PlayerFrameData.
-    /// Resets the frame buffer and timer state on the source frame data, keeping the last
-    /// <paramref name="keepFrames"/> frames as the next run's pre-run.
+    /// Resets the timer state on the source frame data; its recording keeps only the last
+    /// <paramref name="keepFrames"/> frames, as the next run's pre-run.
     /// </summary>
     public static ReplaySaveSnapshot CreateMainReplaySnapshot(PlayerFrameData frame, int keepFrames)
     {
-        // The replay gets an exact copy and the buffer is kept for the next run, at its size unless it grew far past
-        // this run (a long warm-up, then short attempts).
-        var buffer       = frame.Frames;
-        var framesBuffer = buffer.ToArray();
-        TrimPreRunFrames(frame, keepFrames);
-
-        if (buffer.Capacity > 4 * Math.Max(framesBuffer.Length, InitialFrames))
-        {
-            buffer.Capacity = Math.Max(framesBuffer.Length, InitialFrames);
-        }
+        // The replay takes the recording's chunks as they are; only the frames kept for the next run are copied.
+        var framesBuffer = frame.Frames.Detach(keepFrames);
 
         var header = new ReplayFileHeader
         {
             SteamId     = frame.SteamId,
-            TotalFrames = framesBuffer.Length,
+            TotalFrames = framesBuffer.Count,
             PreFrame    = frame.TimerStartFrame,
             PostFrame   = frame.TimerFinishFrame,
             Time        = frame.FinishTime,
@@ -551,8 +542,8 @@ internal static class ReplayShared
 
     /// <summary>
     /// Create a stage replay snapshot from PlayerFrameData.
-    /// Materializes the [startTick, startTick+length) range into a private array so the
-    /// snapshot never aliases the player's live, still-mutating Frames list.
+    /// Copies the [startTick, startTick+length) range into chunks of its own so the
+    /// snapshot never aliases the player's live, still-mutating recording.
     /// </summary>
     public static ReplaySaveSnapshot CreateStageReplaySnapshot(PlayerFrameData frame,
                                                                int             startTick,
@@ -565,22 +556,12 @@ internal static class ReplayShared
         var length     = Math.Max(0, finalFrame                        - startTick);
 
         // Copy the frames out NOW, on the (main-thread) caller. Unlike the main path —
-        // which detaches its buffer by swapping in a fresh list (CreateMainReplaySnapshot) —
-        // the stage path can't swap because the run continues, so a zero-copy slice over
-        // frame.Frames would be read by the background serializer while OnPlayerRunCommandPost
-        // keeps appending and TrimPreRunFrames shrinks the same List<T>: a torn-read / shifted-
-        // frame data race. A private array makes the snapshot immutable and self-contained.
-        ReplayFrameData[] framesToWrite;
-
-        if (length == 0)
-        {
-            framesToWrite = [];
-        }
-        else
-        {
-            framesToWrite = new ReplayFrameData[length];
-            frame.Frames.CopyTo(startTick, framesToWrite, 0, length);
-        }
+        // which hands its chunks to its snapshot (CreateMainReplaySnapshot) — the stage
+        // path can't, because the run continues, so a view over frame.Frames would be read
+        // by the background serializer while OnPlayerRunCommandPost keeps appending and
+        // TrimPreRunFrames drops frames off its front: a torn-read / shifted-frame data race.
+        // A copy in pooled chunks of its own makes the snapshot immutable and self-contained.
+        IReadOnlyList<ReplayFrameData> framesToWrite = length == 0 ? [] : frame.Frames.CopyRange(startTick, length);
 
         // Clamp the marker fields to the materialized length so they can never index past the
         // written frames (e.g. when the post-run pushed stageFinishFrame beyond what was recorded).
@@ -590,7 +571,7 @@ internal static class ReplayShared
         var header = new ReplayFileHeader
         {
             SteamId     = frame.SteamId,
-            TotalFrames = framesToWrite.Length,
+            TotalFrames = framesToWrite.Count,
             PreFrame    = preFrame,
             PostFrame   = postFrame,
             Time        = finishTime,
@@ -605,18 +586,11 @@ internal static class ReplayShared
     /// </summary>
     public static void TrimPreRunFrames(PlayerFrameData frameData, int maxPreFrame)
     {
-        if (maxPreFrame <= 0)
-        {
-            frameData.Frames.Clear();
-
-            return;
-        }
-
-        var excess = frameData.Frames.Count - maxPreFrame;
+        var excess = frameData.Frames.Count - Math.Max(maxPreFrame, 0);
 
         if (excess > 0)
         {
-            frameData.Frames.RemoveRange(0, excess);
+            frameData.Frames.RemoveFirst(excess);
         }
     }
 
@@ -636,7 +610,7 @@ internal static class ReplayShared
             return;
         }
 
-        frameData.Frames.RemoveRange(0, excess);
+        frameData.Frames.RemoveFirst(excess);
         ShiftFrameIndices(frameData.NewStageTicks, excess);
         ShiftFrameIndices(frameData.StageTimerStartTicks, excess);
         frameData.TimerStartFrame  = Math.Max(0, frameData.TimerStartFrame  - excess);
@@ -679,7 +653,7 @@ internal static class ReplayShared
             return false;
         }
 
-        frameData.Frames.RemoveRange(mark.FrameCount, frameData.Frames.Count - mark.FrameCount);
+        frameData.Frames.Truncate(mark.FrameCount);
 
         frameData.NewStageTicks.Clear();
         frameData.NewStageTicks.AddRange(mark.NewStageTicks);
@@ -824,7 +798,8 @@ internal static class ReplayShared
         return true;
     }
 
-    private static ReplayFrameData[]? DeserializeReplayFrames(ReadOnlySpan<byte> payload, int version, Decompressor decompressor)
+    private static IReadOnlyList<ReplayFrameData>? DeserializeReplayFrames(ReadOnlySpan<byte> payload, int version, Decompressor decompressor,
+                                                                           bool pooled)
     {
         ulong capacity;
         try
@@ -835,7 +810,7 @@ internal static class ReplayShared
         catch (ZstdException)
         {
             // Legacy and current files may be stored without Zstd compression.
-            return ReplayFrameStorage.Deserialize(payload, version);
+            return Deserialize(payload);
         }
 
         // The declared size comes from the (possibly remote or corrupt) payload itself. A 24-hour
@@ -848,11 +823,14 @@ internal static class ReplayShared
         try
         {
             var written = decompressor.Unwrap(payload, buffer.AsSpan(0, (int)capacity));
-            return ReplayFrameStorage.Deserialize(buffer.AsSpan(0, written), version);
+            return Deserialize(buffer.AsSpan(0, written));
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+
+        IReadOnlyList<ReplayFrameData>? Deserialize(ReadOnlySpan<byte> frames)
+            => pooled ? ReplayFrameStorage.DeserializePooled(frames, version) : ReplayFrameStorage.Deserialize(frames, version);
     }
 }

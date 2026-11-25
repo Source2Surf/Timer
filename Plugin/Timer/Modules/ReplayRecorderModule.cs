@@ -417,9 +417,11 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
             return;
         }
 
+        // Put in again (a map change), or a previous occupant's recording if its disconnect went unseen.
+        ReleaseFrameData(slot);
+
         var data = new PlayerFrameData
         {
-            Frames  = new List<ReplayFrameData>(ReplayShared.InitialFrames),
             SteamId = client.SteamId,
             Name    = client.Name,
             Lineage = _nextLineage++,
@@ -437,6 +439,13 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
             return;
         }
 
+        ReleaseFrameData(slot);
+    }
+
+    // Ends a slot's recording: pending post-run captures take their snapshots first (ForceCallOnStop), then the
+    // recording's chunks go back to the pool.
+    private void ReleaseFrameData(PlayerSlot slot)
+    {
         if (_playerFrameData[slot] is not { } frame)
         {
             return;
@@ -452,6 +461,12 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
         {
             _bridge.ModSharp.StopTimer(postFrameTimer);
             frame.PostFrameTimer = null;
+        }
+
+        // A stage finish's deferred half still reads these frames this frame: they're left to it, and the GC.
+        if (!frame.StageFinishPending)
+        {
+            frame.Frames.Clear();
         }
 
         _playerFrameData[slot] = null;
@@ -862,6 +877,8 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
             _logger.LogInformation("No replay for {SteamId} style={Style} track={Track} stage={Stage}: the run outgrew timer_replay_max_minutes",
                                    frame.SteamId, style, track, stage);
 
+            snapshot.ReleaseFrames();
+
             return;
         }
 
@@ -879,6 +896,8 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                                  + "only {FrameCount} frames (min {MinFrames})",
                                  frame.SteamId, style, track, snapshot.Frames.Count, MinValidFrames);
             }
+
+            snapshot.ReleaseFrames();
 
             return;
         }
@@ -1020,6 +1039,7 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
     /// <summary>
     ///     Serializes snapshot, writes to disk, notifies Playback, and handles upload.
     ///     Runs I/O in Task.Run. On failure, fallback-notifies with NoNewRecord.
+    ///     Once Playback has seen the frames, they're its own if it keeps them, else back to the chunk pool.
     /// </summary>
     private void WriteReplayToDiskAndNotify(ReplaySaveSnapshot snapshot,
                                             string             filePath,
@@ -1044,6 +1064,10 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
 
         Task.Run(async () =>
         {
+            // Set on the main thread once Playback has seen the frames: they may then be gone, so the failure
+            // path below doesn't hand them over a second time.
+            var notified = false;
+
             try
             {
                 if (writeFile
@@ -1073,14 +1097,17 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                 // Evaluate the playback notify on the game main thread (it touches bot state).
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
+                    notified = true;
+                    var kept = false;
+
                     if (IsCurrentReplayMap(mapId))
                     {
-                        NotifyPlaybackSaved(_playbackModule,
-                                            style,
-                                            track,
-                                            stage,
-                                            replayContent,
-                                            context);
+                        kept = NotifyPlaybackSaved(_playbackModule,
+                                                   style,
+                                                   track,
+                                                   stage,
+                                                   replayContent,
+                                                   context);
                     }
                     else
                     {
@@ -1089,6 +1116,12 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                         _logger.LogInformation(
                             "Suppressing replay playback cache update for stale map {MapId}; current map has changed.",
                             mapId);
+                    }
+
+                    // The file is written and the upload reads it, not the frames.
+                    if (!kept)
+                    {
+                        snapshot.ReleaseFrames();
                     }
 
                     shouldUpload = providerReady && (uploadNonPB || isNewBest);
@@ -1163,20 +1196,29 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                                  track,
                                  stage);
 
+                // Failed after Playback had the frames: it has what it keeps, the rest went back to the pool.
+                if (notified)
+                {
+                    return;
+                }
+
                 var fallbackContext = context with { AttemptResult = EAttemptResult.NoNewRecord };
 
                 var fallbackContent = new ReplayContent { Header = header, Frames = frames };
 
                 await _bridge.ModSharp.InvokeFrameActionAsync(() =>
                 {
-                    if (IsCurrentReplayMap(mapId))
+                    var kept = IsCurrentReplayMap(mapId)
+                               && NotifyPlaybackSaved(_playbackModule,
+                                                      style,
+                                                      track,
+                                                      stage,
+                                                      fallbackContent,
+                                                      fallbackContext);
+
+                    if (!kept)
                     {
-                        NotifyPlaybackSaved(_playbackModule,
-                                            style,
-                                            track,
-                                            stage,
-                                            fallbackContent,
-                                            fallbackContext);
+                        snapshot.ReleaseFrames();
                     }
                 }).ConfigureAwait(false);
             }
@@ -1901,7 +1943,8 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
 
         // Frames are otherwise only trimmed at timer start, so a player idling without a run
         // (in a zone, AFK), or on a practice run that can't be saved, grows this buffer by ~4 KB/s for as long as
-        // they stay. Trim once it is well past the pre-run window, so RemoveRange runs about once a minute.
+        // they stay. Trim once it is well past the pre-run window, about once a minute; the chunks it empties go back
+        // to the pool.
         var maxPreFrame = (int) (timer_replay_prerun_time.GetFloat() * TimerConstants.Tickrate);
 
         if (frameData.Frames.Count > maxPreFrame + IdleFrameTrimSlack

@@ -311,6 +311,104 @@ public sealed class ReplayRecorderCorrelationTests
         }
     }
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    [InlineData(1, true)]
+    public async Task ASavedReplaysChunksGoBackToThePoolUnlessPlaybackKeepsThem(int stage, bool keeps)
+    {
+        var root = CreateTempDirectory();
+
+        try
+        {
+            var mapName   = "surf_current";
+            var key       = Key(mapId: 101, attemptId: 7, stage);
+            var finalPath = ReplayShared.BuildReplayPath(root, mapName, key.Style, key.Track, key.Stage, 44);
+            Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
+            var playback    = new RecordingPlaybackModule(keeps);
+            var frameAction = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var module = CreateUninitializedModule(root,
+                                                   mapName,
+                                                   playback,
+                                                   new CurrentMapInfoModule(mapId: key.MapId, mapName),
+                                                   frameActionCompleted: frameAction);
+            SetField(module, "timer_replay_file_compression_level", DispatchProxy.Create<IConVar, FixedConVarProxy>());
+            SetField(module, "timer_replay_file_compression_workers", DispatchProxy.Create<IConVar, FixedConVarProxy>());
+
+            var pool   = new ReplayFrameChunkPool(16);
+            var frames = new ReplayFrameBuffer(pool);
+
+            for (var i = 0; i < 2000; i++)
+            {
+                frames.Add(new ReplayFrameData());
+            }
+
+            var pending = new PendingReplay
+            {
+                Snapshot     = new ReplaySaveSnapshot(new ReplayFileHeader { SteamId = key.SteamId, TotalFrames = 2000, Time = 12.5f }, frames),
+                TempFilePath = Path.Combine(root, $"{Guid.NewGuid():N}.tmp"),
+                MapName      = mapName,
+            };
+            var saved = new RunRecord
+            {
+                Id      = 44,
+                MapId   = key.MapId,
+                SteamId = key.SteamId,
+                Style   = key.Style,
+                Track   = key.Track,
+                Stage   = key.Stage,
+                Time    = 12.5f,
+            };
+            var recordEvent = new PlayerRecordSavedEvent(new SteamID(key.SteamId),
+                                                         "runner",
+                                                         EAttemptResult.NewPersonalRecord,
+                                                         saved,
+                                                         null,
+                                                         null,
+                                                         key.AttemptId);
+            var process = typeof(ReplayRecorderModule).GetMethod("ProcessPendingReplay",
+                                                                 BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(process);
+
+            process!.Invoke(module, [pending, key, 44L, recordEvent]);
+            await frameAction.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            // Written from the chunks first; then playback has them for good, or the pool has them back.
+            Assert.True(File.Exists(finalPath));
+            Assert.Equal(1, playback.Notifications);
+            Assert.Equal(keeps ? 2000 : 0, frames.Count);
+            Assert.Equal(keeps ? 0 : 2, pool.SpareCount);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ADisconnectGivesBackTheRecordingUnlessAStageFinishStillReadsIt(bool stageFinishPending)
+    {
+        var module    = CreateUninitializedModule(Path.GetTempPath(), "surf_current");
+        var frameData = new PlayerFrameData?[PlayerSlot.MaxPlayerCount];
+        var recording = new PlayerFrameData { Name = "runner", StageFinishPending = stageFinishPending };
+
+        for (var i = 0; i < 1500; i++)
+        {
+            recording.Frames.Add(new ReplayFrameData());
+        }
+
+        frameData[1] = recording;
+        SetField(module, "_playerFrameData", frameData);
+
+        module.OnClientDisconnected(new PlayerSlot(1));
+
+        Assert.Null(frameData[1]);
+        Assert.Equal(stageFinishPending ? 1500 : 0, recording.Frames.Count);
+    }
+
     private static ReplayRecorderModule CreateUninitializedModule(string replayDirectory,
                                                                   string          currentMapName,
                                                                   IReplayPlaybackModule? playback = null,
@@ -460,7 +558,8 @@ public sealed class ReplayRecorderCorrelationTests
         }
     }
 
-    private sealed class RecordingPlaybackModule : IReplayPlaybackModule
+    // Keeps every replay it's told of, as a new server record would be kept, unless told otherwise.
+    private sealed class RecordingPlaybackModule(bool keeps = true) : IReplayPlaybackModule
     {
         public int Notifications { get; private set; }
 
@@ -470,7 +569,7 @@ public sealed class ReplayRecorderCorrelationTests
                                          ReplaySaveContext context)
         {
             Notifications++;
-            return true;
+            return keeps;
         }
 
         public bool OnNewStageReplaySaved(int style,
@@ -480,7 +579,7 @@ public sealed class ReplayRecorderCorrelationTests
                                           ReplaySaveContext context)
         {
             Notifications++;
-            return true;
+            return keeps;
         }
 
         public IReplayBotData? GetReplayBotData(PlayerSlot slot) => null;

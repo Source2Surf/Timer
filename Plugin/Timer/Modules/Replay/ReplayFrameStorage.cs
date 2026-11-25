@@ -36,7 +36,7 @@ internal sealed class ReplayFrameStorage
     public int SerializedSize => checked(sizeof(int) + _frameCount * FrameSize);
 
     // The caller owns a stable snapshot for the entire save operation. Main snapshots detach
-    // their list; stage snapshots copy their range before background work starts.
+    // their chunks; stage snapshots copy their range before background work starts.
     public ReplayFrameStorage(IReadOnlyList<ReplayFrameData> frames)
     {
         _frames = frames;
@@ -123,20 +123,7 @@ internal sealed class ReplayFrameStorage
 
     public static ReplayFrameData[]? Deserialize(ReadOnlySpan<byte> payload, int version)
     {
-        var frameSize = version switch
-        {
-            LegacyVersion => Unsafe.SizeOf<ReplayFrameData>(),
-            CompactVersion => CompactFrameSize,
-            _ => throw new InvalidDataException($"Unsupported replay version: {version}."),
-        };
-        // MemoryPack unmanaged arrays have a 4-byte count followed by raw frame bytes.
-        // Reject truncated/mislabeled data before allocating, and do not silently ignore trailing bytes.
-        if (payload.Length < sizeof(int))
-            throw new InvalidDataException("Missing replay frame count.");
-
-        var count = BinaryPrimitives.ReadInt32LittleEndian(payload);
-        if (count < -1 || payload.Length != sizeof(int) + (long)Math.Max(count, 0) * frameSize)
-            throw new InvalidDataException("Replay frame payload length does not match its format.");
+        var count = ReadFrameCount(payload, version, out _);
 
         if (count == -1)
             return null;
@@ -159,6 +146,55 @@ internal sealed class ReplayFrameStorage
         }
 
         return frames;
+    }
+
+    /// <summary>
+    /// As <see cref="Deserialize"/>, into pooled chunks rather than one array: for frames that are read once and
+    /// dropped, such as a PB replay's for its spatial index. The caller gives them back with
+    /// <see cref="ReplayFrameBuffer.Clear"/>.
+    /// </summary>
+    public static ReplayFrameBuffer? DeserializePooled(ReadOnlySpan<byte> payload, int version)
+    {
+        var count = ReadFrameCount(payload, version, out var frameSize);
+
+        if (count == -1)
+            return null;
+
+        var frames = new ReplayFrameBuffer();
+        var frameBytes = payload[sizeof(int)..];
+        if (version == LegacyVersion)
+        {
+            for (var i = 0; i < count; i++)
+                frames.Add(MemoryMarshal.Read<ReplayFrameData>(frameBytes.Slice(i * frameSize, frameSize)));
+        }
+        else
+        {
+            var packed = MemoryMarshal.Cast<byte, CompactFrame>(frameBytes);
+            for (var i = 0; i < count; i++)
+                frames.Add(packed[i].ToRuntime());
+        }
+
+        return frames;
+    }
+
+    // MemoryPack unmanaged arrays have a 4-byte count followed by raw frame bytes; -1 is a null array.
+    // Reject truncated/mislabeled data before allocating, and do not silently ignore trailing bytes.
+    private static int ReadFrameCount(ReadOnlySpan<byte> payload, int version, out int frameSize)
+    {
+        frameSize = version switch
+        {
+            LegacyVersion => Unsafe.SizeOf<ReplayFrameData>(),
+            CompactVersion => CompactFrameSize,
+            _ => throw new InvalidDataException($"Unsupported replay version: {version}."),
+        };
+        if (payload.Length < sizeof(int))
+            throw new InvalidDataException("Missing replay frame count.");
+
+        var count = BinaryPrimitives.ReadInt32LittleEndian(payload);
+        if (count < -1 || payload.Length != sizeof(int) + (long)Math.Max(count, 0) * frameSize)
+            throw new InvalidDataException("Replay frame payload length does not match its format.");
+
+        return count;
     }
 
     // Preserve the existing 1/32-unit position, velocity and angle quantization.
