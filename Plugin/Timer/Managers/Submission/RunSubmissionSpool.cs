@@ -202,14 +202,14 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
         {
             EnsureInitialized();
 
+            // The sender's poll nearly always finds nothing due: no token, query or list for that.
+            if (!AnyClaimable(now, finalAttemptForClaimsUpTo))
+            {
+                return [];
+            }
+
             var leaseToken = string.Concat(leaseOwner, ":", Guid.NewGuid().ToString("N"));
-            var candidates = _entries.Values
-                                     .Where(entry => entry.QuarantinedAtUtc is null
-                                                     && (IsDue(entry, now) || NeedsFinalAttempt(entry, now, finalAttemptForClaimsUpTo)))
-                                     .OrderBy(entry => entry.NextAttemptAtUtc)
-                                     .ThenBy(entry => entry.CreatedAtUtc)
-                                     .Take(maximumCount)
-                                     .ToList();
+            var candidates = ClaimableInOrder(maximumCount, now, finalAttemptForClaimsUpTo);
             var claimed = new List<RunSubmissionSpoolLease>(candidates.Count);
             var claimSequence = candidates.Count == 0 ? _claimSequence : ++_claimSequence;
 
@@ -412,6 +412,60 @@ internal sealed class RunSubmissionSpool : IManager, IDisposable
         return finalAttemptForClaimsUpTo is { } upTo
                && (entry.LeaseUntilUtc is null || entry.LeaseUntilUtc.Value <= now)
                && entry.LastClaimSequence <= upTo;
+    }
+
+    private static bool IsClaimable(RunSubmissionQueueEntry entry, DateTime now, long? finalAttemptForClaimsUpTo)
+    {
+        return entry.QuarantinedAtUtc is null
+               && (IsDue(entry, now) || NeedsFinalAttempt(entry, now, finalAttemptForClaimsUpTo));
+    }
+
+    // Its own method: the query's lambda captures the parameters, and C# makes that closure on entry to the method
+    // declaring them, so in ClaimDueBatch every poll would make it, due entries or not.
+    private List<RunSubmissionQueueEntry> ClaimableInOrder(int maximumCount, DateTime now, long? finalAttemptForClaimsUpTo)
+    {
+        return _entries.Values
+                       .Where(entry => IsClaimable(entry, now, finalAttemptForClaimsUpTo))
+                       .OrderBy(entry => entry.NextAttemptAtUtc)
+                       .ThenBy(entry => entry.CreatedAtUtc)
+                       .Take(maximumCount)
+                       .ToList();
+    }
+
+    private bool AnyClaimable(DateTime now, long? finalAttemptForClaimsUpTo)
+    {
+        foreach (var entry in _entries.Values)
+        {
+            if (IsClaimable(entry, now, finalAttemptForClaimsUpTo))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether an entry can still be sent, now or after its backoff or lease: any that is not
+    /// quarantined. Without one only an enqueue makes work. Never throws, initialized or not.
+    /// </summary>
+    internal bool HasSendableEntries
+    {
+        get
+        {
+            lock (_gate)
+            {
+                foreach (var entry in _entries.Values)
+                {
+                    if (entry.QuarantinedAtUtc is null)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
     }
 
     /// <summary>The sequence number of the most recent claim; zero before any claim.</summary>

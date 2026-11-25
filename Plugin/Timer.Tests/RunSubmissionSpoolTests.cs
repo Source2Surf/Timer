@@ -143,6 +143,32 @@ public sealed class RunSubmissionSpoolTests
         Assert.Equal(new SubmissionSpoolSnapshot(0, 0, 0), spool.GetSnapshot());
     }
 
+    // What the sender's idle wait goes by: a backed off or leased entry still polls, a dead letter doesn't.
+    [Fact]
+    public void SendableEntriesAreTheOnesNotQuarantined()
+    {
+        using var spool = CreateSpool();
+        Assert.False(spool.HasSendableEntries);
+
+        Assert.Equal(SubmissionSpoolEnqueueDisposition.Enqueued, spool.Enqueue(CreateRequest(Guid.NewGuid()), TestNow).Disposition);
+        Assert.True(spool.HasSendableEntries);
+
+        var lease = Assert.Single(spool.ClaimDueBatch(1, "leased", TestNow));
+        Assert.True(spool.HasSendableEntries);
+
+        Assert.True(spool.Retry(lease.SubmissionId, lease.LeaseToken, "offline", TestNow));
+        Assert.Empty(spool.ClaimDueBatch(1, "backed-off", TestNow));
+        Assert.True(spool.HasSendableEntries);
+
+        var retried = Assert.Single(spool.ClaimDueBatch(1, "due", TestNow.AddHours(1)));
+        Assert.True(spool.Quarantine(retried.SubmissionId, retried.LeaseToken, "validation failure", TestNow.AddHours(1)));
+        Assert.False(spool.HasSendableEntries);
+        Assert.Empty(spool.ClaimDueBatch(1, "dead-letter", TestNow.AddDays(1)));
+
+        spool.Shutdown();
+        Assert.False(spool.HasSendableEntries);
+    }
+
     [Fact]
     public void ShutdownAndNewQueueLoseUnacknowledgedEntriesByDesign()
     {
