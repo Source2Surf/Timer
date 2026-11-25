@@ -706,10 +706,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     // A reload can take a player's style away; they go to the default.
     private void MovePlayersOffGoneStyles()
     {
-        for (var i = 0; i < PlayerSlot.MaxPlayerCount; i++)
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
-            var slot = (PlayerSlot) i;
-
             if (_timerModule.GetTimerInfo(slot) is { } timer && !IsStyleEnabled(timer.Style))
             {
                 NotifyClientStyleChanged(slot, timer.Style, DefaultStyle);

@@ -516,7 +516,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
     public void OnZoneRemoved(IZoneInfo info)
     {
-        for (var slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
             if (_timerInfo[slot] is { } timerInfo && timerInfo.Track == info.Track && timerInfo.InZone == info.ZoneType)
             {
