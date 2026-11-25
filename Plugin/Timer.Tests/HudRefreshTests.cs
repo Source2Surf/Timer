@@ -52,7 +52,7 @@ public sealed class HudRefreshTests
         var p      = new HudPlayer(new PlayerSlot(1), 0f);
 
         p.FinishTitle.Set((2, true, 3), "a");
-        p.ReplayTitle.Set((header, 1, 0, 2, 4, 3), "c");
+        p.ReplayTitle.Set((header, 1, 7, 0, 2, 4, 3), "c");
         p.ReplayAfter.Set((true, 1f, 3), "d");
 
         var hits = 0;
@@ -60,7 +60,7 @@ public sealed class HudRefreshTests
         Assert.Equal(0, Allocated(() =>
         {
             hits += p.FinishTitle.TryGet((2, true, 3), out _) ? 1 : 0;
-            hits += p.ReplayTitle.TryGet((header, 1, 0, 2, 4, 3), out _) ? 1 : 0;
+            hits += p.ReplayTitle.TryGet((header, 1, 7, 0, 2, 4, 3), out _) ? 1 : 0;
             hits += p.ReplayAfter.TryGet((true, 1f, 3), out _) ? 1 : 0;
         }));
 
@@ -72,9 +72,9 @@ public sealed class HudRefreshTests
     {
         IReadOnlyList<RunRecord> runs = [];
 
-        var menu = new HudModule.ReplayMenuDrawn(1, 2, 3, 4, 0, 1, 0, 2, 0, 3, false, null, runs, false, null, EReplayBotStatus.Idle,
+        var menu = new HudModule.ReplayMenuDrawn(1, 2, 3, 7, 8, 4, 0, 1, 0, 2, 0, 3, false, null, runs, false, null, EReplayBotStatus.Idle,
                                                  0, null, 0, 0, 0, 0, 0, false, 1f, new PlayerSlot(5), true, false, false, null);
-        var card = new HudModule.ProfileDrawn(1, 2, 3, 4, 5, 6, 0, 1, runs, 10, 3, 1500, null, true, 3600, 4, true,
+        var card = new HudModule.ProfileDrawn(1, 2, 3, 7, 8, 4, 5, 6, 0, 1, runs, 10, 3, 1500, null, true, 3600, 4, true,
                                               new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc), new PlayerCountry("CN", "China"));
         HudModule.ReplayMenuDrawn? menuDrawn = menu;
         HudModule.ProfileDrawn?    cardDrawn = card;
@@ -92,8 +92,12 @@ public sealed class HudRefreshTests
         Assert.NotEqual(menu, menu with { BotStatus = EReplayBotStatus.Running });
         Assert.NotEqual(menu, menu with { Busy = new PlayerSlot(5) });
         Assert.NotEqual(menu, menu with { Minute = 5 });
+        Assert.NotEqual(menu, menu with { MyRecordsVersion = 9 }); // a new best of the viewer's: My Runs' badges
+        Assert.NotEqual(menu, menu with { StylesVersion = 9 });    // reload_styles: the style names
         Assert.NotEqual(card, card with { Points = 1501 });
         Assert.NotEqual(card, card with { SessionMinutes = 6 });
+        Assert.NotEqual(card, card with { TargetRecordsVersion = 9 }); // their records loaded after joining
+        Assert.NotEqual(card, card with { StylesVersion = 9 });
     }
 
     // The texts now formatted in place read exactly as through string formatting, in every language the locale has.

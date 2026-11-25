@@ -66,6 +66,8 @@ internal partial class HudModule
         int                       Epoch,
         int                       ZonesVersion,
         int                       RecordsVersion,
+        int                       MyRecordsVersion,
+        int                       StylesVersion,
         long                      Minute,
         int                       Tab,
         int                       Track,
@@ -365,9 +367,10 @@ internal partial class HudModule
             w.Numbered("RmBarFill", "w", ProgressSteps[HudFormat.ProgressStep(elapsed, bot.Time)]);
         }
 
-        // The rest is drawn again only when the picks, the boards, the bot or the language change, and each minute for
-        // a run's "5 min ago" and the names it shows.
+        // The rest is drawn again only when the picks, the boards, the player's own records (My Runs' badges), the
+        // styles, the bot or the language change, and each minute for a run's "5 min ago" and the names it shows.
         var drawn = new ReplayMenuDrawn(p.TrEpoch, _zoneModule.EditVersion, _recordModule.RecordsVersion,
+                                        _recordModule.GetPlayerRecordsVersion(p.Slot), _styleModule.StylesVersion,
                                         DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute,
                                         m.Tab, m.Track, m.Stage, m.Style, m.Page, m.Selected, m.Loading, m.Note, m.Runs, m.RunsLoading,
                                         bot, bot?.Status ?? default, bot?.RunId ?? 0, header, bot?.Rank ?? 0, bot?.Style ?? 0,

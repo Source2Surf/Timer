@@ -53,6 +53,12 @@ internal interface IStyleModule
     StyleSetting GetStyleSetting(int style);
 
     /// <summary>
+    ///     Changes each time the style config is loaded (reload_styles): the names and the styles players can pick may
+    ///     have changed with it.
+    /// </summary>
+    int StylesVersion { get; }
+
+    /// <summary>
     ///     The styles players can pick, in the config's order.
     /// </summary>
     IReadOnlyList<int> GetStyleIds();
@@ -106,6 +112,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
     private StyleSetting?[] _byId = new StyleSetting?[TimerConstants.MAX_STYLE];
     private int[]           _ids  = [];
+
+    public int StylesVersion { get; private set; }
 
     // ReSharper disable InconsistentNaming
 
@@ -646,6 +654,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         }
 
         (_byId, _ids) = ResolveStyles(styles, _logger);
+        StylesVersion++;
 
         AddStyleCommands();
         MovePlayersOffGoneStyles();

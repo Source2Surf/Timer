@@ -283,9 +283,9 @@ internal sealed class HudPlayer
     public          int                         CjkEpoch = -1; // the TrEpoch the menus' cjk class follows
 
     // ---- the timer's titles as last made, by what they show: a refresh only formats one that changed
-    public HudMemo<(int Track, bool Practice, int Epoch)>                                             FinishTitle;
-    public HudMemo<(ReplayFileHeader Header, int Style, int Track, int Stage, int Rank, int Epoch)> ReplayTitle;
-    public HudMemo<(bool Paused, float Speed, int Epoch)>                                             ReplayAfter;
+    public HudMemo<(int Track, bool Practice, int Epoch)>                                                                FinishTitle;
+    public HudMemo<(ReplayFileHeader Header, int Style, int StylesVersion, int Track, int Stage, int Rank, int Epoch)> ReplayTitle;
+    public HudMemo<(bool Paused, float Speed, int Epoch)>                                                                ReplayAfter;
 
     public void ForgetSent()
     {

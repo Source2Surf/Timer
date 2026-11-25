@@ -256,6 +256,8 @@ internal partial class HudModule
         int                       Epoch,
         int                       ZonesVersion,
         int                       RecordsVersion,
+        int                       TargetRecordsVersion,
+        int                       StylesVersion,
         long                      Minute,
         long                      SessionMinutes,
         int                       Version,
@@ -407,7 +409,9 @@ internal partial class HudModule
             : profile?.JoinDate;
         var country = f.Offline ? null : _countries.GetShownCountry(f.Target);
 
+        // Someone online's best times are the server's (GetPlayerRecord), loaded a while after they join.
         var drawn = new ProfileDrawn(p.TrEpoch, _zoneModule.EditVersion, _recordModule.RecordsVersion,
+                                     f.Offline ? 0 : _recordModule.GetPlayerRecordsVersion(f.Target), _styleModule.StylesVersion,
                                      DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute, (long) (session / 60),
                                      f.Version, f.Style, f.Track, f.Records, f.RankOf, f.Rank, points, f.Summary, f.SummaryFetched,
                                      f.MapPlayTime, f.MapPlays, f.MapStatsFetched, joined, country);

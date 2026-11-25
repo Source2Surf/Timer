@@ -865,8 +865,9 @@ internal partial class HudModule
         }
         else
         {
-            // Whose replay, and the pause or speed after its time: made again only when the replay or those change.
-            var titleKey = (header, bot.Style, bot.Track, bot.Stage, bot.Rank, p.TrEpoch);
+            // Whose replay, and the pause or speed after its time: made again only when the replay or those change, or
+            // the style config is reloaded (its name).
+            var titleKey = (header, bot.Style, _styleModule.StylesVersion, bot.Track, bot.Stage, bot.Rank, p.TrEpoch);
 
             if (!p.ReplayTitle.TryGet(titleKey, out var title))
             {
