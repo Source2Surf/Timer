@@ -102,17 +102,28 @@ internal partial class ReplayPlaybackModule : IPersonalBestReplays
 
         Task.Run(async () =>
         {
-            ReplayContent?     content = null;
-            ClosestFrameIndex? index   = null;
+            ReplayFileHeader?  header     = null;
+            var                frameCount = 0;
+            ClosestFrameIndex? index      = null;
 
             try
             {
-                content = LoadRunFromDisk(mapName, pb) ?? await LoadRunFromRemote(mapName, pb, true).ConfigureAwait(false);
+                // Only the index is kept, so the frames are read into pooled chunks and given back once it's built.
+                var content = LoadRunFromDisk(mapName, pb, pooled: true)
+                              ?? await LoadRunFromRemote(mapName, pb, true, pooled: true).ConfigureAwait(false);
 
-                // Built here: it can take a few ms for a long run, too long for the game thread.
-                if (content is { Frames.Count: > 0 })
+                if (content is not null)
                 {
-                    index = new ClosestFrameIndex(content.Frames);
+                    header     = content.Header;
+                    frameCount = content.Frames.Count;
+
+                    // Built here: it can take a few ms for a long run, too long for the game thread.
+                    if (frameCount > 0)
+                    {
+                        index = new ClosestFrameIndex(content.Frames);
+                    }
+
+                    (content.Frames as ReplayFrameBuffer)?.Clear();
                 }
             }
             catch (Exception e)
@@ -140,7 +151,7 @@ internal partial class ReplayPlaybackModule : IPersonalBestReplays
                                                                       return;
                                                                   }
 
-                                                                  entry.Replay = new PersonalBestReplay(content!.Header, content.Frames.Count, index);
+                                                                  entry.Replay = new PersonalBestReplay(header!, frameCount, index);
                                                               },
                                                               token)
                              .ConfigureAwait(false);

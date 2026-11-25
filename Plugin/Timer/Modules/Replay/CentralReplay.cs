@@ -377,8 +377,9 @@ internal partial class ReplayPlaybackModule : ICentralReplay
         bot.Timer = null;
     }
 
-    // A best run (PB or WR when it was set) keeps its file; a slower one is among its player's recent runs.
-    private ReplayContent? LoadRunFromDisk(string mapName, RunRecord record)
+    // A best run (PB or WR when it was set) keeps its file; a slower one is among its player's recent runs. Pooled
+    // frames are for a caller that only reads them once (ReplayFrameStorage.DeserializePooled).
+    private ReplayContent? LoadRunFromDisk(string mapName, RunRecord record, bool pooled = false)
     {
         string[] paths =
         [
@@ -395,7 +396,7 @@ internal partial class ReplayPlaybackModule : ICentralReplay
 
             using var decompressor = new Decompressor();
 
-            if (ReplayShared.LoadReplayFromPath(path, record.Style, record.Track, record.Stage, decompressor, _logger) is { } result)
+            if (ReplayShared.LoadReplayFromPath(path, record.Style, record.Track, record.Stage, decompressor, _logger, pooled) is { } result)
             {
                 return result.Content;
             }
@@ -406,7 +407,7 @@ internal partial class ReplayPlaybackModule : ICentralReplay
 
     // That run by its id; for a leaderboard row, whose run is its player's best, also their best by SteamID, which
     // a store without run lookups still has.
-    private async Task<ReplayContent?> LoadRunFromRemote(string mapName, RunRecord record, bool best)
+    private async Task<ReplayContent?> LoadRunFromRemote(string mapName, RunRecord record, bool best, bool pooled = false)
     {
         if (!_replayProviderProxy.IsAvailable)
         {
@@ -417,7 +418,7 @@ internal partial class ReplayPlaybackModule : ICentralReplay
 
         if (bytes is not null)
         {
-            return DeserializeAndCache(bytes, mapName, record.Style, record.Track, record.Stage, record.Id);
+            return DeserializeAndCache(bytes, mapName, record.Style, record.Track, record.Stage, record.Id, pooled);
         }
 
         if (best)
@@ -428,13 +429,14 @@ internal partial class ReplayPlaybackModule : ICentralReplay
                                             .ConfigureAwait(false);
         }
 
-        return bytes is null ? null : ReplayShared.DeserializeReplay(bytes, record.Style, record.Track, record.Stage, _logger)?.Content;
+        return bytes is null ? null : ReplayShared.DeserializeReplay(bytes, record.Style, record.Track, record.Stage, _logger, pooled)?.Content;
     }
 
     // Only a replay fetched by its run id is surely that run's, so only those are saved to disk.
-    private ReplayContent? DeserializeAndCache(byte[] bytes, string mapName, int style, int track, int stage, long runId)
+    private ReplayContent? DeserializeAndCache(byte[] bytes, string mapName, int style, int track, int stage, long runId,
+                                               bool pooled = false)
     {
-        if (ReplayShared.DeserializeReplay(bytes, style, track, stage, _logger) is not { } loaded)
+        if (ReplayShared.DeserializeReplay(bytes, style, track, stage, _logger, pooled) is not { } loaded)
         {
             return null;
         }

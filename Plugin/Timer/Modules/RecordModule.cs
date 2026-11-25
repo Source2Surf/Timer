@@ -83,6 +83,9 @@ internal interface IRecordModule
     // Changes whenever a leaderboard is loaded, reloaded or cleared, of this map or another.
     int RecordsVersion { get; }
 
+    // Changes whenever the player's own records (GetPlayerRecord) do: loaded on joining, a new best, a deletion.
+    int GetPlayerRecordsVersion(PlayerSlot slot);
+
     /// <summary>
     /// A board of any map, fastest first. Another map's are null while it loads (the first read starts the load) and
     /// are reloaded in the background once a minute old; the current map's are the ones above.
@@ -501,6 +504,9 @@ internal partial class RecordModule : IModule, IGameListener, IRecordModule, ITi
 
     public RunRecord? GetPlayerRecord(PlayerSlot slot, int style, int track, int stage = 0) =>
         _playerCache.GetRecord(slot, style, track, stage);
+
+    public int GetPlayerRecordsVersion(PlayerSlot slot) =>
+        _playerCache.Version(slot);
 
     public RunRecord? GetWR(int style, int track, int stage = 0) =>
         _mapCache.GetWR(style, track, stage);

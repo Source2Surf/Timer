@@ -75,8 +75,9 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
     private          bool      _refreshAgain;
     private          float     _refreshDueAt = float.PositiveInfinity; // the next scheduled refresh; none at infinity
 
-    // Host_Say sends a chat line to each recipient in turn, ~64 copies in one tick: it's rendered once.
-    private (int Tick, int Index, string Token, string? Name, string? Text, string Line)? _lastChat;
+    // Host_Say sends a chat line to each recipient in turn, ~64 copies in one tick: it's rendered once. Sent is whom this
+    // tick's copies of the line went to.
+    private (int Tick, int Index, string Token, string Line, ulong Sent)? _lastChat;
     private          bool      _shutDown;
     private          Guid      _refreshTimer;
     private          Guid      _scoreTimer;
@@ -289,12 +290,16 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
         ApplyScore(@params.Controller.PlayerSlot);
     }
 
-    // The game resets scores on deaths and team changes, which no spawn follows.
+    // The game resets scores on deaths and team changes, which no spawn follows. By slot rather than GetGameClients,
+    // which makes a list each time; in game is a full sign-on, as it has it.
     private void ApplyScores()
     {
-        foreach (var client in _bridge.ClientManager.GetGameClients(true))
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
-            ApplyScore(client.Slot);
+            if (_bridge.ClientManager.GetGameClient(slot) is { SignOnState: SignOnState.Full })
+            {
+                ApplyScore(slot);
+            }
         }
     }
 
@@ -338,7 +343,7 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
             return;
         }
 
-        var tag = TitleOf(slot) is { } title ? RankTitles.Render(_config.ScoreboardFormat, title, _ranks[slot], _total) : null;
+        var tag = TitleOf(slot) is { } title ? RenderedTag(slot, title) : null;
 
         if (tag is null && _appliedTags[slot] is null)
         {
@@ -352,6 +357,25 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
             controller.SetClanTag(tag);
             _appliedTags[slot] = tag;
         }
+    }
+
+    // A slot's tag as last rendered, and from what: every spawn applies it again, but renders it only once it changes.
+    private readonly ((string Format, RankTitle Title, int Rank, int Total) From, string Tag)?[] _renderedTags
+        = new ((string, RankTitle, int, int), string)?[PlayerSlot.MaxPlayerCount];
+
+    private string RenderedTag(PlayerSlot slot, RankTitle title)
+    {
+        var from = (Format: _config.ScoreboardFormat, Title: title, Rank: _ranks[slot], Total: _total);
+
+        if (_renderedTags[slot] is { } kept && kept.From == from)
+        {
+            return kept.Tag;
+        }
+
+        var tag = RankTitles.Render(from.Format, title, from.Rank, from.Total);
+        _renderedTags[slot] = (from, tag);
+
+        return tag;
     }
 
     // ------------------------------------------------------------------ chat
@@ -376,25 +400,29 @@ internal class RankModule : IModule, IRankModule, IClientListener, IPlayerManage
             return new (EHookAction.Ignored);
         }
 
-        var name = data.ReadString("param1");
-        var text = data.ReadString("param2");
-        var tick = _bridge.GlobalVars.TickCount;
+        var tick      = _bridge.GlobalVars.TickCount;
+        ulong receivers = param.Receivers;
 
         string line;
 
-        if (_lastChat is { } last && last.Tick == tick && last.Index == index && last.Token == token && last.Name == name && last.Text == text)
+        // The next copy of the line rendered last, for someone it hasn't gone to yet: kept, its name and text not even
+        // read. A copy for someone it already went to is the player's next line (say a; say b), read and rendered anew.
+        if (_lastChat is { } last && last.Tick == tick && last.Index == index && last.Token == token && (last.Sent & receivers) == 0)
         {
-            line = last.Line;
+            line      = last.Line;
+            _lastChat = last with { Sent = last.Sent | receivers };
         }
         else
         {
+            var name   = data.ReadString("param1");
+            var text   = data.ReadString("param2");
             var slot   = (byte) (index - 1);
             var title  = TitleOf(slot);
             var format = title is null ? _config.ChatFormatUntitled : _config.ChatFormat;
 
             // A leading color code needs something before it to render.
             line      = " " + RankTitles.Render(format, title, _ranks[slot], _total, StripColors(name), StripColors(text), Prefix(token));
-            _lastChat = (tick, index, token, name, text, line);
+            _lastChat = (tick, index, token, line, receivers);
         }
 
         data.SetString("messagename", line);

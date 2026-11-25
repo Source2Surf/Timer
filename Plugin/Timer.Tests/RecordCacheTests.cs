@@ -66,6 +66,44 @@ public sealed class RecordCacheTests
         Assert.False(cache.IsLoaded(Slot));
     }
 
+    // What the HUD goes by to draw a player's records again: every change moves it on, only for that player, and it
+    // never comes back to a count something was drawn at.
+    [Fact]
+    public void APlayersVersionMovesOnWithEveryChangeToTheirRecords()
+    {
+        var cache = new PlayerRecordCache(NullLogger.Instance);
+        var other = new PlayerSlot(2);
+        var seen  = new HashSet<int> { cache.Version(Slot) };
+
+        void Changed()
+            => Assert.True(seen.Add(cache.Version(Slot)), "the version came back to an earlier count");
+
+        cache.Populate(Slot, [new RunRecord { Id = 1, Time = 90 }], []);
+        Changed();
+
+        cache.SetRecord(Slot, 0, 0, new RunRecord { Id = 2, Time = 80 });
+        Changed();
+
+        var version = cache.Version(Slot);
+        cache.SetRecord(Slot, 0, 0, new RunRecord { Id = 3, Time = 120 }); // slower: the best stays
+        Assert.Equal(version, cache.Version(Slot));
+
+        cache.SetStageRecord(Slot, 0, 0, 1, new RunRecord { Id = 4, Time = 30, Stage = 1 });
+        Changed();
+
+        cache.ReplaceRecord(Slot, 0, 0, 0, null);
+        Changed();
+
+        version = cache.Version(other);
+        cache.Clear(Slot);
+        Changed();
+        Assert.Equal(version, cache.Version(other));
+
+        cache.ClearAll();
+        Changed();
+        Assert.NotEqual(version, cache.Version(other));
+    }
+
     [Fact]
     public void RecordSortUsesRunIdToBreakEqualTimes()
     {

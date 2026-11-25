@@ -277,10 +277,16 @@ internal sealed class RecordSaver
         }
 
         var response = await acknowledgementTask.ConfigureAwait(false);
-        _logger.LogDebug("Remote main submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
-                               request.SubmissionId,
-                               response.Disposition,
-                               response.RunId);
+
+        // Checked first: the arguments are boxed into an array before LogDebug looks at the level.
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Remote main submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
+                             request.SubmissionId,
+                             response.Disposition,
+                             response.RunId);
+        }
+
         if (mapId == 0)
         {
             _logger.LogWarning("Remote main submission {submissionId} was acknowledged, but no stable map id was captured; suppressing PlayerRecordSavedEvent and cache projection.",
@@ -405,10 +411,15 @@ internal sealed class RecordSaver
         }
 
         var response = await acknowledgementTask.ConfigureAwait(false);
-        _logger.LogDebug("Remote stage submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
-                               request.SubmissionId,
-                               response.Disposition,
-                               response.RunId);
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Remote stage submission {submissionId} was confirmed as {disposition}; run {runId} is canonical.",
+                             request.SubmissionId,
+                             response.Disposition,
+                             response.RunId);
+        }
+
         if (mapId == 0)
         {
             _logger.LogWarning("Remote stage submission {submissionId} was acknowledged, but no stable map id was captured; suppressing PlayerRecordSavedEvent and cache projection.",
@@ -490,9 +501,14 @@ internal sealed class RecordSaver
     }
 
     private void LogRemoteSubmissionPending(Guid submissionId, string runKind)
-        => _logger.LogDebug("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
-                                  runKind,
-                                  submissionId);
+    {
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Queued remote {runKind} submission {submissionId}; awaiting canonical backend acknowledgement.",
+                             runKind,
+                             submissionId);
+        }
+    }
 
     private Task NotifyPlayerAsync(SteamID steamId, ChatText text, CancellationToken ct)
         => NotifyPlayerAsync(steamId, tr => tr[text], ct);

@@ -49,6 +49,44 @@ internal partial class HudModule
         public void Text(string panel, string variable, ref Utf16ValueStringBuilder value)
             => Write(panel, variable, value.AsSpan(), null);
 
+        /// <summary>
+        ///     <paramref name="text" /> with its {0} filled, formatted in place: a string only when it differs from what
+        ///     the client has. Takes ZString's one scratch builder, so not while another is in use.
+        /// </summary>
+        public void Text<T1>(string panel, string variable, HudTr tr, HudText text, T1 a)
+            where T1 : struct, IHudArg
+        {
+            var sb = ZString.CreateStringBuilder(true);
+
+            try
+            {
+                tr.Format(ref sb, text, a);
+                Text(panel, variable, ref sb);
+            }
+            finally
+            {
+                sb.Dispose();
+            }
+        }
+
+        /// <inheritdoc cref="Text{T1}" />
+        public void Text<T1, T2>(string panel, string variable, HudTr tr, HudText text, T1 a, T2 b)
+            where T1 : struct, IHudArg
+            where T2 : struct, IHudArg
+        {
+            var sb = ZString.CreateStringBuilder(true);
+
+            try
+            {
+                tr.Format(ref sb, text, a, b);
+                Text(panel, variable, ref sb);
+            }
+            finally
+            {
+                sb.Dispose();
+            }
+        }
+
         // The client looks a whole value up in the game's own strings and shows what it finds instead: "Normal" became
         // 普通, "Style" became SET STYLE (valve_english.txt). A zero-width space in front keeps every value as it is,
         // except editkey / editkey2, which name the commands whose bound keys {g:csgo_key:editkey} shows. What's kept
@@ -310,9 +348,19 @@ internal partial class HudModule
 
         var tr = p.Tr;
 
-        w.Text("LocsTitle", "text", count > 0 ? tr.Format(HudTexts.LocsTitleCount, count) : tr[HudTexts.LocsTitle]);
+        // The counts are formatted in place, so they only make a string when they change.
+        if (count > 0)
+        {
+            w.Text("LocsTitle", "text", tr, HudTexts.LocsTitleCount, new IntArg(count));
+            w.Text("LocsTele", "text", tr, HudTexts.LocsTeleportTo, new IntArg(_practiceModule.GetCurrentLoc(client) + 1));
+        }
+        else
+        {
+            w.Text("LocsTitle", "text", tr[HudTexts.LocsTitle]);
+            w.Text("LocsTele", "text", tr[HudTexts.LocsTeleport]);
+        }
+
         w.Text("LocsSave", "text", tr[HudTexts.LocsSave]);
-        w.Text("LocsTele", "text", count > 0 ? tr.Format(HudTexts.LocsTeleportTo, _practiceModule.GetCurrentLoc(client) + 1) : tr[HudTexts.LocsTeleport]);
         w.Class("LocsTele", "dim", count == 0);
         w.Text("LocsPrev", "text", tr[HudTexts.LocsPrev]);
         w.Class("LocsPrev", "dim", count < 2);
@@ -323,7 +371,16 @@ internal partial class HudModule
         // Clear all takes a second press within a few seconds; the practice module keeps the clock, and this panel
         // drops the prompt once it says the request has lapsed.
         var asking = count > 0 && _practiceModule.IsClearPending(p.Slot);
-        w.Text("LocsClear", "text", asking ? tr.Format(HudTexts.LocsClearAsk, count) : tr[HudTexts.LocsClear]);
+
+        if (asking)
+        {
+            w.Text("LocsClear", "text", tr, HudTexts.LocsClearAsk, new IntArg(count));
+        }
+        else
+        {
+            w.Text("LocsClear", "text", tr[HudTexts.LocsClear]);
+        }
+
         w.Class("LocsClear", "dim", count == 0);
         w.Class("LocsClear", "warn", asking);
         w.Class("LocsKeyClear", "warn", asking);
@@ -651,10 +708,18 @@ internal partial class HudModule
             timeDiff = HudFormat.DiffMillis(finish.Time, theirs);
         }
 
+        // A finish's and a stop's titles stay the same for as long as they show: made once.
         if (finish is not null)
         {
-            var title = finish.Track > 0 ? tr.Format(HudTexts.BonusCompleted, finish.Track) : tr[HudTexts.MapCompleted];
-            view.Title = finish.Practice ? tr.Format(HudTexts.PracticeTitle, title) : title;
+            var key = (finish.Track, finish.Practice, p.TrEpoch);
+
+            if (!p.FinishTitle.TryGet(key, out var title))
+            {
+                var completed = finish.Track > 0 ? tr.Format(HudTexts.BonusCompleted, finish.Track) : tr[HudTexts.MapCompleted];
+                title = p.FinishTitle.Set(key, finish.Practice ? tr.Format(HudTexts.PracticeTitle, completed) : completed);
+            }
+
+            view.Title = title;
         }
         else if (stopped)
         {
@@ -800,16 +865,37 @@ internal partial class HudModule
         }
         else
         {
-            view.Title      = p.Tr.Format(HudTexts.ReplayTitle, header.PlayerName, ReplayTagOf(p.Tr, bot));
+            // Whose replay, and the pause or speed after its time: made again only when the replay or those change, or
+            // the style config is reloaded (its name).
+            var titleKey = (header, bot.Style, _styleModule.StylesVersion, bot.Track, bot.Stage, bot.Rank, p.TrEpoch);
+
+            if (!p.ReplayTitle.TryGet(titleKey, out var title))
+            {
+                title = p.ReplayTitle.Set(titleKey, p.Tr.Format(HudTexts.ReplayTitle, header.PlayerName, ReplayTagOf(p.Tr, bot)));
+            }
+
+            view.Title      = title;
             view.TitleClass = "replay";
             view.TimeLabel  = p.Tr[HudTexts.Time];
 
             // A central bot's pause and speed, as its controller set them.
             view.Time = HudFormat.ReplayElapsed(bot.CurrentFrame, header.PreFrame, header.PostFrame,
                                                 _styleModule.GetStyleSetting(bot.Style).TimerScale);
-            view.TimeAfter = bot.Paused ? ZString.Concat(" ", p.Tr[HudTexts.ReplayPaused])
-                : bot.Speed != 1f  ? ZString.Concat(" [", HudFormat.SpeedTag(bot.Speed), ']')
-                                     : null;
+
+            if (bot.Paused || bot.Speed != 1f)
+            {
+                var afterKey = (bot.Paused, bot.Speed, p.TrEpoch);
+
+                if (!p.ReplayAfter.TryGet(afterKey, out var after))
+                {
+                    after = p.ReplayAfter.Set(afterKey,
+                                              bot.Paused
+                                                  ? ZString.Concat(" ", p.Tr[HudTexts.ReplayPaused])
+                                                  : ZString.Concat(" [", HudFormat.SpeedTag(bot.Speed), ']'));
+                }
+
+                view.TimeAfter = after;
+            }
         }
 
         view.Shown[(int) HudLine.Speed] = p.IsOn(HudOptions.Speed);
@@ -1096,7 +1182,15 @@ internal partial class HudModule
 
         if (style < 0 || track < 0)
         {
-            p.RecordsDrawn = default;
+            // A bot with no replay yet: N/A, formatted again only when the language may have changed.
+            var none = (true, style, track, (RunRecord?) null, (RunRecord?) null, -1, p.TrEpoch);
+
+            if (p.RecordsDrawn == none)
+            {
+                return;
+            }
+
+            p.RecordsDrawn = none;
             w.Text("Sr", "sr", p.Tr.Format(HudTexts.InfoSr, p.Tr[HudTexts.NotAvailable]));
             w.Text("Pb", "pb", p.Tr.Format(HudTexts.InfoPb, p.Tr[HudTexts.NotAvailable]));
 

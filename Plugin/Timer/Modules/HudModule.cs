@@ -23,6 +23,7 @@ using Sharp.Shared;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.HookParams;
+using Sharp.Shared.Listeners;
 using Sharp.Shared.Managers;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
@@ -51,8 +52,12 @@ internal interface IHudModule
 ///     The entity's whole state is that player's, so every value and class is set on it directly, and nothing one
 ///     player's HUD does costs anyone else bandwidth.
 /// </summary>
-internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerModuleListener, IZoneModuleListener, IPlayerManagerListener
+internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerModuleListener, IZoneModuleListener, IPlayerManagerListener,
+                                   IClientListener
 {
+    int IClientListener.ListenerVersion  => IClientListener.ApiVersion;
+    int IClientListener.ListenerPriority => 0;
+
     private const float HudUpdateInterval   = 0.10f; // seconds between a player's HUD refreshes
     private const float LayoutRetryInterval = 5f;    // after the layout entity failed to spawn
     private const float SaveDelay           = 1f;    // settings are written this long after the last change
@@ -167,6 +172,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         _styleModule.StyleMenuRequested    += OnStyleMenuRequested;
         _mapInfo.MapInfoRequested          += OnMapInfoRequested;
         _playerManager.RegisterListener(this);
+        _bridge.ClientManager.InstallClientListener(this);
 
         _commandManager.AddClientChatCommand("hud", OnCommandHud);
         _commandManager.AddClientChatCommand("showkeys", OnCommandShowKeys);
@@ -187,6 +193,7 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
         _styleModule.StyleMenuRequested    -= OnStyleMenuRequested;
         _mapInfo.MapInfoRequested          -= OnMapInfoRequested;
         _playerManager.UnregisterListener(this);
+        _bridge.ClientManager.RemoveClientListener(this);
 
         _panorama.RemoveClickListener(OnHudClicked);
         _bridge.HookManager.PlayerRunCommand.RemoveHookPre(OnPlayerRunCommandPre);
@@ -219,6 +226,8 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
 
     public void OnClientPutInServer(PlayerSlot slot)
     {
+        _spectatorNames[slot] = null;
+
         if (_bridge.ClientManager.GetGameClient(slot) is not { IsFakeClient: false } client)
         {
             return;
@@ -240,6 +249,8 @@ internal partial class HudModule : IModule, IHudModule, IPlayerSettings, ITimerM
 
     public void OnClientDisconnected(PlayerSlot slot)
     {
+        _spectatorNames[slot] = null;
+
         if (_players[slot] is not { } p)
         {
             return;

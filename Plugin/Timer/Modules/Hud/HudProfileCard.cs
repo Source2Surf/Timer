@@ -224,9 +224,56 @@ internal partial class HudModule
         }
     }
 
-    // An offline player's PB here, from the fetched records.
+    // An offline player's PB here, from the fetched records: the fastest, the first of equal ones.
     private static RunRecord? OfflineRecord(HudProfile f, int track, int stage)
-        => f.Records?.Where(r => r.Style == f.Style && r.Track == track && r.Stage == stage).MinBy(r => r.Time);
+    {
+        if (f.Records is not { } records)
+        {
+            return null;
+        }
+
+        RunRecord? best = null;
+
+        for (var i = 0; i < records.Count; i++)
+        {
+            var r = records[i];
+
+            if (r.Style == f.Style && r.Track == track && r.Stage == stage && (best is null || r.Time < best.Time))
+            {
+                best = r;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    ///     Everything the profile card draws from: it's drawn again only when this changes. A new profile is a new
+    ///     Version; the minutes keep the play times, which count this visit, and the name (read from the client) up to
+    ///     date.
+    /// </summary>
+    internal readonly record struct ProfileDrawn(
+        int                       Epoch,
+        int                       ZonesVersion,
+        int                       RecordsVersion,
+        int                       TargetRecordsVersion,
+        int                       StylesVersion,
+        long                      Minute,
+        long                      SessionMinutes,
+        int                       Version,
+        int                       Style,
+        int                       Track,
+        IReadOnlyList<RunRecord>? Records,
+        int                       RankOf,
+        int                       Rank,
+        uint?                     Points,
+        PlayerSummary?            Summary,
+        bool                      SummaryFetched,
+        float                     MapPlayTime,
+        int                       MapPlays,
+        bool                      MapStatsFetched,
+        DateTime?                 Joined,
+        PlayerCountry?            Country);
 
     // Runs a query for the open profile and applies its answer on the game thread, unless the card has moved on
     // to another profile (or closed and reopened) since.
@@ -360,6 +407,21 @@ internal partial class HudModule
         var joined  = f.Offline
             ? f.Summary is { JoinedAt: > 0 } s ? DateTimeOffset.FromUnixTimeMilliseconds(s.JoinedAt).UtcDateTime : (DateTime?) null
             : profile?.JoinDate;
+        var country = f.Offline ? null : _countries.GetShownCountry(f.Target);
+
+        // Someone online's best times are the server's (GetPlayerRecord), loaded a while after they join.
+        var drawn = new ProfileDrawn(p.TrEpoch, _zoneModule.EditVersion, _recordModule.RecordsVersion,
+                                     f.Offline ? 0 : _recordModule.GetPlayerRecordsVersion(f.Target), _styleModule.StylesVersion,
+                                     DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute, (long) (session / 60),
+                                     f.Version, f.Style, f.Track, f.Records, f.RankOf, f.Rank, points, f.Summary, f.SummaryFetched,
+                                     f.MapPlayTime, f.MapPlays, f.MapStatsFetched, joined, country);
+
+        if (f.Drawn == drawn)
+        {
+            return;
+        }
+
+        f.Drawn = drawn;
 
         var tr = p.Tr;
         w.Labels(HudLabels.Profile);
@@ -373,7 +435,7 @@ internal partial class HudModule
         w.Text("PfJoined", "text",
                ZString.Concat(joined is not { } date ? "" : tr.Format(HudTexts.Joined, date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
                               f.Summary is { } played ? tr.Format(HudTexts.Played, HudFormat.Duration(tr, played.PlayTime + session)) : "",
-                              !f.Offline && _countries.GetShownCountry(f.Target) is { } country ? tr.Format(HudTexts.From, country.Name) : ""));
+                              country is not null ? tr.Format(HudTexts.From, country.Name) : ""));
 
         w.Text("PfStyleValue", "value", styleName);
         w.Class("PfStylePrev", "disabled", _styleModule.StepStyle(f.Style, -1) == f.Style);
@@ -389,7 +451,18 @@ internal partial class HudModule
 
             if (f.Summary is { } summary)
             {
-                var style = summary.Styles.FirstOrDefault(x => x.Style == f.Style);
+                PlayerStyleSummary? style = null;
+
+                for (var i = 0; i < summary.Styles.Count; i++)
+                {
+                    if (summary.Styles[i].Style == f.Style)
+                    {
+                        style = summary.Styles[i];
+
+                        break;
+                    }
+                }
+
                 var maps     = style?.MapsCompleted ?? 0;
                 var bonuses  = style?.BonusesCompleted ?? 0;
 

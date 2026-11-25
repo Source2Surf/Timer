@@ -105,9 +105,9 @@ internal class NightVisionModule : IModule, INightVisionModule, IPlayerManagerLi
         // Nothing would point the cameras again once this is unloaded.
         _on = 0;
 
-        for (var slot = 0; slot < _tonemaps.Length; slot++)
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
-            Remove((byte) slot);
+            Remove(slot);
         }
     }
 

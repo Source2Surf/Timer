@@ -53,6 +53,12 @@ internal interface IStyleModule
     StyleSetting GetStyleSetting(int style);
 
     /// <summary>
+    ///     Changes each time the style config is loaded (reload_styles): the names and the styles players can pick may
+    ///     have changed with it.
+    /// </summary>
+    int StylesVersion { get; }
+
+    /// <summary>
     ///     The styles players can pick, in the config's order.
     /// </summary>
     IReadOnlyList<int> GetStyleIds();
@@ -106,6 +112,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
 
     private StyleSetting?[] _byId = new StyleSetting?[TimerConstants.MAX_STYLE];
     private int[]           _ids  = [];
+
+    public int StylesVersion { get; private set; }
 
     // ReSharper disable InconsistentNaming
 
@@ -466,6 +474,12 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         return ((MathF.Cos(yaw) * velocity.X) + (MathF.Sin(yaw) * velocity.Y)) / speed <= BackwardsMaxDot;
     }
 
+    // The jumps whose velocity changes next frame: by slot, the style it changes by; and the one frame action that
+    // applies them, made once rather than a closure per jump.
+    private readonly StyleSetting?[] _pendingJumps = new StyleSetting?[PlayerSlot.MaxPlayerCount];
+    private          bool            _jumpsQueued;
+    private          Action?         _applyJumps;
+
     // Each jump's velocity changes, a frame after it as bhoptimer does, outside the movement.
     private void OnPlayerJump(IGameEvent e)
     {
@@ -477,16 +491,34 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
             return;
         }
 
-        var slot = controller.PlayerSlot;
+        _pendingJumps[controller.PlayerSlot] = style;
 
-        _bridge.ModSharp.InvokeFrameAction(() =>
+        if (!_jumpsQueued)
         {
+            _jumpsQueued = true;
+            _bridge.ModSharp.InvokeFrameAction(_applyJumps ??= ApplyPendingJumps);
+        }
+    }
+
+    private void ApplyPendingJumps()
+    {
+        _jumpsQueued = false;
+
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
+        {
+            if (_pendingJumps[slot] is not { } style)
+            {
+                continue;
+            }
+
+            _pendingJumps[slot] = null;
+
             if (_bridge.TryGetController(slot, out var deferred)
                 && deferred.GetPlayerPawn() is { IsAlive: true } pawn)
             {
                 pawn.SetAbsVelocity(JumpVelocity(pawn.GetAbsVelocity(), style));
             }
-        });
+        }
     }
 
     internal static Vector JumpVelocity(Vector velocity, StyleSetting style)
@@ -622,6 +654,7 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
         }
 
         (_byId, _ids) = ResolveStyles(styles, _logger);
+        StylesVersion++;
 
         AddStyleCommands();
         MovePlayersOffGoneStyles();
@@ -682,10 +715,8 @@ internal class StyleModule : IModule, IStyleModule, ITimerStyles, IGameListener,
     // A reload can take a player's style away; they go to the default.
     private void MovePlayersOffGoneStyles()
     {
-        for (var i = 0; i < PlayerSlot.MaxPlayerCount; i++)
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
-            var slot = (PlayerSlot) i;
-
             if (_timerModule.GetTimerInfo(slot) is { } timer && !IsStyleEnabled(timer.Style))
             {
                 NotifyClientStyleChanged(slot, timer.Style, DefaultStyle);

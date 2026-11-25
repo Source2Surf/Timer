@@ -33,8 +33,8 @@ internal enum SsjTier
     ReallyGood,
 }
 
-// The first jump of a chain has nothing before it to measure.
-internal sealed record SsjJump(int Serial, int Chain, int Number, float Speed, SsjStats? Stats);
+// The first jump of a chain has nothing before it to measure. A struct: one is made every jump, and kept in place.
+internal readonly record struct SsjJump(int Serial, int Chain, int Number, float Speed, SsjStats? Stats);
 
 // A player's jumps for SSJ, counted the way bhop-get-stats counts them, but fed per movement step (ProcessMove runs
 // once per sub-tick step) with each step weighted by its share of the tick. Gain follows CS2's AirAccelerate:

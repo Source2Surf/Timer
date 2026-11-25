@@ -708,6 +708,43 @@ public sealed class ReplayStorageFormatTests
             _ => throw new ArgumentOutOfRangeException(nameof(component)),
         };
 
+    // A PB's spatial index reads its replay once, into pooled chunks: the same frames as the array readers give, in
+    // both formats (an origin out of int24 range falls back to V1) and from a file as from bytes.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PooledReadsGiveTheSameFrames(bool fullWidth)
+    {
+        var frames = Enumerable.Range(0, 2500)
+                               .Select(i => LegacyFrame() with { Origin = new Vector(i, fullWidth ? 1e9f : -i, 0) })
+                               .ToArray();
+        var bytes = ReplayShared.SerializeReplay(Header(frames.Length), frames);
+        var plain = Decode(bytes).Content;
+        Assert.Equal(fullWidth ? 1 : 2, plain.Header.Version);
+
+        var pooled = ReplayShared.DeserializeReplay(bytes, 2, 3, 4, NullLogger.Instance, pooled: true);
+        Assert.True(pooled.HasValue);
+        var buffer = Assert.IsType<ReplayFrameBuffer>(pooled.Value.Content.Frames);
+        Assert.Equal(plain.Frames, buffer);
+        buffer.Clear();
+
+        var path = TempPath();
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            using var decompressor = new Decompressor();
+            var loaded = ReplayShared.LoadReplayFromPath(path, 2, 3, 4, decompressor, NullLogger.Instance, pooled: true);
+            Assert.True(loaded.HasValue);
+            buffer = Assert.IsType<ReplayFrameBuffer>(loaded.Value.Content.Frames);
+            Assert.Equal(plain.Frames, buffer);
+            buffer.Clear();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static ReplayLoadResult Decode(byte[] bytes)
     {
         var loaded = ReplayShared.DeserializeReplay(bytes, 2, 3, 4, NullLogger.Instance);

@@ -22,6 +22,7 @@ using Sharp.Shared.Types;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Modules.Zone;
 using Source2Surf.Timer.Shared.Models;
+using Source2Surf.Timer.Shared.Models.Replay;
 using Source2Surf.Timer.Shared.Models.Timer;
 using Source2Surf.Timer.Shared.Models.Zone;
 
@@ -80,6 +81,9 @@ internal sealed class HudReplayMenu
     public IReadOnlyList<RunRecord>?            Runs;
     public (int Style, int Track, int Stage)    RunsFor;
     public bool                                 RunsLoading;
+
+    // What the menu was last drawn from, so an unchanged one isn't formatted again; null to draw it.
+    public HudModule.ReplayMenuDrawn? Drawn;
 }
 
 /// <summary>
@@ -202,6 +206,9 @@ internal sealed class HudProfile
     public float MapPlayTime;
     public int   MapPlays;
     public bool  MapStatsFetched;
+
+    // What the card was last drawn from, so an unchanged one isn't formatted again; null to draw it.
+    public HudModule.ProfileDrawn? Drawn;
 }
 
 /// <summary>
@@ -275,11 +282,18 @@ internal sealed class HudPlayer
     public          int                         TrEpoch;
     public          int                         CjkEpoch = -1; // the TrEpoch the menus' cjk class follows
 
+    // ---- the timer's titles as last made, by what they show: a refresh only formats one that changed
+    public HudMemo<(int Track, bool Practice, int Epoch)>                                                                FinishTitle;
+    public HudMemo<(ReplayFileHeader Header, int Style, int StylesVersion, int Track, int Stage, int Rank, int Epoch)> ReplayTitle;
+    public HudMemo<(bool Paused, float Speed, int Epoch)>                                                                ReplayAfter;
+
     public void ForgetSent()
     {
         SplitsDrawn  = default;
         RecordsDrawn = default;
         SsjDrawn     = null;
+        Replays.Drawn = null;
+        Profile.Drawn = null;
         SentText.Clear();
         SentClass.Clear();
         SentNumbered.Clear();

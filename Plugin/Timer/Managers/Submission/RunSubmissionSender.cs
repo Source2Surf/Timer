@@ -313,7 +313,16 @@ internal sealed class RunSubmissionSender : IManager, IDisposable
 
                 try
                 {
-                    await _wakeSignal.WaitAsync(_options.PollInterval, cancellationToken).ConfigureAwait(false);
+                    // An enqueue and the drain both signal: with nothing left to send, no timed poll (a timer and
+                    // tasks each time) until one does.
+                    if (_spool.HasSendableEntries)
+                    {
+                        await _wakeSignal.WaitAsync(_options.PollInterval, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await _wakeSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {

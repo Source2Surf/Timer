@@ -146,7 +146,7 @@ internal partial class HudModule
             w.Text("SsjEmpty", "text", tr[HudTexts.SsjEmpty]);
         }
 
-        if (jump is null)
+        if (jump is not { } shown)
         {
             p.SsjDrawn = default;
 
@@ -168,19 +168,20 @@ internal partial class HudModule
                    | (p.IsOn(HudOptions.SsjStrafes) ? 16 : 0)
                    | (p.IsOn(HudOptions.SsjEfficiency) ? 32 : 0);
 
-        if (p.SsjDrawn is { } drawn && ReferenceEquals(drawn.Jump, jump) && drawn.Rows == rows && drawn.Epoch == p.TrEpoch)
+        // By value: a jump is a struct, and the one shown is the same value until the next is picked.
+        if (p.SsjDrawn is { } drawn && drawn.Jump == shown && drawn.Rows == rows && drawn.Epoch == p.TrEpoch)
         {
             return;
         }
 
-        p.SsjDrawn = (jump, rows, p.TrEpoch);
+        p.SsjDrawn = (shown, rows, p.TrEpoch);
 
-        w.Text("SsjJump", "text", tr.Format(HudTexts.SsjJumpN, jump.Number));
-        w.Text("SsjSpeed", "text", HudFormat.RoundSpeed(jump.Speed).ToString(CultureInfo.InvariantCulture));
+        w.Text("SsjJump", "text", tr.Format(HudTexts.SsjJumpN, shown.Number));
+        w.Text("SsjSpeed", "text", HudFormat.RoundSpeed(shown.Speed).ToString(CultureInfo.InvariantCulture));
 
         var row = 0;
 
-        if (jump.Stats is { } stats)
+        if (shown.Stats is { } stats)
         {
             if ((rows & 1) != 0)
             {

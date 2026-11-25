@@ -34,7 +34,7 @@ public sealed class SsjTrackerTests
 
     // Jumping from the ground: the step's inputs still count toward the jump before it.
     private static SsjJump Jump(SsjTracker t, float speed = 300, float z = 0, float side = 0, float yaw = 0)
-        => Step(t, true, speed, side: side, z: z, jump: true, yaw: yaw)!;
+        => Step(t, true, speed, side: side, z: z, jump: true, yaw: yaw)!.Value;
 
     [Fact]
     public void PerpendicularStrafesGainFully()
@@ -139,7 +139,7 @@ public sealed class SsjTrackerTests
         }
 
         // Taking off along the last direction, still strafing across it.
-        var stats = Step(t, true, 0, 300, side: Strafe, jump: true, yaw: 90)!.Stats!.Value;
+        var stats = Step(t, true, 0, 300, side: Strafe, jump: true, yaw: 90)!.Value.Stats!.Value;
         Assert.Equal(1f, stats.Gain, 3);
         Assert.InRange(stats.Efficiency, 0.85f, 0.95f); // chord / arc of a quarter circle is 0.90
     }
@@ -279,8 +279,8 @@ public sealed class SsjTrackerTests
         }
 
         Assert.Equal(6, t.Serial);
-        Assert.Equal(3, t.After(0)!.Serial); // the oldest still kept
-        Assert.Equal(5, t.After(4)!.Serial);
+        Assert.Equal(3, t.After(0)!.Value.Serial); // the oldest still kept
+        Assert.Equal(5, t.After(4)!.Value.Serial);
         Assert.Null(t.After(6));
     }
 

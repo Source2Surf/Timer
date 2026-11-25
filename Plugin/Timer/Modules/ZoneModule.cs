@@ -291,13 +291,15 @@ internal partial class ZoneModule : IModule, IZoneModule, IEntityListener, IGame
         // 自建的 trigger_multiple 不在 modsharp 的回合保留名单里, 回合重启会被删掉; 地图自带的随地图实体重新生成
         if (_lostZones.Count == 0)
         {
-            var generation = _zoneLoadGeneration;
-
-            _bridge.ModSharp.InvokeFrameAction(() => RebuildLostZones(generation));
+            RebuildLostZonesNextFrame(_zoneLoadGeneration);
         }
 
         _lostZones.Add(info);
     }
+
+    // Its own method: a lambda in OnEntityDeleted makes its closure for every entity deleted anywhere, zone or not.
+    private void RebuildLostZonesNextFrame(int generation)
+        => _bridge.ModSharp.InvokeFrameAction(() => RebuildLostZones(generation));
 
     private void RebuildLostZones(int generation)
     {

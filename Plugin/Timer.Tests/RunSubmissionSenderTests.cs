@@ -350,6 +350,45 @@ public sealed class RunSubmissionSenderTests : IDisposable
         Assert.Equal(new SubmissionSpoolSnapshot(0, 0, 0), GetSpool().GetSnapshot());
     }
 
+    // Idle, it waits for a signal rather than the next poll: with a poll a minute apart, a new run still goes at once.
+    [Fact]
+    public async Task AnIdleSenderSendsANewRunWithoutWaitingForAPoll()
+    {
+        var transport = new FakeTransport
+        {
+            Submit = (request, _) => Task.FromResult(Canonical(request.SubmissionId)),
+        };
+        var sender = CreateSender(new FakeTransportFactory(transport), TimeSpan.FromMinutes(1));
+
+        Assert.True(sender.Init());
+
+        for (var run = 1; run <= 2; run++)
+        {
+            await Task.Delay(100);
+
+            var response = await sender.EnqueueAndWaitAsync(CreateRequest(Guid.NewGuid()))
+                                       .WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.Equal(SubmissionDisposition.Accepted, response.Disposition);
+            Assert.Equal(run, transport.SubmitCalls);
+        }
+    }
+
+    [Fact]
+    public async Task AnIdleSenderShutsDownWithoutWaitingForAPoll()
+    {
+        var sender = CreateSender(new FakeTransportFactory(new FakeTransport()), TimeSpan.FromMinutes(1));
+
+        Assert.True(sender.Init());
+        await Task.Delay(100);
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        sender.Shutdown();
+
+        // Well inside the drain timeout (2 s here), which a missed signal would sit out.
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"Shutdown took {clock.Elapsed}");
+    }
+
     [Fact]
     public void SenderCreatesExactlyOneTransportForItsLifecycle()
     {
@@ -437,11 +476,11 @@ public sealed class RunSubmissionSenderTests : IDisposable
     private RunSubmissionSender CreateSender(FakeTransport transport)
         => CreateSender(new FakeTransportFactory(transport));
 
-    private RunSubmissionSender CreateSender(FakeTransportFactory factory)
+    private RunSubmissionSender CreateSender(FakeTransportFactory factory, TimeSpan? pollInterval = null)
     {
         _spool = new RunSubmissionSpool(NullLogger<RunSubmissionSpool>.Instance);
         _sender = new RunSubmissionSender(_spool,
-                                          BackendOptions.CreateForTests(new Uri("https://timer.test")),
+                                          BackendOptions.CreateForTests(new Uri("https://timer.test"), pollInterval: pollInterval),
                                           factory,
                                           CancellationToken.None,
                                           NullLogger<RunSubmissionSender>.Instance);

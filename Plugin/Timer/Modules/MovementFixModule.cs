@@ -279,7 +279,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
 
     private static void ResetPlayerState()
     {
-        for (var slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
             ResetPlayerState(slot);
         }
@@ -287,7 +287,7 @@ internal unsafe partial class MovementFixModule : IModule, IMovementFixModule, I
         ResetBhopBlocks();
     }
 
-    private static void ResetPlayerState(int slot)
+    private static void ResetPlayerState(PlayerSlot slot)
     {
         _moveTick[slot]         = 0;
         _isFakeClient[slot]     = false;

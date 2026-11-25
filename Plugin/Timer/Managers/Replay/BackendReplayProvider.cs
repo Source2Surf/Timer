@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Source2Surf.Timer.Managers.Request;
@@ -57,7 +58,23 @@ internal sealed class BackendReplayProvider : IReplayProvider
     public Task DeleteStoredAsync(string url)
         => _replayStorage.DeleteAsync(url);
 
-    public Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)
+    public async Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)
+    {
+        await using var data = new MemoryStream(replayData, writable: false);
+        await UploadReplayAsync(mapName, style, track, steamId, runId, data);
+    }
+
+    public async Task UploadStageReplayAsync(string mapName, int style, int track, int stage, ulong steamId, ulong runId, byte[] replayData)
+    {
+        await using var data = new MemoryStream(replayData, writable: false);
+        await UploadStageReplayAsync(mapName, style, track, stage, steamId, runId, data);
+    }
+
+    /// <summary>
+    /// As the byte array overload, from a seekable stream (see <see cref="IReplayStorage.UploadAsync"/>): a replay file is
+    /// sent as it's read rather than read in whole first.
+    /// </summary>
+    public Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, Stream replayData)
     {
         // Each attempt owns an immutable object key. A partial retry must not truncate an
         // object referenced by an earlier successful commit.
@@ -65,7 +82,8 @@ internal sealed class BackendReplayProvider : IReplayProvider
         return UploadAsync(key, mapName, steamId, runId, replayData);
     }
 
-    public Task UploadStageReplayAsync(string mapName, int style, int track, int stage, ulong steamId, ulong runId, byte[] replayData)
+    /// <inheritdoc cref="UploadReplayAsync(string, int, int, ulong, ulong, Stream)" />
+    public Task UploadStageReplayAsync(string mapName, int style, int track, int stage, ulong steamId, ulong runId, Stream replayData)
     {
         var key = $"{mapName.ToLowerInvariant()}/style_{style}/{track}/stage_{stage}/{steamId}_{runId}_{Guid.NewGuid():N}.replay";
         return UploadAsync(key, mapName, steamId, runId, replayData);
@@ -87,7 +105,7 @@ internal sealed class BackendReplayProvider : IReplayProvider
         }
     }
 
-    private async Task UploadAsync(string key, string mapName, ulong steamId, ulong runId, byte[] replayData)
+    private async Task UploadAsync(string key, string mapName, ulong steamId, ulong runId, Stream replayData)
     {
         string url;
 

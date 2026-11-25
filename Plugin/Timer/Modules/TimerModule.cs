@@ -468,15 +468,17 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
             }
             case EZoneType.Reset:
             {
-                // Back to the track's start, after the touch rather than inside it.
-                var slot  = controller.PlayerSlot;
-                var track = info.Track;
-                _bridge.ModSharp.InvokeFrameAction(() => Restart(slot, track));
+                RestartAfterTouch(controller.PlayerSlot, info.Track);
 
                 break;
             }
         }
     }
+
+    // Back to the track's start, after the touch rather than inside it. Its own method: a lambda in OnZoneStartTouch
+    // makes its closure on every touch, before the switch ever gets here.
+    private void RestartAfterTouch(PlayerSlot slot, int track)
+        => _bridge.ModSharp.InvokeFrameAction(() => Restart(slot, track));
 
     public void OnZoneTrigger(IZoneInfo info, IPlayerController controller, IPlayerPawn pawn)
     {
@@ -514,7 +516,7 @@ internal partial class TimerModule : ITimerModule, IModule, IZoneModuleListener,
 
     public void OnZoneRemoved(IZoneInfo info)
     {
-        for (var slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
             if (_timerInfo[slot] is { } timerInfo && timerInfo.Track == info.Track && timerInfo.InZone == info.ZoneType)
             {

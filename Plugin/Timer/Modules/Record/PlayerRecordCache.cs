@@ -31,6 +31,10 @@ internal sealed class PlayerRecordCache
     private readonly bool[] _loaded;
     private readonly ILogger _logger;
 
+    // By slot, moved on by every change to its records, so what's drawn from them knows to draw again. Never reset:
+    // an old count coming back would match something drawn before.
+    private readonly int[] _versions = new int[PlayerSlot.MaxPlayerCount];
+
     public PlayerRecordCache(ILogger logger)
     {
         _loaded = new bool[PlayerSlot.MaxPlayerCount];
@@ -40,9 +44,13 @@ internal sealed class PlayerRecordCache
     public bool IsLoaded(PlayerSlot slot)
         => _loaded[slot];
 
+    public int Version(PlayerSlot slot)
+        => _versions[slot];
+
     public void Populate(PlayerSlot slot, IReadOnlyList<RunRecord> records, IReadOnlyList<RunRecord> stageRecords)
     {
         _loaded[slot] = true;
+        _versions[slot]++;
 
         foreach (var record in records)
         {
@@ -99,6 +107,7 @@ internal sealed class PlayerRecordCache
         if (!records.TryGetValue(key, out var best) || record.CompareTo(best) < 0)
         {
             records[key] = record;
+            _versions[slot]++;
         }
     }
 
@@ -109,12 +118,15 @@ internal sealed class PlayerRecordCache
         if (!records.TryGetValue(key, out var best) || record.CompareTo(best) < 0)
         {
             records[key] = record;
+            _versions[slot]++;
         }
     }
 
     // After an admin deleted the player's best: their next-fastest run, or none.
     public void ReplaceRecord(PlayerSlot slot, int style, int track, int stage, RunRecord? record)
     {
+        _versions[slot]++;
+
         if (stage == 0)
         {
             var records = GetOrAddSlotRecords(slot);
@@ -139,6 +151,7 @@ internal sealed class PlayerRecordCache
         _records.Remove(slot);
         _stageRecords.Remove(slot);
         _loaded[slot] = false;
+        _versions[slot]++;
     }
 
     public void ClearAll()
@@ -146,6 +159,11 @@ internal sealed class PlayerRecordCache
         _records.Clear();
         _stageRecords.Clear();
         Array.Clear(_loaded);
+
+        for (var i = 0; i < _versions.Length; i++)
+        {
+            _versions[i]++;
+        }
     }
 
     private Dictionary<(int style, int track), RunRecord> GetOrAddSlotRecords(int slot)
