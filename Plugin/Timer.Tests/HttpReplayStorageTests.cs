@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using Source2Surf.Timer.Managers.Replay;
+using Source2Surf.Timer.Modules.Replay;
 using Xunit;
 
 namespace Timer.Tests;
@@ -59,6 +60,55 @@ public sealed class HttpReplayStorageTests
         // HttpClient.Timeout alone covers only the headers once the body is streamed.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => storage.DownloadAsync("https://replays.test/stalled.replay").WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    // A replay file is PUT as it's read, with its length: the included storage server takes a plain, sized body.
+    [Fact]
+    public async Task UploadPutsAFileAsItsReadWithItsLength()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.replay");
+        byte[] contents = [.. Enumerable.Range(0, 300_000).Select(i => (byte) (i * 7))];
+        await File.WriteAllBytesAsync(path, contents);
+
+        try
+        {
+            var handler = new RecordingHandler();
+            using var client = new HttpClient(handler);
+            string url;
+
+            await using (var file = ReplayShared.OpenForUpload(path))
+            {
+                url = await new HttpReplayStorage(client, "https://replays.test/").UploadAsync("surf_x/style_0/0/a.replay", file);
+            }
+
+            Assert.Equal("https://replays.test/surf_x/style_0/0/a.replay", url);
+            Assert.Equal("PUT", handler.Method);
+            Assert.Equal(contents.Length, handler.ContentLength);
+            Assert.False(handler.Chunked);
+            Assert.Equal(contents, handler.Body);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private sealed class RecordingHandler : HttpMessageHandler
+    {
+        public string? Method        { get; private set; }
+        public long?   ContentLength { get; private set; }
+        public bool    Chunked       { get; private set; }
+        public byte[]  Body          { get; private set; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Method        = request.Method.Method;
+            ContentLength = request.Content?.Headers.ContentLength;
+            Chunked       = request.Headers.TransferEncodingChunked == true;
+            Body          = request.Content is null ? [] : await request.Content.ReadAsByteArrayAsync(cancellationToken);
+
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
     }
 
     private sealed class StallingStream : Stream

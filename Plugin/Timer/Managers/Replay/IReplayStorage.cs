@@ -1,3 +1,4 @@
+using System.IO;
 using System.Threading.Tasks;
 
 namespace Source2Surf.Timer.Managers.Replay;
@@ -9,9 +10,11 @@ namespace Source2Surf.Timer.Managers.Replay;
 internal interface IReplayStorage
 {
     /// <summary>
-    /// Uploads replay data and returns an accessible URL.
+    /// Uploads replay data and returns an accessible URL. <paramref name="data"/> is sent as it's read, from its
+    /// position to its end, so a replay file never has to be all in memory. It must be seekable: the request then
+    /// carries a Content-Length, and a retried request can read it again.
     /// </summary>
-    Task<string> UploadAsync(string key, byte[] data);
+    Task<string> UploadAsync(string key, Stream data);
 
     /// <summary>
     /// Downloads replay data from the given URL.

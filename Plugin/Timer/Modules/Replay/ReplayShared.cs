@@ -743,6 +743,13 @@ internal static class ReplayShared
     }
 
     /// <summary>
+    /// A replay file opened to be uploaded as it's read (see <see cref="Managers.Replay.IReplayStorage.UploadAsync"/>).
+    /// Unbuffered: the upload already reads it in large blocks.
+    /// </summary>
+    public static FileStream OpenForUpload(string path)
+        => new (path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 0, FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+    /// <summary>
     /// Asynchronously write a replay file (JSON header + \n separator + MemoryPack frame data).
     /// Spatial fields are quantized for storage (see <see cref="ReplayFrameStorage"/>).
     /// If compressionLevel &lt;= 0, writes uncompressed frame data.

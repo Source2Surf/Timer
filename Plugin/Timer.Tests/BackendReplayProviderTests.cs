@@ -2,6 +2,8 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Source2Surf.Timer.Managers.Replay;
 using Source2Surf.Timer.Managers.Request;
+using Source2Surf.Timer.Modules.Replay;
+using Source2Surf.Timer.Shared.Interfaces;
 using Xunit;
 
 namespace Timer.Tests;
@@ -69,9 +71,83 @@ public sealed class BackendReplayProviderTests
         Assert.Null(await _provider.GetRunReplayAsync(RunId));
     }
 
+    [Fact]
+    public async Task AStreamIsUploadedFromItsPositionToItsEnd()
+    {
+        using var data = new MemoryStream([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        data.Position = 3;
+
+        await _provider.UploadReplayAsync(MapName, 0, 0, SteamId, RunId, data);
+
+        Assert.Equal([3, 4, 5, 6, 7, 8, 9], _objects.Get(_catalog.Urls[RunId]));
+    }
+
+    // A replay file goes to the built-in provider as it is, to be sent as it's read; an external provider, whose
+    // contract takes a byte array, gets the file read in.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task TheBuiltInProviderIsHandedTheFileAndAnExternalOneItsBytes(int stage)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.replay");
+        byte[] contents = [.. Enumerable.Range(0, 300_000).Select(i => (byte) i)];
+        await File.WriteAllBytesAsync(path, contents);
+
+        try
+        {
+            await using (var file = ReplayShared.OpenForUpload(path))
+            {
+                await ReplayProviderProxy.UploadAsync(_provider, MapName, 0, 0, stage, SteamId, RunId, file);
+
+                Assert.Same(file, _objects.LastData);
+                Assert.Equal(contents, _objects.Get(_catalog.Urls[RunId]));
+            }
+
+            var external = new ExternalProvider();
+
+            await using (var file = ReplayShared.OpenForUpload(path))
+            {
+                file.Position = 100;
+                await ReplayProviderProxy.UploadAsync(external, MapName, 0, 0, stage, SteamId, RunId, file);
+            }
+
+            var upload = Assert.Single(external.Uploads);
+            Assert.Equal(stage, upload.Stage);
+            Assert.Equal(contents[100..], upload.Data);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private Task UploadAsync(bool stage, byte[] bytes)
         => stage ? _provider.UploadStageReplayAsync(MapName, 0, 0, 1, SteamId, RunId, bytes)
                  : _provider.UploadReplayAsync(MapName, 0, 0, SteamId, RunId, bytes);
+
+    // Another module's IReplayProvider: only the contract's byte array uploads.
+    private sealed class ExternalProvider : IReplayProvider
+    {
+        public List<(int Stage, byte[] Data)> Uploads { get; } = [];
+
+        public Task<byte[]?> GetReplayAsync(string mapName, int style, int track, ulong? steamId = null)
+            => Task.FromResult<byte[]?>(null);
+
+        public Task<byte[]?> GetStageReplayAsync(string mapName, int style, int track, int stage, ulong? steamId = null)
+            => Task.FromResult<byte[]?>(null);
+
+        public Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, byte[] replayData)
+        {
+            Uploads.Add((0, replayData));
+            return Task.CompletedTask;
+        }
+
+        public Task UploadStageReplayAsync(string mapName, int style, int track, int stage, ulong steamId, ulong runId, byte[] replayData)
+        {
+            Uploads.Add((stage, replayData));
+            return Task.CompletedTask;
+        }
+    }
 
     private Task<byte[]?> DownloadAsync(bool stage)
         => stage ? _provider.GetStageReplayAsync(MapName, 0, 0, 1)
@@ -117,9 +193,14 @@ public sealed class BackendReplayProviderTests
         public int Count => _objects.Count;
         public bool FailNextUploadAfterTruncation { get; set; }
         public bool Contains(string url) => _objects.ContainsKey(url);
+        public byte[] Get(string url) => _objects[url];
 
-        public Task<string> UploadAsync(string key, byte[] data)
+        // The stream the last upload was read from.
+        public Stream? LastData { get; private set; }
+
+        public async Task<string> UploadAsync(string key, Stream data)
         {
+            LastData = data;
             var url = $"https://test.invalid/{key}";
             // Match the included HTTP storage server's File.Create before copying the body.
             _objects[url] = [];
@@ -128,8 +209,10 @@ public sealed class BackendReplayProviderTests
                 FailNextUploadAfterTruncation = false;
                 throw new IOException("Interrupted upload after object truncation.");
             }
-            _objects[url] = data.ToArray();
-            return Task.FromResult(url);
+            using var body = new MemoryStream();
+            await data.CopyToAsync(body);
+            _objects[url] = body.ToArray();
+            return url;
         }
 
         public Task<byte[]> DownloadAsync(string url)

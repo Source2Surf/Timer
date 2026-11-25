@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -137,5 +138,53 @@ internal sealed class ReplayProviderProxy : IDisposable
         if (provider is null) return;
 
         await provider.UploadStageReplayAsync(mapName, style, track, stage, steamId, runId, replayData);
+    }
+
+    /// <summary>
+    /// Uploads a replay from a seekable stream, from its position to its end: a replay file, sent as it's read by the
+    /// built-in provider. An external IReplayProvider, whose contract takes a byte array, gets it read in whole.
+    /// </summary>
+    public async Task UploadReplayAsync(string mapName, int style, int track, ulong steamId, ulong runId, Stream replayData)
+    {
+        var provider = Volatile.Read(ref _provider);
+        if (provider is null) return;
+
+        await UploadAsync(provider, mapName, style, track, 0, steamId, runId, replayData);
+    }
+
+    /// <inheritdoc cref="UploadReplayAsync(string, int, int, ulong, ulong, Stream)" />
+    public async Task UploadStageReplayAsync(string mapName, int style, int track, int stage, ulong steamId, ulong runId, Stream replayData)
+    {
+        var provider = Volatile.Read(ref _provider);
+        if (provider is null) return;
+
+        await UploadAsync(provider, mapName, style, track, stage, steamId, runId, replayData);
+    }
+
+    // Stage 0 is the main replay.
+    internal static async Task UploadAsync(IReplayProvider provider,
+                                           string          mapName,
+                                           int             style,
+                                           int             track,
+                                           int             stage,
+                                           ulong           steamId,
+                                           ulong           runId,
+                                           Stream          replayData)
+    {
+        if (provider is BackendReplayProvider builtIn)
+        {
+            await (stage == 0
+                       ? builtIn.UploadReplayAsync(mapName, style, track, steamId, runId, replayData)
+                       : builtIn.UploadStageReplayAsync(mapName, style, track, stage, steamId, runId, replayData));
+
+            return;
+        }
+
+        var bytes = new byte[checked((int) (replayData.Length - replayData.Position))];
+        await replayData.ReadExactlyAsync(bytes);
+
+        await (stage == 0
+                   ? provider.UploadReplayAsync(mapName, style, track, steamId, runId, bytes)
+                   : provider.UploadStageReplayAsync(mapName, style, track, stage, steamId, runId, bytes));
     }
 }

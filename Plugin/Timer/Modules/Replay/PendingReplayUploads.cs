@@ -22,6 +22,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Source2Surf.Timer.Modules.Replay;
 
 // ReSharper disable once CheckNamespace
 namespace Source2Surf.Timer.Modules;
@@ -136,7 +137,8 @@ internal partial class ReplayRecorderModule
                     continue;
                 }
 
-                var bytes = await File.ReadAllBytesAsync(replayPath).ConfigureAwait(false);
+                // Sent as it's read, never all in memory. Opened here, so failing to open it is logged below.
+                await using var replayFile = ReplayShared.OpenForUpload(replayPath);
 
                 try
                 {
@@ -147,7 +149,7 @@ internal partial class ReplayRecorderModule
                                             upload.Stage,
                                             upload.SteamId,
                                             upload.RunId,
-                                            bytes)
+                                            replayFile)
                         .ConfigureAwait(false);
                 }
                 catch (Exception)

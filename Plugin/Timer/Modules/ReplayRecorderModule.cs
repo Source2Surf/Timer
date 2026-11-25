@@ -1142,16 +1142,17 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
                 {
                     try
                     {
-                        var replayBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
+                        // Sent as it's read from the file just written, never all in memory.
+                        await using var replayFile = ReplayShared.OpenForUpload(filePath);
 
 #if DEBUG
                         _logger.LogInformation(
                             "Uploading replay: map={Map} style={Style} track={Track} stage={Stage} steamId={SteamId} runId={RunId} bytes={Bytes}",
-                            mapName, style, track, stage, header.SteamId, savedRunId, replayBytes.Length);
+                            mapName, style, track, stage, header.SteamId, savedRunId, replayFile.Length);
 #endif
 
                         await UploadReplayAsync(_replayProviderProxy, mapName, style, track, stage,
-                                                header.SteamId, (ulong) savedRunId, replayBytes).ConfigureAwait(false);
+                                                header.SteamId, (ulong) savedRunId, replayFile).ConfigureAwait(false);
 
 #if DEBUG
                         _logger.LogInformation(
@@ -1749,6 +1750,18 @@ internal partial class ReplayRecorderModule : IReplayRecorderModule,
         => stage == 0
             ? proxy.UploadReplayAsync(mapName, style, track, steamId, runId, replayBytes)
             : proxy.UploadStageReplayAsync(mapName, style, track, stage, steamId, runId, replayBytes);
+
+    private static Task UploadReplayAsync(ReplayProviderProxy proxy,
+                                          string              mapName,
+                                          int                 style,
+                                          int                 track,
+                                          int                 stage,
+                                          ulong               steamId,
+                                          ulong               runId,
+                                          Stream              replayData)
+        => stage == 0
+            ? proxy.UploadReplayAsync(mapName, style, track, steamId, runId, replayData)
+            : proxy.UploadStageReplayAsync(mapName, style, track, stage, steamId, runId, replayData);
 
     /// <summary>
     ///     Removes fallback records older than timer_replay_fallback_ttl, deleting their

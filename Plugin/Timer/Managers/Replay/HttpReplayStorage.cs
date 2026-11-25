@@ -21,11 +21,11 @@ internal sealed class HttpReplayStorage : IReplayStorage
         _baseUrl    = baseUrl.TrimEnd('/');
     }
 
-    public async Task<string> UploadAsync(string key, byte[] data)
+    public async Task<string> UploadAsync(string key, Stream data)
     {
         var url = $"{_baseUrl}/{key}";
 
-        using var content  = new ByteArrayContent(data);
+        using var content  = new StreamContent(data);
         using var response = await _httpClient.PutAsync(url, content);
 
         response.EnsureSuccessStatusCode();
