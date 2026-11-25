@@ -19,6 +19,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Text;
+using Sharp.Shared.Enums;
+using Sharp.Shared.Objects;
 using Sharp.Shared.Units;
 using Source2Surf.Timer.Extensions;
 using Source2Surf.Timer.Modules.Hud;
@@ -38,6 +40,10 @@ internal partial class HudModule
     private readonly List<string>[] _spectators = Enumerable.Range(0, PlayerSlot.MaxPlayerCount).Select(_ => new List<string>()).ToArray();
     private          float          _spectatorsAt = float.NegativeInfinity;
 
+    // Each slot's name as the list shows it, shortened: read once, not on every rebuild, and forgotten when the slot's
+    // player changes or their settings do (a new name).
+    private readonly string?[] _spectatorNames = new string?[PlayerSlot.MaxPlayerCount];
+
     // Who spectates whom, for every HUD at once, a few times a second: the same rule as !specs.
     private void RebuildSpectators(float now)
     {
@@ -53,18 +59,21 @@ internal partial class HudModule
             list.Clear();
         }
 
-        foreach (var client in _bridge.ClientManager.GetGameClients(true))
+        // By slot rather than GetGameClients, which makes a list each time; in game is a full sign-on, as it has it.
+        for (PlayerSlot slot = 0; slot < PlayerSlot.MaxPlayerCount; slot++)
         {
-            if (!client.IsFakeClient
-                && !client.IsHltv
+            if (_bridge.ClientManager.GetGameClient(slot) is { SignOnState: SignOnState.Full, IsFakeClient: false, IsHltv: false } client
                 && client.GetPlayerController() is { } spectator
                 && _bridge.GetObservedSlot(spectator) is { } target
-                && target != client.Slot)
+                && target != slot)
             {
-                _spectators[target].Add(client.Name);
+                _spectators[target].Add(_spectatorNames[slot] ??= Shorten(client.Name));
             }
         }
     }
+
+    public void OnClientSettingChanged(IGameClient client)
+        => _spectatorNames[client.Slot] = null;
 
     private void UpdateSpectators(HudWriter w, HudPlayer p, List<string> names)
     {
@@ -80,7 +89,7 @@ internal partial class HudModule
             return;
         }
 
-        w.Text("SpecHead", "text", p.Tr.Format(HudTexts.SpecHead, names.Count));
+        w.Text("SpecHead", "text", p.Tr, HudTexts.SpecHead, new IntArg(names.Count));
 
         for (var i = 0; i < SpecRows; i++)
         {
@@ -89,7 +98,7 @@ internal partial class HudModule
 
             if (on)
             {
-                w.Text(SpecNameIds[i], "text", Shorten(names[i]));
+                w.Text(SpecNameIds[i], "text", names[i]);
             }
         }
 

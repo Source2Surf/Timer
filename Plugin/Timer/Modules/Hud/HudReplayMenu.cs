@@ -57,6 +57,43 @@ internal partial class HudModule
     private static string[] RowIds(string part)
         => Enumerable.Range(0, ReplayRows).Select(i => ZString.Concat("RmRow", i, part)).ToArray();
 
+    /// <summary>
+    ///     Everything the replay menu draws from but the playing replay's time and bar, which are written on every
+    ///     refresh: the menu is drawn again only when this changes. The minute keeps a run's "5 min ago" and the names it
+    ///     shows (read from the clients) up to date. No nullable enums, which compare boxed.
+    /// </summary>
+    internal readonly record struct ReplayMenuDrawn(
+        int                       Epoch,
+        int                       ZonesVersion,
+        int                       RecordsVersion,
+        long                      Minute,
+        int                       Tab,
+        int                       Track,
+        int                       Stage,
+        int                       Style,
+        int                       Page,
+        int                       Selected,
+        bool                      Loading,
+        string?                   Note,
+        IReadOnlyList<RunRecord>? Runs,
+        bool                      RunsLoading,
+        IReplayBotData?           Bot,
+        EReplayBotStatus          BotStatus,
+        long                      BotRunId,
+        ReplayFileHeader?         Header,
+        int                       BotRank,
+        int                       BotStyle,
+        int                       BotTrack,
+        int                       BotStage,
+        float                     BotTime,
+        bool                      BotPaused,
+        float                     BotSpeed,
+        PlayerSlot?               BotOwner,
+        bool                      Observing,
+        bool                      Watching,
+        bool                      Mine,
+        PlayerSlot?               Busy);
+
     private ECommandAction OnCommandReplay(PlayerSlot slot, StringCommand command)
     {
         if (_players[slot] is { } p)
@@ -296,7 +333,54 @@ internal partial class HudModule
         m.Page     = Math.Clamp(m.Page, 0, pages - 1);
         m.Selected = Math.Clamp(m.Selected, 0, Math.Max(0, records.Count - 1));
 
-        var tr    = p.Tr;
+        var tr = p.Tr;
+
+        // Watching the central bot: what's playing, and its controls for whoever started it.
+        var bot       = _central.CentralBot;
+        var header    = bot?.Header;
+        var observing = bot is not null && ObservedSlot(controller) == bot.Slot;
+        var watching  = bot is { Status: not EReplayBotStatus.Idle } && header is not null && observing;
+        var mine      = watching && _central.CanControl(p.Slot); // they started it, or may control it anyway
+        var busy      = _central.BusyFor(p.Slot);
+
+        // The playing replay's time and bar move on every refresh: formatted in place, a string only for a new time.
+        if (watching && bot is not null && header is not null)
+        {
+            var elapsed = HudFormat.ReplayElapsed(bot.CurrentFrame, header.PreFrame, header.PostFrame,
+                                                  _styleModule.GetStyleSetting(bot.Style).TimerScale);
+            var sb = ZString.CreateStringBuilder(true);
+
+            try
+            {
+                new TimeArg(elapsed).AppendTo(ref sb);
+                sb.Append(" / ");
+                new TimeArg(bot.Time).AppendTo(ref sb);
+                w.Text("RmNowTime", "text", ref sb);
+            }
+            finally
+            {
+                sb.Dispose();
+            }
+
+            w.Numbered("RmBarFill", "w", ProgressSteps[HudFormat.ProgressStep(elapsed, bot.Time)]);
+        }
+
+        // The rest is drawn again only when the picks, the boards, the bot or the language change, and each minute for
+        // a run's "5 min ago" and the names it shows.
+        var drawn = new ReplayMenuDrawn(p.TrEpoch, _zoneModule.EditVersion, _recordModule.RecordsVersion,
+                                        DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute,
+                                        m.Tab, m.Track, m.Stage, m.Style, m.Page, m.Selected, m.Loading, m.Note, m.Runs, m.RunsLoading,
+                                        bot, bot?.Status ?? default, bot?.RunId ?? 0, header, bot?.Rank ?? 0, bot?.Style ?? 0,
+                                        bot?.Track ?? 0, bot?.Stage ?? 0, bot?.Time ?? 0, bot?.Paused ?? false, bot?.Speed ?? 0,
+                                        bot?.Owner, observing, watching, mine, busy);
+
+        if (m.Drawn == drawn)
+        {
+            return;
+        }
+
+        m.Drawn = drawn;
+
         var board = m.Tab == 0;
         w.Labels(HudLabels.Replays);
         w.Class("RmTabBoard", "active", board);
@@ -324,7 +408,6 @@ internal partial class HudModule
         w.Class("RmJumpWr", "disabled", records.Count == 0);
         w.Class("RmJumpPb", "disabled", IndexOfPlayer(records, p.SteamId) < 0);
 
-        var bot    = _central.CentralBot;
         var pb     = board ? null : _recordModule.GetPlayerRecord(p.Slot, m.Style, m.Track, m.Stage);
         var nowUtc = DateTime.UtcNow;
 
@@ -375,24 +458,14 @@ internal partial class HudModule
         w.Class("RmPagePrev", "disabled", m.Page == 0);
         w.Class("RmPageNext", "disabled", m.Page >= pages - 1);
 
-        // Watching the central bot: what's playing, and its controls for whoever started it.
-        var header   = bot?.Header;
-        var watching = bot is { Status: not EReplayBotStatus.Idle } && header is not null && ObservedSlot(controller) == bot.Slot;
-        var mine     = watching && _central.CanControl(p.Slot); // they started it, or may control it anyway
-        var busy     = _central.BusyFor(p.Slot);
-
         w.Class("RmNow", "Hidden", !watching);
         w.Class("RmStatus", "Hidden", watching);
 
-        if (watching)
+        // Watching implies both are there; said again for the compiler.
+        if (watching && bot is not null && header is not null)
         {
-            var elapsed = HudFormat.ReplayElapsed(bot!.CurrentFrame, header!.PreFrame, header.PostFrame,
-                                                  _styleModule.GetStyleSetting(bot.Style).TimerScale);
-
             w.Text("RmNowName", "text", header.PlayerName);
             w.Text("RmNowTag", "text", ReplayTagOf(tr, bot));
-            w.Text("RmNowTime", "text", ZString.Concat(HudFormat.FormatTime(elapsed), " / ", HudFormat.FormatTime(bot.Time)));
-            w.Numbered("RmBarFill", "w", ProgressSteps[HudFormat.ProgressStep(elapsed, bot.Time)]);
             w.Class("RmCtl", "Hidden", !mine);
             w.Class("RmAlong", "Hidden", mine);
 
@@ -436,7 +509,7 @@ internal partial class HudModule
                                    _bridge.ClientManager.GetGameClient(owner)?.Name ?? tr[HudTexts.Someone],
                                    HudFormat.Whose(tr, busyHeader.PlayerName, bot.Rank, false));
             }
-            else if (bot.Status == EReplayBotStatus.Idle && ObservedSlot(controller) == bot.Slot)
+            else if (bot.Status == EReplayBotStatus.Idle && observing)
             {
                 // Spectating it after a replay ended (or before one): no Stop button, so say how to get back.
                 status = tr[HudTexts.BotFree];
